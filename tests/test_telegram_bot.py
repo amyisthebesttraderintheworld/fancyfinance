@@ -1,7 +1,7 @@
 import pytest
 import queue
 from unittest.mock import MagicMock, AsyncMock, patch
-from telegram_bot import start, help_command, proxy_command, button_handler
+from telegram_bot import start, help_command, proxy_command, button_handler, verify_email_command
 import telegram_bot # to get global variables if needed
 
 @pytest.fixture
@@ -83,3 +83,33 @@ async def test_button_handler_agree_shows_main_menu(mock_context):
     query.edit_message_text.assert_called_once()
     mock_context.bot.send_message.assert_called_once()
     assert "Trading Bot Connected" in mock_context.bot.send_message.call_args.kwargs["text"]
+
+
+@pytest.mark.asyncio
+async def test_verify_email_command_success(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = ["user@example.com"]
+
+    with patch.object(telegram_bot.db, "request_email_verification", return_value="123456"):
+        with patch("telegram_bot.EmailService") as mock_email_service:
+            mock_email_service.return_value.send_verification_email.return_value = True
+
+            await verify_email_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called()
+    assert "Verification Email Sent" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_verify_email_command_failure(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = ["user@example.com"]
+
+    with patch.object(telegram_bot.db, "request_email_verification", return_value="123456"):
+        with patch("telegram_bot.EmailService") as mock_email_service:
+            mock_email_service.return_value.send_verification_email.return_value = False
+
+            await verify_email_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called()
+    assert "EMAIL_CONFIRM_WEBHOOK_URL" in mock_update.message.reply_text.call_args[0][0]

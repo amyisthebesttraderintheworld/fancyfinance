@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import queue
 
@@ -8,6 +9,7 @@ from telegram.error import Conflict
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from common import SettingsManager, get_logger
+from email_service import EmailService
 from fancyfinance import APP_NAME, __version__
 from supabase_client import SupabaseManager
 
@@ -118,11 +120,28 @@ async def verify_email_command(update: Update, context: ContextTypes.DEFAULT_TYP
     email = context.args[0].lower()
     otp = db.request_email_verification(update.effective_user.id, email)
     if otp:
-        logger.info(f"Email verification OTP for {email}: {otp}")
+        email_service = EmailService(config or {})
+        sent = await asyncio.to_thread(
+            email_service.send_verification_email,
+            email=email,
+            otp=otp,
+            telegram_id=update.effective_user.id,
+            username=update.effective_user.username or "",
+            first_name=update.effective_user.first_name or "",
+        )
+        if sent:
+            await _reply(
+                update,
+                f"📨 *Verification Email Sent to {email}*\n\n"
+                "Use `/confirm_email 123456` after you receive the code.",
+                parse_mode="Markdown",
+            )
+            return
+
         await _reply(
             update,
-            f"📨 *Verification Email Sent to {email}*\n\n"
-            "Use `/confirm_email 123456` after you receive the code.",
+            "❌ Email delivery is not configured or the webhook failed.\n\n"
+            "Ask the admin to set `EMAIL_CONFIRM_WEBHOOK_URL` in Railway.",
             parse_mode="Markdown",
         )
     else:

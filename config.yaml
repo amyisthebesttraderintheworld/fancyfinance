@@ -52,6 +52,10 @@ telegram:
     - 123456789
   enable_notifications: true
 
+email:
+  confirm_webhook_url: "${EMAIL_CONFIRM_WEBHOOK_URL:-}"  # n8n /webhook-test/... for editor testing, /webhook/... for live
+  confirm_webhook_timeout_seconds: 15
+
 supabase:
   url: "${SUPABASE_URL:-}"
   service_role_key: "${SUPABASE_SERVICE_ROLE_KEY:-}"
