@@ -339,10 +339,11 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
                 "Disable FancyFinance polling with TELEGRAM_POLLING_ENABLED=false if another service owns inbound Telegram updates."
             )
             _conflict_logged = True
-        try:
-            await context.application.stop()
-        except Exception as exc:
-            logger.warning(f"Failed to stop Telegram application after conflict: {exc}")
+        if context.application.running:
+            try:
+                context.application.stop_running()
+            except Exception as exc:
+                logger.warning(f"Failed to stop Telegram application after conflict: {exc}")
         return
 
     logger.error(f"Telegram error: {context.error}")
