@@ -1,0 +1,77 @@
+app_name: "FancyFinance"
+exchange: "phemex"
+
+phemex:
+  api_key: "${PHEMEX_API_KEY:-YOUR_API_KEY}"
+  api_secret: "${PHEMEX_API_SECRET:-YOUR_API_SECRET}"
+  symbols:
+    - "BTCUSD"
+    - "ETHUSD"
+  testnet: true
+  scan_all_symbols: true  # If true, bot fetches all available symbols
+  symbol_type: "Perpetual" # Perpetual or Spot
+
+strategy:
+  timeframe: "1m"
+  fast_ma: 9
+  slow_ma: 21
+  rsi_period: 14
+  rsi_oversold: 30
+  rsi_overbought: 70
+  volume_multiplier: 1.5
+  atr_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  bb_period: 20
+  bb_std_dev: 2.0
+  squeeze_threshold: 0.05
+  use_macd_confirmation: true
+  use_bollinger_squeeze: true
+
+risk:
+  max_positions: 3
+  risk_per_trade: 0.02  # 2% of balance
+  max_daily_loss: 0.10  # 10% of balance
+  stop_loss_atr_mult: 2.0
+  take_profit_atr_mult: 3.0
+
+backtest:
+  start_date: "2023-01-01"
+  end_date: "2023-12-31"
+  initial_balance: 10000
+  fee_rate: 0.0006  # 0.06%
+  slippage: 0.0005  # 0.05%
+  data_dir: "data"
+
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN:-}"
+  personal_mode: true
+  admin_chat_ids:
+    - 123456789
+  enable_notifications: true
+
+supabase:
+  url: "${SUPABASE_URL:-}"
+  service_role_key: "${SUPABASE_SERVICE_ROLE_KEY:-}"
+
+scoring:
+  trend_weight:    30
+  rsi_weight:      25
+  volume_weight:   25
+  momentum_weight: 20
+  min_score:       45
+
+safety:
+  max_consecutive_losses: 3    # Pause if 3 losses in a row
+  loss_window_minutes: 60      # Or if X losses within 60 mins
+  timeout_duration_minutes: 30 # How long to stay paused
+
+api:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8000
+  auth_token: "${FANCYFINANCE_API_TOKEN:-}"
+
+mode: "simulation"  # Options: backtest, simulation, live
+customer_mode: false # If true, enables multi-user database features
