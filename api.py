@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 from datetime import datetime, timezone
 from typing import Optional
@@ -44,8 +45,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
 
     @app.get("/health")
-    def health(x_api_key: Optional[str] = Header(default=None)):
-        _authorize(auth_token, x_api_key)
+    def health():
         return {"status": "ok", **_snapshot(engine)}
 
     @app.get("/stats")
@@ -92,7 +92,7 @@ def start_api_server(engine, config):
         return None
 
     host = api_config.get("host", "0.0.0.0")
-    port = int(api_config.get("port", 8000))
+    port = int(os.getenv("PORT") or api_config.get("port", 8000))
     auth_token = api_config.get("auth_token") or None
     app = create_app(engine, auth_token=auth_token)
 

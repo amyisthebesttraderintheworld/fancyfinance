@@ -70,7 +70,7 @@ safety:
 api:
   enabled: true
   host: "0.0.0.0"
-  port: 8000
+  port: "${PORT:-8000}"
   auth_token: "${FANCYFINANCE_API_TOKEN:-}"
 
 mode: "simulation"  # Options: backtest, simulation, live

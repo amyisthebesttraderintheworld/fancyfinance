@@ -1,6 +1,7 @@
 import argparse
 import queue
 import threading
+from queue import Queue, Empty
 
 from api import start_api_server
 from backtester import Backtester
@@ -11,6 +12,47 @@ from live_engine import LiveEngine
 from simulator import Simulator
 from supabase_client import SupabaseManager
 from telegram_bot import run_bot
+
+SYMBOL_FETCH_TIMEOUT_SECONDS = 15
+
+
+def _set_symbols(config, exchange_id, symbols):
+    config[exchange_id]['symbols'] = symbols
+    config['symbols'] = symbols
+
+
+def _fetch_symbols_with_timeout(exchange_id, api_key, api_secret, market_type, logger, timeout_seconds=SYMBOL_FETCH_TIMEOUT_SECONDS):
+    result_queue: Queue = Queue(maxsize=1)
+
+    def worker():
+        try:
+            client = ExchangeManager(exchange_id, api_key, api_secret)
+            symbols = client.fetch_all_symbols(market_type=market_type)
+            result_queue.put(("ok", symbols))
+        except Exception as exc:  # pragma: no cover - defensive runtime path
+            result_queue.put(("error", exc))
+
+    thread = threading.Thread(target=worker, name="symbol-fetch", daemon=True)
+    thread.start()
+    thread.join(timeout_seconds)
+
+    if thread.is_alive():
+        logger.warning(
+            f"Symbol discovery exceeded {timeout_seconds}s. Continuing startup with configured symbols."
+        )
+        return None
+
+    try:
+        status, payload = result_queue.get_nowait()
+    except Empty:
+        return None
+
+    if status == "error":
+        logger.warning(f"Symbol discovery failed. Continuing startup with configured symbols: {payload}")
+        return None
+
+    return payload
+
 
 def main():
     parser = argparse.ArgumentParser(description=f"{APP_NAME} algorithmic trading platform")
@@ -49,28 +91,17 @@ def main():
     mode = config['mode']
     logger.info(f"Starting in {mode} mode on {exchange_id}")
     
-    # Handle Dynamic Symbols
     ex_config = config[exchange_id]
-    
+    default_symbols = ex_config.get('symbols', ['BTCUSDT'])
+
     if args.symbol:
         symbols = [args.symbol]
         logger.info(f"Using symbol from command line: {args.symbol}")
-    elif ex_config.get('scan_all_symbols', True):
-        client = ExchangeManager(exchange_id, config['api_key'], config['api_secret'])
-        fetched_symbols = client.fetch_all_symbols(market_type=ex_config.get('market_type', 'swap'))
-        if fetched_symbols:
-            symbols = fetched_symbols
-            logger.info(f"Scanning all {len(symbols)} {exchange_id} {ex_config.get('market_type', 'swap')} symbols.")
-        else:
-            symbols = ex_config.get('symbols', ['BTCUSDT'])
-            logger.warning(f"Could not fetch symbols, using default symbols from config: {symbols}")
     else:
-        symbols = ex_config['symbols']
+        symbols = default_symbols
         logger.info(f"Using symbols from config: {symbols}")
-            
-    # Update config with fetched symbols for engine
-    config[exchange_id]['symbols'] = symbols
-    config['symbols'] = symbols # Also set top-level for engine ease
+
+    _set_symbols(config, exchange_id, symbols)
 
     if mode == 'backtest':
         backtester = Backtester(config)
@@ -97,14 +128,32 @@ def main():
             engine = Simulator(config, notifier, command_queue)
         else:
             engine = LiveEngine(config, notifier, command_queue)
+
+        start_api_server(engine, config)
+
+        if not args.symbol and ex_config.get('scan_all_symbols', True):
+            fetched_symbols = _fetch_symbols_with_timeout(
+                exchange_id,
+                config['api_key'],
+                config['api_secret'],
+                ex_config.get('market_type', 'swap'),
+                logger,
+            )
+            if fetched_symbols:
+                _set_symbols(config, exchange_id, fetched_symbols)
+                engine.symbols = fetched_symbols
+                if hasattr(engine, "_ensure_symbol_state"):
+                    for symbol in fetched_symbols:
+                        engine._ensure_symbol_state(symbol)
+                logger.info(f"Scanning all {len(fetched_symbols)} {exchange_id} {ex_config.get('market_type', 'swap')} symbols.")
+            else:
+                logger.warning(f"Using configured symbols for startup: {config['symbols']}")
             
         # Start Telegram Bot in separate thread
         if config['telegram']['bot_token']:
             bot_thread = threading.Thread(target=run_bot, args=(engine, command_queue))
             bot_thread.daemon = True
             bot_thread.start()
-
-        start_api_server(engine, config)
         
         # Check if API Keys were deferred for dynamic loading
         if not config[exchange_id].get('api_key') or config[exchange_id]['api_key'] == "YOUR_API_KEY":
