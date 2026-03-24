@@ -9,7 +9,7 @@ phemex:
     - "ETHUSD"
   testnet: true
   scan_all_symbols: true  # If true, bot fetches all available symbols
-  symbol_type: "Perpetual" # Perpetual or Spot
+  market_type: "all"  # all, swap, spot, or future
 
 strategy:
   timeframe: "1m"

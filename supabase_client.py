@@ -33,7 +33,9 @@ class CipherManager:
         try:
             self.cipher = Fernet(key)
         except Exception:
-            self.logger.warning("MASTER_ENCRYPTION_KEY invalid. Falling back to temporary in-memory key.")
+            self.logger.warning(
+                "MASTER_ENCRYPTION_KEY invalid. Expected a Fernet key. Falling back to temporary in-memory key."
+            )
             self.cipher = Fernet(Fernet.generate_key())
 
     def encrypt(self, data: str) -> str:

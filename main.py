@@ -21,6 +21,26 @@ def _set_symbols(config, exchange_id, symbols):
     config['symbols'] = symbols
 
 
+def _resolve_market_type(exchange_config):
+    raw_value = exchange_config.get('market_type') or exchange_config.get('symbol_type') or 'swap'
+    normalized = str(raw_value).strip().lower()
+    aliases = {
+        'perpetual': 'swap',
+        'perp': 'swap',
+        'swap': 'swap',
+        'spot': 'spot',
+        'future': 'future',
+        'futures': 'future',
+        'all': 'all',
+        '*': 'all',
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _describe_market_scope(market_type):
+    return "all active" if market_type == "all" else f"all {market_type}"
+
+
 def _fetch_symbols_with_timeout(exchange_id, api_key, api_secret, market_type, logger, timeout_seconds=SYMBOL_FETCH_TIMEOUT_SECONDS):
     result_queue: Queue = Queue(maxsize=1)
 
@@ -92,6 +112,8 @@ def main():
     logger.info(f"Starting in {mode} mode on {exchange_id}")
     
     ex_config = config[exchange_id]
+    market_type = _resolve_market_type(ex_config)
+    market_scope = _describe_market_scope(market_type)
     default_symbols = ex_config.get('symbols', ['BTCUSDT'])
 
     if args.symbol:
@@ -99,7 +121,10 @@ def main():
         logger.info(f"Using symbol from command line: {args.symbol}")
     else:
         symbols = default_symbols
-        logger.info(f"Using symbols from config: {symbols}")
+        if ex_config.get('scan_all_symbols', True):
+            logger.info(f"Using bootstrap symbols from config while discovering {market_scope} symbols: {symbols}")
+        else:
+            logger.info(f"Using symbols from config: {symbols}")
 
     _set_symbols(config, exchange_id, symbols)
 
@@ -136,7 +161,7 @@ def main():
                 exchange_id,
                 config['api_key'],
                 config['api_secret'],
-                ex_config.get('market_type', 'swap'),
+                market_type,
                 logger,
             )
             if fetched_symbols:
@@ -145,7 +170,7 @@ def main():
                 if hasattr(engine, "_ensure_symbol_state"):
                     for symbol in fetched_symbols:
                         engine._ensure_symbol_state(symbol)
-                logger.info(f"Scanning all {len(fetched_symbols)} {exchange_id} {ex_config.get('market_type', 'swap')} symbols.")
+                logger.info(f"Scanning all {len(fetched_symbols)} {exchange_id} {market_scope} symbols.")
             else:
                 logger.warning(f"Using configured symbols for startup: {config['symbols']}")
             

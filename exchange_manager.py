@@ -30,10 +30,18 @@ class ExchangeManager:
 
     def fetch_all_symbols(self, market_type: str = 'swap') -> List[str]:
         try:
+            normalized_market_type = (market_type or 'swap').lower()
             markets = self.client.load_markets()
             symbols = []
             for symbol, market in markets.items():
-                if market.get('type') == market_type and market.get('active'):
+                if not market.get('active'):
+                    continue
+
+                if normalized_market_type in {"all", "*", "any"}:
+                    symbols.append(symbol)
+                    continue
+
+                if (market.get('type') or '').lower() == normalized_market_type:
                     symbols.append(symbol)
             return symbols
         except Exception as e:
