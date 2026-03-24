@@ -22,6 +22,11 @@ from scanner_long import LongScanner
 from scanner_short import ShortScanner
 from supabase_client import SupabaseManager
 
+WS_PING_INTERVAL_SECONDS = 20
+WS_PING_TIMEOUT_SECONDS = 60
+SUBSCRIPTION_PAUSE_EVERY = 50
+SUBSCRIPTION_PAUSE_SECONDS = 0.01
+
 
 class Simulator:
     def __init__(self, config, notifier: TelegramNotifier, command_queue: queue.Queue):
@@ -107,7 +112,8 @@ class Simulator:
                 "params": [symbol, 60],
             }
             await websocket.send(json.dumps(subscribe_msg))
-            await asyncio.sleep(0.05)
+            if index % SUBSCRIPTION_PAUSE_EVERY == 0:
+                await asyncio.sleep(SUBSCRIPTION_PAUSE_SECONDS)
             self.logger.debug(f"Subscribed to {symbol}")
 
     async def _handle_ws_message(self, data: Dict[str, Any]):
@@ -133,7 +139,11 @@ class Simulator:
 
         while self.is_running:
             try:
-                async with websockets.connect(self.ws_url, ping_interval=20, ping_timeout=20) as websocket:
+                async with websockets.connect(
+                    self.ws_url,
+                    ping_interval=WS_PING_INTERVAL_SECONDS,
+                    ping_timeout=WS_PING_TIMEOUT_SECONDS,
+                ) as websocket:
                     self._websocket = websocket
                     self.logger.info("Connected to WebSocket")
                     await self._subscribe(websocket)

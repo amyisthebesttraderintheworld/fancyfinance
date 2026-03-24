@@ -4,6 +4,7 @@ import inspect
 import queue
 
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import Conflict
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from common import SettingsManager, get_logger
@@ -15,6 +16,7 @@ config = None
 db = SupabaseManager()
 settings_mgr = SettingsManager()
 logger = get_logger("TelegramBot")
+_conflict_logged = False
 
 
 async def _maybe_await(result):
@@ -31,6 +33,14 @@ async def _reply(target, text: str, **kwargs):
         return
     if hasattr(target, "edit_message_text"):
         await _maybe_await(target.edit_message_text(text, **kwargs))
+
+
+def _is_truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def get_main_menu():
@@ -312,7 +322,30 @@ async def set_commands(application: Application):
 
 
 async def post_init(application: Application):
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=False)
+    except Exception as exc:
+        logger.warning(f"Unable to clear Telegram webhook before polling: {exc}")
     await set_commands(application)
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    global _conflict_logged
+
+    if isinstance(context.error, Conflict):
+        if not _conflict_logged:
+            logger.error(
+                "Telegram polling conflict detected. Another poller or active webhook is using this bot token. "
+                "Disable FancyFinance polling with TELEGRAM_POLLING_ENABLED=false if another service owns inbound Telegram updates."
+            )
+            _conflict_logged = True
+        try:
+            await context.application.stop()
+        except Exception as exc:
+            logger.warning(f"Failed to stop Telegram application after conflict: {exc}")
+        return
+
+    logger.error(f"Telegram error: {context.error}")
 
 
 def run_bot(engine, command_queue):
@@ -320,12 +353,18 @@ def run_bot(engine, command_queue):
     cmd_queue = command_queue
     config = engine.config
 
-    token = config.get("telegram", {}).get("bot_token")
+    telegram_config = config.get("telegram", {})
+    token = telegram_config.get("bot_token")
     if not token:
         logger.warning("Telegram bot token missing. Bot controls disabled.")
         return
 
+    if not _is_truthy(telegram_config.get("polling_enabled", True)):
+        logger.info("Telegram polling disabled. Outbound notifications remain enabled.")
+        return
+
     application = Application.builder().token(token).post_init(post_init).build()
+    application.add_error_handler(error_handler)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("signup", signup_command))
     application.add_handler(CommandHandler("verify_email", verify_email_command))
@@ -342,4 +381,4 @@ def run_bot(engine, command_queue):
         application.add_handler(CommandHandler(command, proxy_command))
 
     logger.info("Telegram Bot Polling...")
-    application.run_polling(stop_signals=None)
+    application.run_polling(stop_signals=None, drop_pending_updates=False)

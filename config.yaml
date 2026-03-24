@@ -46,6 +46,7 @@ backtest:
 
 telegram:
   bot_token: "${TELEGRAM_BOT_TOKEN:-}"
+  polling_enabled: "${TELEGRAM_POLLING_ENABLED:-true}"
   personal_mode: true
   admin_chat_ids:
     - 123456789
