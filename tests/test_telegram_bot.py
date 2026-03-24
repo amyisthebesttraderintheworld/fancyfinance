@@ -21,6 +21,7 @@ def mock_context():
 
 @pytest.mark.asyncio
 async def test_start_command(mock_update, mock_context):
+    telegram_bot.settings_mgr.settings.pop("user_agreed_12345", None)
     await start(mock_update, mock_context)
     mock_update.message.reply_text.assert_called()
     assert "IMPORTANT LEGAL" in mock_update.message.reply_text.call_args[0][0]
@@ -70,7 +71,8 @@ async def test_button_handler_agree_shows_main_menu(mock_context):
     query.data = "agree_12345"
     query.answer = AsyncMock()
     query.edit_message_text = AsyncMock()
-    query.message.reply_text = AsyncMock()
+    query.message.chat.id = 12345
+    mock_context.bot.send_message = AsyncMock()
 
     update = MagicMock()
     update.callback_query = query
@@ -79,5 +81,5 @@ async def test_button_handler_agree_shows_main_menu(mock_context):
 
     query.answer.assert_called_once()
     query.edit_message_text.assert_called_once()
-    query.message.reply_text.assert_called_once()
-    assert "Trading Bot Connected" in query.message.reply_text.call_args[0][0]
+    mock_context.bot.send_message.assert_called_once()
+    assert "Trading Bot Connected" in mock_context.bot.send_message.call_args.kwargs["text"]

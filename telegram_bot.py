@@ -70,6 +70,22 @@ async def _send_welcome_menu(target):
     await _reply(target, welcome_text, parse_mode="Markdown", reply_markup=get_main_menu())
 
 
+async def _send_welcome_menu_to_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    welcome_text = (
+        f"🤖 *{APP_NAME} v{__version__}*\n\n"
+        "Trading Bot Connected. Use /help for commands.\n\n"
+        "Use the buttons below to control the engine or type a command directly."
+    )
+    await _maybe_await(
+        context.bot.send_message(
+            chat_id=chat_id,
+            text=welcome_text,
+            parse_mode="Markdown",
+            reply_markup=get_main_menu(),
+        )
+    )
+
+
 async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) < 2:
         await _reply(
@@ -219,11 +235,20 @@ async def set_value_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
 
     if query.data.startswith("agree_"):
         user_id = query.data.split("_", 1)[1]
-        settings_mgr.set(f"user_agreed_{user_id}", True, "Boolean", "User agreement to Terms & Conditions")
+        saved = settings_mgr.set(
+            f"user_agreed_{user_id}",
+            True,
+            "Boolean",
+            "User agreement to Terms & Conditions",
+        )
+        if not saved:
+            await query.answer("Could not save agreement. Please try again.", show_alert=True)
+            return
+
+        await query.answer("Agreement recorded")
         try:
             await _maybe_await(
                 query.edit_message_text(
@@ -233,8 +258,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as exc:
             logger.warning(f"Failed to update agreement message: {exc}")
-        await _send_welcome_menu(query)
+        await _send_welcome_menu_to_chat(context, query.message.chat.id)
+        logger.info(f"User {user_id} accepted the risk disclosure.")
         return
+
+    await query.answer()
 
     if query.data.startswith("toggle_"):
         key = query.data.split("_", 1)[1]
