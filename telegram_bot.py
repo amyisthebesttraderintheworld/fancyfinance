@@ -61,6 +61,15 @@ def get_main_menu():
     return InlineKeyboardMarkup(keyboard)
 
 
+async def _send_welcome_menu(target):
+    welcome_text = (
+        f"🤖 *{APP_NAME} v{__version__}*\n\n"
+        "Trading Bot Connected. Use /help for commands.\n\n"
+        "Use the buttons below to control the engine or type a command directly."
+    )
+    await _reply(target, welcome_text, parse_mode="Markdown", reply_markup=get_main_menu())
+
+
 async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) < 2:
         await _reply(
@@ -175,12 +184,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, disclaimer_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    welcome_text = (
-        f"🤖 *{APP_NAME} v{__version__}*\n\n"
-        "Trading Bot Connected. Use /help for commands.\n\n"
-        "Use the buttons below to control the engine or type a command directly."
-    )
-    await _reply(update, welcome_text, parse_mode="Markdown", reply_markup=get_main_menu())
+    await _send_welcome_menu(update)
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -220,7 +224,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("agree_"):
         user_id = query.data.split("_", 1)[1]
         settings_mgr.set(f"user_agreed_{user_id}", True, "Boolean", "User agreement to Terms & Conditions")
-        await _reply(query, "✅ *Agreement recorded.*", parse_mode="Markdown")
+        try:
+            await _maybe_await(
+                query.edit_message_text(
+                    "✅ *Agreement recorded. Welcome to FancyFinance.*",
+                    parse_mode="Markdown",
+                )
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to update agreement message: {exc}")
+        await _send_welcome_menu(query)
         return
 
     if query.data.startswith("toggle_"):

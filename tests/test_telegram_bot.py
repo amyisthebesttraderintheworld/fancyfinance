@@ -1,7 +1,7 @@
 import pytest
 import queue
 from unittest.mock import MagicMock, AsyncMock, patch
-from telegram_bot import start, help_command, proxy_command
+from telegram_bot import start, help_command, proxy_command, button_handler
 import telegram_bot # to get global variables if needed
 
 @pytest.fixture
@@ -62,3 +62,22 @@ async def test_proxy_command_unauthorized(mock_update, mock_context, mock_config
     
     assert telegram_bot.cmd_queue.empty()
     mock_update.message.reply_text.assert_called_with("Unauthorized.")
+
+
+@pytest.mark.asyncio
+async def test_button_handler_agree_shows_main_menu(mock_context):
+    query = MagicMock()
+    query.data = "agree_12345"
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    query.message.reply_text = AsyncMock()
+
+    update = MagicMock()
+    update.callback_query = query
+
+    await button_handler(update, mock_context)
+
+    query.answer.assert_called_once()
+    query.edit_message_text.assert_called_once()
+    query.message.reply_text.assert_called_once()
+    assert "Trading Bot Connected" in query.message.reply_text.call_args[0][0]
