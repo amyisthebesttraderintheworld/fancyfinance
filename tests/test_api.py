@@ -367,7 +367,25 @@ def test_dashboard_page_uses_member_token_fallback(sample_config):
     response = client.get("/dashboard")
 
     assert response.status_code == 200
+    assert 'const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";' in response.text
     assert 'const TOKEN_KEYS = ["fancyfinance_api_token", "fancyfinance_member_dashboard_token"];' in response.text
+
+
+def test_dashboard_bootstrap_returns_public_summary(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/bootstrap")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["public_bootstrap"] is True
+    assert payload["snapshot"]["balance"] == 10125.5
+    assert payload["runtime"]["engine_status"] == "running"
+    assert payload["positions"] == []
+    assert payload["recent_trades"] == []
+    assert payload["portfolio"]["notional_exposure"] == 4200.0
+    assert payload["performance"]["realized_pnl"] == 125.5
 
 
 def test_member_dashboard_data_requires_valid_token(sample_config):

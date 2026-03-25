@@ -1416,6 +1416,7 @@ def build_dashboard_html(
       const AUTH_REQUIRED = __AUTH_REQUIRED_JS__;
       const PUBLIC_MODE = __PUBLIC_MODE_JS__;
       const DATA_ENDPOINT = "__DATA_ENDPOINT__";
+      const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";
       const TOKEN_KEY = "__TOKEN_STORAGE_KEY__";
       const TOKEN_KEYS = __TOKEN_STORAGE_KEYS__;
       const QUERY_TOKEN_PARAM = "__QUERY_TOKEN_PARAM__";
@@ -1948,19 +1949,37 @@ def build_dashboard_html(
         const referenceBalance = referenceBalanceRaw === null || referenceBalanceRaw === undefined || Number.isNaN(Number(referenceBalanceRaw))
           ? null
           : Number(referenceBalanceRaw);
-        const liveUpnl = positions.reduce((sum, position) => {
-          const unrealized = positionUpnl(position);
-          return unrealized == null ? sum : sum + unrealized;
-        }, 0);
-        const exposure = positions.reduce((sum, position) => {
-          const entry = Number(position.entry_price);
-          const quantity = Number(position.quantity);
-          if (!Number.isFinite(entry) || !Number.isFinite(quantity)) {
-            return sum;
-          }
-          return sum + Math.abs(entry * quantity);
-        }, 0);
-        const markedPositions = positions.filter((position) => position.mark_price !== null && position.mark_price !== undefined && !Number.isNaN(Number(position.mark_price))).length;
+        const directLiveUpnl = apiPortfolio.live_upnl === null || apiPortfolio.live_upnl === undefined || Number.isNaN(Number(apiPortfolio.live_upnl))
+          ? null
+          : Number(apiPortfolio.live_upnl);
+        const liveUpnl = directLiveUpnl !== null
+          ? directLiveUpnl
+          : positions.reduce((sum, position) => {
+              const unrealized = positionUpnl(position);
+              return unrealized == null ? sum : sum + unrealized;
+            }, 0);
+        const directExposure = apiPortfolio.notional_exposure === null || apiPortfolio.notional_exposure === undefined || Number.isNaN(Number(apiPortfolio.notional_exposure))
+          ? null
+          : Number(apiPortfolio.notional_exposure);
+        const exposure = directExposure !== null
+          ? directExposure
+          : positions.reduce((sum, position) => {
+              const entry = Number(position.entry_price);
+              const quantity = Number(position.quantity);
+              if (!Number.isFinite(entry) || !Number.isFinite(quantity)) {
+                return sum;
+              }
+              return sum + Math.abs(entry * quantity);
+            }, 0);
+        const directMarkedPositions = apiPortfolio.marked_positions === null || apiPortfolio.marked_positions === undefined || Number.isNaN(Number(apiPortfolio.marked_positions))
+          ? null
+          : Number(apiPortfolio.marked_positions);
+        const markedPositions = directMarkedPositions !== null
+          ? directMarkedPositions
+          : positions.filter((position) => position.mark_price !== null && position.mark_price !== undefined && !Number.isNaN(Number(position.mark_price))).length;
+        const openPositions = snapshot.open_positions === null || snapshot.open_positions === undefined || Number.isNaN(Number(snapshot.open_positions))
+          ? positions.length
+          : Number(snapshot.open_positions);
         const markedEquity = balance === null || balance === undefined || Number.isNaN(Number(balance))
           ? null
           : Number(balance) + liveUpnl;
@@ -1989,7 +2008,7 @@ def build_dashboard_html(
           markedEquity,
           exposure,
           markedPositions,
-          openPositions: positions.length,
+          openPositions,
           winningPositions: apiPortfolio.winning_positions ?? 0,
           losingPositions: apiPortfolio.losing_positions ?? 0,
           sessionDelta,
@@ -2276,6 +2295,7 @@ def build_dashboard_html(
         const runtime = payload.runtime || {};
         const config = payload.config || {};
         const memberAccess = !!payload.member_access;
+        const publicBootstrap = !!payload.public_bootstrap;
         const portfolio = computePortfolio(payload);
         const averageTrade = performance.closed_trades ? Number(performance.realized_pnl || 0) / Number(performance.closed_trades || 1) : null;
         const alerts = (Array.isArray(payload.activity) ? payload.activity : []).filter((entry) => {
@@ -2324,9 +2344,11 @@ def build_dashboard_html(
 
         if (memberAccess) {
           setMessage(els.controlMessage, "Engine controls stay in Telegram. Strategy and backtesting tools are available here.", false);
+        } else if (publicBootstrap) {
+          setMessage(els.controlMessage, "Showing the live public summary. Unlock the dashboard to view positions, trades, and member detail.", false);
         }
 
-        applyAccessMode(memberAccess);
+        applyAccessMode(memberAccess || publicBootstrap);
         renderWallet(portfolio);
         renderSetup(config);
         renderStrategy(payload.strategy || {});
@@ -2336,14 +2358,35 @@ def build_dashboard_html(
         renderUsers(payload.users || {});
       }
 
-      async function loadDashboard() {
-        if (AUTH_REQUIRED && !state.token) {
+      async function loadBootstrap(message) {
+        try {
+          const separator = BOOTSTRAP_ENDPOINT.includes("?") ? "&" : "?";
+          const response = await fetch(`${BOOTSTRAP_ENDPOINT}${separator}_ts=${Date.now()}`, {
+            cache: "no-store",
+          });
+          if (!response.ok) {
+            throw new Error(`Public bootstrap failed: ${response.status}`);
+          }
+          const payload = await response.json();
           setMessage(
             els.authMessage,
+            message || "Showing the live public summary. Add a valid dashboard token or API key for protected detail.",
+            false
+          );
+          renderData(payload);
+          return true;
+        } catch (error) {
+          setMessage(els.authMessage, error.message || "Could not load dashboard.", true);
+          return false;
+        }
+      }
+
+      async function loadDashboard() {
+        if (AUTH_REQUIRED && !state.token) {
+          await loadBootstrap(
             PUBLIC_MODE
-              ? "Member dashboard locked. Use /dashboard_api in Telegram for a fresh access link."
-              : "Dashboard locked. Add a valid API token.",
-            true
+              ? "Member dashboard locked. Showing the live public summary until you use /dashboard_api in Telegram."
+              : "Dashboard locked. Showing the live public summary until you add a valid API token."
           );
           return;
         }
@@ -2361,7 +2404,7 @@ def build_dashboard_html(
               await loadDashboard();
               return;
             }
-            setMessage(els.authMessage, "Dashboard locked. Add a valid dashboard token or API key.", true);
+            await loadBootstrap("Dashboard locked. Showing the live public summary until a valid dashboard token or API key is provided.");
             return;
           }
 

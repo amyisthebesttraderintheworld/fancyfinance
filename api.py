@@ -627,6 +627,25 @@ def _member_dashboard_payload(engine, user_id: int):
     }
 
 
+def _public_dashboard_payload(engine):
+    snapshot = _snapshot(engine)
+    positions = _positions_payload(engine)
+    trades = _recent_trades(engine)
+    return {
+        "public_bootstrap": True,
+        "snapshot": snapshot,
+        "runtime": _runtime_summary(engine),
+        "positions": [],
+        "recent_trades": [],
+        "performance": _performance_summary(engine, trades),
+        "portfolio": _portfolio_summary(snapshot, positions),
+        "activity": [],
+        "users": {},
+        "config": {},
+        "strategy": {},
+    }
+
+
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
     stripe_service = StripeService(engine.config)
@@ -705,6 +724,10 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     def dashboard_member_data(x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
         user_id = _authorize_member_dashboard(auth_token, x_api_key or access)
         return _member_dashboard_payload(engine, user_id)
+
+    @app.get("/dashboard/bootstrap")
+    def dashboard_bootstrap():
+        return _public_dashboard_payload(engine)
 
     @app.post("/strategy/config")
     async def strategy_config_save(request: Request, x_api_key: Optional[str] = Header(default=None)):
