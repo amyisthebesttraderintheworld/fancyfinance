@@ -1,0 +1,41 @@
+{
+  "balance": 89.5,
+  "positions": [
+    {
+      "symbol": "XAUUSDT",
+      "side": "Buy",
+      "size": 0.11097227246800115,
+      "margin": 10.0,
+      "leverage": 50,
+      "fee": 0.5,
+      "entry": 4505.63,
+      "pnl": 0.0,
+      "stop_price": 4370.4610999999995,
+      "original_stop": 4370.4610999999995,
+      "take_profit": 4956.193,
+      "tp_stages": [
+        {
+          "price": 4730.9115,
+          "qty": 0.05548614,
+          "hit": false
+        },
+        {
+          "price": 4843.55225,
+          "qty": 0.02774307,
+          "hit": false
+        },
+        {
+          "price": 4956.193,
+          "qty": 0.02774306,
+          "hit": false
+        }
+      ],
+      "high_water": 4505.63,
+      "low_water": null,
+      "timestamp": "2026-03-21T11:08:53.345246",
+      "entry_time": "2026-03-21T11:08:53.345273",
+      "entry_score": 160,
+      "mark_price": 4501.65
+    }
+  ]
+}

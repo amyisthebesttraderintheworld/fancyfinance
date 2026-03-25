@@ -1,0 +1,3722 @@
+[
+  {
+    "timestamp": "2026-03-06T15:06:22.702021",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04848,
+    "qty": "30940.59405940594",
+    "score": 116,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T18:28:03.015973",
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "price": 0.1003,
+    "qty": "14955.134596211366",
+    "score": 116,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T18:28:57.780618",
+    "symbol": "UAIUSDT",
+    "direction": "SHORT",
+    "price": 0.3195,
+    "qty": "4553.9906103286385",
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T18:35:28.499910",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.05002,
+    "qty": "29988.004798080765",
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T18:37:43.141292",
+    "symbol": "TRIAUSDT",
+    "direction": "SHORT",
+    "price": 0.02096,
+    "qty": "17239.980916030618",
+    "score": 145,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T18:43:19.004846",
+    "symbol": "LTCUSDT",
+    "direction": "LONG",
+    "price": 53.5,
+    "qty": "28.037383177570092",
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T18:46:27.347420",
+    "symbol": "WIFUSDT",
+    "direction": "LONG",
+    "price": 0.1877,
+    "qty": "7991.475759190197",
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T22:58:03.857027",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.905,
+    "qty": "1657.4585635359115",
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T22:58:03.873525",
+    "symbol": "ESPUSDT",
+    "direction": "LONG",
+    "price": 0.11367,
+    "qty": "13196.093956188968",
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T22:58:03.902185",
+    "symbol": "TAOUSDT",
+    "direction": "LONG",
+    "price": 176.97,
+    "qty": "8.476012883539584",
+    "score": 140,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-06T22:58:03.936095",
+    "symbol": "ETCUSDT",
+    "direction": "LONG",
+    "price": 8.259,
+    "qty": "57.56320377769726",
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T15:19:46.926381",
+    "symbol": "ENJUSDT",
+    "direction": "SHORT",
+    "price": 0.02326,
+    "qty": "64488.392089423905",
+    "score": 149,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T15:19:46.954540",
+    "symbol": "NIGHTUSDT",
+    "direction": "LONG",
+    "price": 0.04781,
+    "qty": "31374.18950010458",
+    "score": 141,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T15:19:47.045433",
+    "symbol": "BCHUSDT",
+    "direction": "LONG",
+    "price": 453.32,
+    "qty": "1.6075025892283845",
+    "score": 136,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T15:19:47.019851",
+    "symbol": "HYPEUSDT",
+    "direction": "SHORT",
+    "price": 42.541,
+    "qty": "35.26010201922851",
+    "score": 159,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T15:52:20.855158",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.61,
+    "qty": "156.08740894901146",
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:34.520220",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005752,
+    "qty": "260778.859527121",
+    "score": 164,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:35.246032",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.0946,
+    "qty": "15856.236786469344",
+    "score": 163,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:37.278256",
+    "symbol": "KASUSDT",
+    "direction": "SHORT",
+    "price": 0.03809,
+    "qty": "30986.79671329679",
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:10:40.201454",
+    "symbol": "INJUSDT",
+    "direction": "LONG",
+    "price": 3.043,
+    "qty": "492.5943477647178",
+    "score": 145,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:26:15.402194",
+    "symbol": "WLDUSDT",
+    "direction": "LONG",
+    "price": 0.3637,
+    "qty": "4124.278251306021",
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:26:15.489356",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2636,
+    "qty": "5519.726858877087",
+    "score": 154,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:37:18.328667",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005765,
+    "qty": "260190.80659150044",
+    "score": 158,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:37:18.774051",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.644,
+    "qty": "155.53712152633761",
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:37:18.978201",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09454,
+    "qty": "2044.4240900615532",
+    "score": 163,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:40:14.840460",
+    "symbol": "HYPEUSDT",
+    "direction": "SHORT",
+    "price": 42.73,
+    "qty": "7.020828457758016",
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:40:43.610924",
+    "symbol": "TRUMPUSDT",
+    "direction": "LONG",
+    "price": 3.483,
+    "qty": "86.13264427217915",
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:41:12.912886",
+    "symbol": "u1000BONKUSDT",
+    "direction": "LONG",
+    "price": 0.006104,
+    "qty": "49148.0996068152",
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:41:39.723511",
+    "symbol": "BCHUSDT",
+    "direction": "LONG",
+    "price": 454.27,
+    "qty": "0.6604002025227288",
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:42:08.661335",
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "price": 0.108,
+    "qty": "2777.777777777778",
+    "score": 111,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:43:02.290796",
+    "symbol": "VVVUSDT",
+    "direction": "LONG",
+    "price": 5.423,
+    "qty": "55.31993361607966",
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:46:14.623771",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7318,
+    "qty": "409.94807324405576",
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:47:09.013699",
+    "symbol": "HBARUSDT",
+    "direction": "LONG",
+    "price": 0.09537,
+    "qty": "3145.6432840515886",
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:47:35.265257",
+    "symbol": "ARBUSDT",
+    "direction": "LONG",
+    "price": 0.1022,
+    "qty": "2935.420743639922",
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T16:49:29.585305",
+    "symbol": "KASUSDT",
+    "direction": "SHORT",
+    "price": 0.03812,
+    "qty": "7869.884575026233",
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T17:08:14.522405",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.562,
+    "qty": "533.8078291814946",
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T17:58:44.461847",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005801,
+    "qty": "51715.22151353215",
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T17:58:44.473035",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.0953,
+    "qty": "3147.953830010493",
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:01:28.103032",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02604,
+    "qty": "3840.2457757296465",
+    "score": 119,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:06:58.441813",
+    "symbol": "KASUSDT",
+    "direction": "SHORT",
+    "price": 0.03855,
+    "qty": "5188.067444876783",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:10:19.866126",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.668,
+    "qty": "20.68680182043856",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:15:21.126514",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7345,
+    "qty": "272.2940776038121",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:21:26.508846",
+    "symbol": "TRUMPUSDT",
+    "direction": "LONG",
+    "price": 3.478,
+    "qty": "57.50431282346176",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:25:37.307946",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.5622,
+    "qty": "355.7452863749555",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:51:38.332175",
+    "symbol": "KASUSDT",
+    "direction": "SHORT",
+    "price": 0.03874,
+    "qty": "5162.622612287042",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:52:46.242663",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.5698,
+    "qty": "351.00035100035103",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:53:12.921768",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02636,
+    "qty": "3793.626707132018",
+    "leverage": 10,
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:53:40.160922",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7341,
+    "qty": "272.44244653316986",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:55:15.603450",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005803,
+    "qty": "34464.931931759435",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:55:21.797165",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09491,
+    "qty": "4214.519018017069",
+    "leverage": 40,
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:55:20.586564",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.266,
+    "qty": "1127.8195488721803",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:56:15.445448",
+    "symbol": "HYPEUSDT",
+    "direction": "SHORT",
+    "price": 41.806,
+    "qty": "2.3920011481605514",
+    "leverage": 10,
+    "score": 122,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T18:56:42.414946",
+    "symbol": "FARTCOINUSDT",
+    "direction": "SHORT",
+    "price": 0.2097,
+    "qty": "476.87172150691464",
+    "leverage": 10,
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:15:35.714891",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2662,
+    "qty": "751.3148009015778",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:15:35.945971",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09485,
+    "qty": "4217.185028993147",
+    "leverage": 40,
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:15:36.013741",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005802,
+    "qty": "34470.87211306446",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:15:36.022809",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.658,
+    "qty": "20.70822116380203",
+    "leverage": 20,
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:15:36.260449",
+    "symbol": "KASUSDT",
+    "direction": "SHORT",
+    "price": 0.03904,
+    "qty": "5122.950819672132",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:17:46.309216",
+    "symbol": "HBARUSDT",
+    "direction": "LONG",
+    "price": 0.09539,
+    "qty": "1048.327916972429",
+    "leverage": 10,
+    "score": 117,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:18:13.070361",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.5671,
+    "qty": "176.3357432551578",
+    "leverage": 10,
+    "score": 118,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:18:39.919387",
+    "symbol": "u1000PEPEUSDT",
+    "direction": "LONG",
+    "price": 0.0035043,
+    "qty": "28536.369603059098",
+    "leverage": 10,
+    "score": 110,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T19:19:06.420973",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7342,
+    "qty": "272.40533914464726",
+    "leverage": 20,
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:30.346972",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1262,
+    "qty": "2377.1790808240885",
+    "leverage": 30,
+    "score": 140,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:30.669719",
+    "symbol": "BTCUSDT",
+    "direction": "LONG",
+    "price": 71178.3,
+    "qty": "0.004214767703078045",
+    "leverage": 30,
+    "score": 136,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:32.678300",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.674,
+    "qty": "81.65487207403375",
+    "leverage": 30,
+    "score": 142,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:32.874226",
+    "symbol": "MOODENGUSDT",
+    "direction": "LONG",
+    "price": 0.05158,
+    "qty": "5816.2078324932145",
+    "leverage": 30,
+    "score": 136,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:32.890898",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 76.27,
+    "qty": "3.933394519470303",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:32.821751",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4831.0,
+    "qty": "0.062098944317946596",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:01:33.794877",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.221,
+    "qty": "43.37924303220909",
+    "leverage": 40,
+    "score": 149,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:04:11.640148",
+    "symbol": "NIGHTUSDT",
+    "direction": "LONG",
+    "price": 0.04739,
+    "qty": "4220.299641274531",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T20:05:32.383418",
+    "symbol": "APEUSDT",
+    "direction": "LONG",
+    "price": 0.095,
+    "qty": "2105.2631578947367",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:28:24.999927",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7319,
+    "qty": "409.8920617570706",
+    "leverage": 30,
+    "score": 142,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:32:14.403544",
+    "symbol": "AUS200USDT",
+    "direction": "LONG",
+    "price": 5984.02,
+    "qty": "0.03342234818733894",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:33:07.681972",
+    "symbol": "BCHUSDT",
+    "direction": "LONG",
+    "price": 454.19,
+    "qty": "0.44034434928113786",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:33:34.316828",
+    "symbol": "XPTUSDT",
+    "direction": "LONG",
+    "price": 2032.22,
+    "qty": "0.09841454173268642",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:33:59.836125",
+    "symbol": "LTCUSDT",
+    "direction": "LONG",
+    "price": 55.86,
+    "qty": "3.5803795202291444",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:34:26.326002",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.9828,
+    "qty": "203.5002035002035",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:36:04.185683",
+    "symbol": "RENDERUSDT",
+    "direction": "LONG",
+    "price": 1.726,
+    "qty": "115.87485515643105",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T21:39:43.927391",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.67,
+    "qty": "20.682523267838675",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:27.754349",
+    "symbol": "MOODENGUSDT",
+    "direction": "LONG",
+    "price": 0.05122,
+    "qty": "5857.087075361187",
+    "leverage": 30,
+    "score": 136,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:27.765441",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.674,
+    "qty": "81.65487207403375",
+    "leverage": 30,
+    "score": 142,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:27.820838",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4845.0,
+    "qty": "0.06191950464396285",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:27.826358",
+    "symbol": "NIGHTUSDT",
+    "direction": "LONG",
+    "price": 0.04584,
+    "qty": "6544.502617801048",
+    "leverage": 30,
+    "score": 141,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:27.817848",
+    "symbol": "INJUSDT",
+    "direction": "LONG",
+    "price": 3.047,
+    "qty": "65.63833278634722",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:28.395162",
+    "symbol": "BTCUSDT",
+    "direction": "LONG",
+    "price": 71160.7,
+    "qty": "0.004215810131153853",
+    "leverage": 30,
+    "score": 136,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:28.862178",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.202,
+    "qty": "43.46881112801565",
+    "leverage": 40,
+    "score": 149,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T22:26:28.935080",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1254,
+    "qty": "3189.7926634768737",
+    "leverage": 40,
+    "score": 147,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T23:18:10.223173",
+    "symbol": "APEUSDT",
+    "direction": "LONG",
+    "price": 0.0944,
+    "qty": "3177.9661016949153",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T23:19:46.194610",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 76.53,
+    "qty": "2.6133542401672547",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T23:20:14.004117",
+    "symbol": "WLDUSDT",
+    "direction": "LONG",
+    "price": 0.3651,
+    "qty": "273.8975623116954",
+    "leverage": 10,
+    "score": 120,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-18T23:21:43.309611",
+    "symbol": "RENDERUSDT",
+    "direction": "LONG",
+    "price": 1.729,
+    "qty": "173.5106998264893",
+    "leverage": 30,
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T00:25:17.082662",
+    "symbol": "GRASSUSDT",
+    "direction": "LONG",
+    "price": 0.3673,
+    "qty": "544.5140212360468",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T00:25:17.611596",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.198,
+    "qty": "21.743857360295717",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T00:26:35.509149",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09475,
+    "qty": "3166.2269129287597",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T00:28:25.692355",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.981,
+    "qty": "203.8735983690112",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T00:59:25.639821",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.5779,
+    "qty": "346.0806367883717",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T01:01:45.318078",
+    "symbol": "INJUSDT",
+    "direction": "LONG",
+    "price": 3.045,
+    "qty": "32.84072249589491",
+    "leverage": 10,
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T01:09:55.304056",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.667,
+    "qty": "27.27024815925825",
+    "leverage": 10,
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T01:10:22.739384",
+    "symbol": "BNBUSDT",
+    "direction": "LONG",
+    "price": 649.37,
+    "qty": "0.1539954109367541",
+    "leverage": 10,
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T01:14:06.917887",
+    "symbol": "APEUSDT",
+    "direction": "LONG",
+    "price": 0.0945,
+    "qty": "2116.4021164021165",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T01:14:34.367364",
+    "symbol": "HBARUSDT",
+    "direction": "LONG",
+    "price": 0.09513,
+    "qty": "2102.3862083464733",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T01:27:33.959634",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 75.88,
+    "qty": "3.9536109646810758",
+    "leverage": 30,
+    "score": 141,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:19:01.524920",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09476,
+    "qty": "2110.595187842972",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:19:02.272558",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.9758,
+    "qty": "204.96003279360525",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:19:02.340232",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 74.58,
+    "qty": "5.363368195226602",
+    "leverage": 40,
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:19:05.089993",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2643,
+    "qty": "756.7158531971245",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:20:16.586452",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 74.29,
+    "qty": "5.384304751648943",
+    "leverage": 40,
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:20:17.163109",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2641,
+    "qty": "757.2889057175312",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:20:17.535775",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.178,
+    "qty": "21.791239921551533",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:20:18.283510",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.9746,
+    "qty": "205.21239482864763",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:20:20.181393",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09469,
+    "qty": "3168.2331819621927",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:20:25.077169",
+    "symbol": "MOODENGUSDT",
+    "direction": "LONG",
+    "price": 0.05109,
+    "qty": "3914.6604032100213",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:23:00.571312",
+    "symbol": "NAS100USDT",
+    "direction": "LONG",
+    "price": 24401.85,
+    "qty": "0.004098049942934655",
+    "leverage": 10,
+    "score": 113,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:24:10.394423",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09456,
+    "qty": "4230.118443316413",
+    "leverage": 40,
+    "score": 150,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:24:10.713279",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.175,
+    "qty": "21.798365122615802",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:24:10.790362",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 74.04,
+    "qty": "5.402485143165856",
+    "leverage": 40,
+    "score": 153,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:24:10.704325",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.9742,
+    "qty": "205.2966536645453",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:26:27.556937",
+    "symbol": "HBARUSDT",
+    "direction": "LONG",
+    "price": 0.09489,
+    "qty": "3161.555485298767",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:26:27.578451",
+    "symbol": "MOODENGUSDT",
+    "direction": "LONG",
+    "price": 0.05112,
+    "qty": "3912.3630672926447",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:26:27.889454",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.264,
+    "qty": "757.5757575757575",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:26:27.922930",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 73.95,
+    "qty": "5.409060175794456",
+    "leverage": 40,
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:29:32.205957",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.5904,
+    "qty": "169.37669376693765",
+    "leverage": 10,
+    "score": 117,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:33:36.187334",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09432,
+    "qty": "4240.882103477523",
+    "leverage": 40,
+    "score": 150,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:33:36.342765",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.161,
+    "qty": "32.7475166466543",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:35:00.727569",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.627,
+    "qty": "55.141990625861595",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:35:01.659158",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005762,
+    "qty": "34710.17007983339",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:36:31.759647",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4807.51,
+    "qty": "0.06240236629773001",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T02:49:31.992113",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4756.0,
+    "qty": "0.04205214465937763",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:26:26.057898",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 72.38,
+    "qty": "5.5263885051119095",
+    "leverage": 40,
+    "score": 148,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:26:26.624475",
+    "symbol": "HBARUSDT",
+    "direction": "LONG",
+    "price": 0.09399,
+    "qty": "2127.885945313331",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:26:26.430777",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4768.95,
+    "qty": "0.041937952798834124",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:26:27.046073",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.089,
+    "qty": "33.006931455605674",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:26:26.912874",
+    "symbol": "DOGEUSDT",
+    "direction": "LONG",
+    "price": 0.09413,
+    "qty": "3187.0816955274618",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:26:26.907594",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.9614,
+    "qty": "416.0599126274183",
+    "leverage": 40,
+    "score": 145,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:29:20.757744",
+    "symbol": "BCHUSDT",
+    "direction": "LONG",
+    "price": 452.04,
+    "qty": "0.44243872223697017",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:31:14.903580",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.601,
+    "qty": "55.540127742293805",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:31:14.914953",
+    "symbol": "ASTERUSDT",
+    "direction": "LONG",
+    "price": 0.6799,
+    "qty": "294.16090601559057",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T03:41:01.352601",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4758.0,
+    "qty": "0.042034468263976464",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T05:23:04.505119",
+    "symbol": "ZROUSDT",
+    "direction": "LONG",
+    "price": 2.0799,
+    "qty": "96.15846915717103",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T05:49:15.315061",
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "price": 0.1046,
+    "qty": "1912.0458891013384",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T06:38:33.070395",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.007208,
+    "qty": "13873.473917869034",
+    "leverage": 10,
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:42:57.138397",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7112,
+    "qty": "281.21484814398195",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:42:57.152810",
+    "symbol": "SAHARAUSDT",
+    "direction": "SHORT",
+    "price": 0.02619,
+    "qty": "7636.5024818633065",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:52:51.601506",
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "price": 0.1034,
+    "qty": "967.1179883945841",
+    "leverage": 10,
+    "score": 114,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:53:19.642102",
+    "symbol": "INJUSDT",
+    "direction": "LONG",
+    "price": 3.005,
+    "qty": "66.55574043261231",
+    "leverage": 20,
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:53:46.929631",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 70.53,
+    "qty": "2.835672763363108",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:55:31.655302",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.7111,
+    "qty": "281.25439459991566",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:57:25.974526",
+    "symbol": "ZROUSDT",
+    "direction": "LONG",
+    "price": 2.1,
+    "qty": "47.61904761904762",
+    "leverage": 10,
+    "score": 122,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T07:59:09.228494",
+    "symbol": "SAHARAUSDT",
+    "direction": "SHORT",
+    "price": 0.02637,
+    "qty": "7584.376185058779",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:00:43.337976",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.599,
+    "qty": "138.9274798555154",
+    "leverage": 50,
+    "score": 159,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:01:29.939409",
+    "symbol": "ARBUSDT",
+    "direction": "LONG",
+    "price": 0.1006,
+    "qty": "1988.0715705765408",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:03:19.958681",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.522,
+    "qty": "31.505986137366097",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:11:10.356829",
+    "symbol": "NEARUSDT",
+    "direction": "LONG",
+    "price": 1.353,
+    "qty": "147.81966001478196",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:22:54.158576",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.007129,
+    "qty": "28054.425585636134",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:28.387574",
+    "symbol": "INJUSDT",
+    "direction": "LONG",
+    "price": 2.986,
+    "qty": "66.97923643670461",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:28.698147",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4607.0,
+    "qty": "0.04341219882787063",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:28.701544",
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "price": 0.1022,
+    "qty": "2935.420743639922",
+    "leverage": 30,
+    "score": 141,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:29.112782",
+    "symbol": "NEARUSDT",
+    "direction": "LONG",
+    "price": 1.35,
+    "qty": "148.14814814814815",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:29.146830",
+    "symbol": "u1000BONKUSDT",
+    "direction": "LONG",
+    "price": 0.005999,
+    "qty": "33338.88981496916",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:29.259285",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.575,
+    "qty": "139.86013986013987",
+    "leverage": 50,
+    "score": 159,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:29.701944",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 9.032,
+    "qty": "33.21523472099203",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:30.029509",
+    "symbol": "ARBUSDT",
+    "direction": "LONG",
+    "price": 0.0997,
+    "qty": "2006.0180541624875",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:28:30.085985",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1217,
+    "qty": "1643.3853738701725",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T08:53:10.975903",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.006983,
+    "qty": "14320.492624946299",
+    "leverage": 10,
+    "score": 117,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:14:37.244900",
+    "symbol": "NIGHTUSDT",
+    "direction": "LONG",
+    "price": 0.04383,
+    "qty": "4563.084645220169",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:41:45.463700",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2122.67,
+    "qty": "0.14133143635138765",
+    "leverage": 30,
+    "score": 142,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:41:45.595459",
+    "symbol": "SOLUSDT",
+    "direction": "LONG",
+    "price": 88.03,
+    "qty": "3.407929115074406",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:41:48.249851",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2568,
+    "qty": "389.40809968847356",
+    "leverage": 10,
+    "score": 118,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:43:41.722439",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2665,
+    "qty": "375.23452157598496",
+    "leverage": 10,
+    "score": 120,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:44:45.529909",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 112.82,
+    "qty": "0.8863676653075696",
+    "leverage": 10,
+    "score": 120,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:46:06.581987",
+    "symbol": "NAS100USDT",
+    "direction": "LONG",
+    "price": 24225.7,
+    "qty": "0.0041278476989313004",
+    "leverage": 10,
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T09:47:01.413614",
+    "symbol": "LTCUSDT",
+    "direction": "LONG",
+    "price": 55.06,
+    "qty": "3.6324010170722847",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:00:24.428023",
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "price": 0.1008,
+    "qty": "2976.190476190476",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:00:24.706017",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2579,
+    "qty": "387.7471888328809",
+    "leverage": 10,
+    "score": 119,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:00:25.130743",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 112.74,
+    "qty": "0.8869966294128083",
+    "leverage": 10,
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:03:40.714464",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2136.72,
+    "qty": "0.0936014077651728",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:04:39.076487",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1207,
+    "qty": "12427.506213753106",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:45.688822",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1206,
+    "qty": "3316.749585406302",
+    "leverage": 40,
+    "score": 145,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:45.840401",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2131.25,
+    "qty": "0.093841642228739",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:45.756107",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.007032,
+    "qty": "42662.11604095563",
+    "leverage": 30,
+    "score": 137,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:45.769588",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 8.979,
+    "qty": "33.41129301703976",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:46.004102",
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "price": 0.1003,
+    "qty": "1994.0179461615155",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:46.009686",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.562,
+    "qty": "112.29646266142618",
+    "leverage": 40,
+    "score": 154,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:11:45.821151",
+    "symbol": "NEARUSDT",
+    "direction": "LONG",
+    "price": 1.331,
+    "qty": "75.13148009015778",
+    "leverage": 10,
+    "score": 123,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:12:01.333424",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04302,
+    "qty": "4649.000464900047",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T10:13:47.284005",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2573,
+    "qty": "777.302759424796",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:16:19.029995",
+    "symbol": "NAS100USDT",
+    "direction": "LONG",
+    "price": 24303.86,
+    "qty": "0.012343718240641609",
+    "leverage": 30,
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:37:39.840655",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.51,
+    "qty": "113.96011396011397",
+    "leverage": 40,
+    "score": 147,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:37:40.001598",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.006963,
+    "qty": "28723.25147206664",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:37:39.896624",
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "price": 0.0988,
+    "qty": "3036.4372469635628",
+    "leverage": 30,
+    "score": 141,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:37:40.047646",
+    "symbol": "SAHARAUSDT",
+    "direction": "SHORT",
+    "price": 0.02677,
+    "qty": "11206.574523720583",
+    "leverage": 30,
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:37:40.317901",
+    "symbol": "SOLUSDT",
+    "direction": "LONG",
+    "price": 87.68,
+    "qty": "2.2810218978102186",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:39:27.512863",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2115.0,
+    "qty": "0.14184397163120568",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:39:30.993324",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 111.25,
+    "qty": "2.696629213483146",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:39:31.051987",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1192,
+    "qty": "3355.7046979865772",
+    "leverage": 40,
+    "score": 145,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:39:31.304083",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2642,
+    "qty": "757.0022710068131",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:54:06.555993",
+    "symbol": "SAHARAUSDT",
+    "direction": "SHORT",
+    "price": 0.02665,
+    "qty": "15009.3808630394",
+    "leverage": 40,
+    "score": 149,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:54:06.395668",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 8.95,
+    "qty": "33.5195530726257",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:54:06.698160",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.525,
+    "qty": "113.47517730496455",
+    "leverage": 40,
+    "score": 147,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:54:06.548342",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2652,
+    "qty": "1131.2217194570137",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:54:06.619911",
+    "symbol": "NEARUSDT",
+    "direction": "LONG",
+    "price": 1.332,
+    "qty": "150.15015015015015",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:54:06.982529",
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "price": 0.0991,
+    "qty": "3027.245206861756",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:57:04.376148",
+    "symbol": "u1000BONKUSDT",
+    "direction": "LONG",
+    "price": 0.005899,
+    "qty": "33904.05153415833",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T11:57:04.568355",
+    "symbol": "SOLUSDT",
+    "direction": "LONG",
+    "price": 87.71,
+    "qty": "2.2802417056207958",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T12:01:02.662940",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1196,
+    "qty": "836.1204013377926",
+    "leverage": 10,
+    "score": 119,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T12:25:31.999984",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 70.82,
+    "qty": "5.648121999435189",
+    "leverage": 40,
+    "score": 146,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:26.403012",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4600.0,
+    "qty": "0.06521739130434782",
+    "leverage": 30,
+    "score": 140,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:26.468512",
+    "symbol": "XPTUSDT",
+    "direction": "LONG",
+    "price": 1948.81,
+    "qty": "0.10262673118467168",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:26.793609",
+    "symbol": "COPPERUSDT",
+    "direction": "LONG",
+    "price": 5.462,
+    "qty": "54.9249359209081",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:26.830924",
+    "symbol": "ATOMUSDT",
+    "direction": "LONG",
+    "price": 1.838,
+    "qty": "272.0348204570185",
+    "leverage": 50,
+    "score": 162,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:26.996042",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.006925,
+    "qty": "28880.86642599278",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:27.053708",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 6.107,
+    "qty": "49.123956115932536",
+    "leverage": 30,
+    "score": 135,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:27.095746",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 70.7,
+    "qty": "5.657708628005658",
+    "leverage": 40,
+    "score": 146,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:06:28.658429",
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "price": 0.1008,
+    "qty": "992.063492063492",
+    "leverage": 10,
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:09:31.647905",
+    "symbol": "WLDUSDT",
+    "direction": "LONG",
+    "price": 0.3293,
+    "qty": "607.3489219556635",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T13:31:35.676146",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04457,
+    "qty": "2243.6616558223022",
+    "leverage": 10,
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:06:55.290476",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 71.4,
+    "qty": "4.201680672268907",
+    "leverage": 30,
+    "score": 144,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:06:55.505386",
+    "symbol": "ATOMUSDT",
+    "direction": "LONG",
+    "price": 1.832,
+    "qty": "272.92576419213975",
+    "leverage": 50,
+    "score": 169,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:06:55.975231",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 6.171,
+    "qty": "64.81931615621455",
+    "leverage": 40,
+    "score": 153,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:06:56.307762",
+    "symbol": "XPTUSDT",
+    "direction": "LONG",
+    "price": 1956.91,
+    "qty": "0.1533029112222841",
+    "leverage": 30,
+    "score": 136,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:27:10.870134",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 71.45,
+    "qty": "4.198740377886634",
+    "leverage": 30,
+    "score": 139,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:27:12.352936",
+    "symbol": "PAXGUSDT",
+    "direction": "LONG",
+    "price": 4618.0,
+    "qty": "0.043308791684711995",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:27:12.378327",
+    "symbol": "XPTUSDT",
+    "direction": "LONG",
+    "price": 1956.42,
+    "qty": "0.10222753805420104",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:27:12.583517",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 6.191,
+    "qty": "80.76239702794379",
+    "leverage": 50,
+    "score": 158,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:27:12.864272",
+    "symbol": "ATOMUSDT",
+    "direction": "LONG",
+    "price": 1.83,
+    "qty": "273.22404371584696",
+    "leverage": 50,
+    "score": 169,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:27:37.427064",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.5847,
+    "qty": "342.05575508807937",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:32:03.692611",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04473,
+    "qty": "2235.63603845294",
+    "leverage": 10,
+    "score": 124,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:32:03.952523",
+    "symbol": "WLDUSDT",
+    "direction": "LONG",
+    "price": 0.3273,
+    "qty": "611.0601894286588",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:36:33.586543",
+    "symbol": "SAHARAUSDT",
+    "direction": "SHORT",
+    "price": 0.02697,
+    "qty": "11123.470522803114",
+    "leverage": 30,
+    "score": 144,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T14:59:41.395917",
+    "symbol": "GER40USDT",
+    "direction": "LONG",
+    "price": 26319.92,
+    "qty": "0.007598807291207573",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T15:57:24.887204",
+    "symbol": "BEATUSDT",
+    "direction": "SHORT",
+    "price": 0.6,
+    "qty": "333.33333333333337",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T17:13:45.356876",
+    "symbol": "PENGUUSDT",
+    "direction": "LONG",
+    "price": 0.007117,
+    "qty": "28101.728256287763",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-19T17:13:45.692489",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 112.27,
+    "qty": "1.7814197915738845",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T20:38:31.256015",
+    "symbol": "XAGUSDT",
+    "direction": "LONG",
+    "price": 68.01,
+    "qty": "7.351860020585208",
+    "leverage": 50,
+    "score": 155,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T20:38:31.387560",
+    "symbol": "PHAUSDT",
+    "direction": "SHORT",
+    "price": 0.03893,
+    "qty": "7706.139224248652",
+    "leverage": 30,
+    "score": 140,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T20:38:32.245760",
+    "symbol": "STOUSDT",
+    "direction": "SHORT",
+    "price": 0.0995,
+    "qty": "2010.0502512562814",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T20:40:34.142514",
+    "symbol": "SAHARAUSDT",
+    "direction": "SHORT",
+    "price": 0.02923,
+    "qty": "6842.285323297981",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T20:49:43.419398",
+    "symbol": "ATHUSDT",
+    "direction": "SHORT",
+    "price": 0.007417,
+    "qty": "26965.080221113658",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T21:17:37.596904",
+    "symbol": "PHAUSDT",
+    "direction": "SHORT",
+    "price": 0.03818,
+    "qty": "5238.344683080147",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T21:19:06.126472",
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "price": 0.1022,
+    "qty": "1956.9471624266146",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T21:59:02.014334",
+    "symbol": "ATHUSDT",
+    "direction": "SHORT",
+    "price": 0.007818,
+    "qty": "38372.98541826554",
+    "leverage": 30,
+    "score": 140,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T22:01:12.278605",
+    "symbol": "WAXPUSDT",
+    "direction": "SHORT",
+    "price": 0.00763,
+    "qty": "26212.319790301444",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T22:14:23.566286",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.6986,
+    "qty": "286.286859433152",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T22:15:58.376545",
+    "symbol": "ETHFIUSDT",
+    "direction": "SHORT",
+    "price": 0.574,
+    "qty": "348.43205574912895",
+    "leverage": 20,
+    "score": 133,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T22:21:00.037530",
+    "symbol": "STOUSDT",
+    "direction": "SHORT",
+    "price": 0.10103,
+    "qty": "2969.4150252400277",
+    "leverage": 30,
+    "score": 140,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T23:01:12.579336",
+    "symbol": "PHAUSDT",
+    "direction": "SHORT",
+    "price": 0.03896,
+    "qty": "5133.470225872689",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T23:11:40.632138",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02036,
+    "qty": "14734.774066797643",
+    "leverage": 30,
+    "score": 137,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-20T23:13:34.752592",
+    "symbol": "STOUSDT",
+    "direction": "SHORT",
+    "price": 0.10378,
+    "qty": "4817.883985353633",
+    "leverage": 50,
+    "score": 158,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T00:25:12.471204",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4505.22,
+    "qty": "0.08878589724808111",
+    "leverage": 40,
+    "score": 153,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T01:21:35.027980",
+    "symbol": "WLDUSDT",
+    "direction": "LONG",
+    "price": 0.3213,
+    "qty": "933.7068160597573",
+    "leverage": 30,
+    "score": 143,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T08:07:48.735050",
+    "symbol": "ETHFIUSDT",
+    "direction": "SHORT",
+    "price": 0.5864,
+    "qty": "341.06412005457025",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T08:48:29.007206",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02083,
+    "qty": "9601.536245799327",
+    "leverage": 20,
+    "score": 131,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T09:15:52.316463",
+    "symbol": "BTRUSDT",
+    "direction": "SHORT",
+    "price": 0.1523,
+    "qty": "656.5988181221275",
+    "leverage": 10,
+    "score": 122,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T10:56:35.685867",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4501.63,
+    "qty": "0.08885670301646292",
+    "leverage": 40,
+    "score": 153,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T11:04:36.519282",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4501.27,
+    "qty": "0.11107976193385422",
+    "leverage": 50,
+    "score": 160,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T11:08:04.927689",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02114,
+    "qty": "9460.73793755913",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T11:08:53.345246",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4505.63,
+    "qty": "0.11097227246800115",
+    "leverage": 50,
+    "score": 160,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T11:11:54.052109",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4505.63,
+    "qty": "0.11097227246800115",
+    "leverage": 50,
+    "score": 160,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T12:09:02.837632",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02103,
+    "qty": "71326",
+    "score": 137,
+    "is_scaling": false,
+    "dry_run": true,
+    "status": "dry_run"
+  },
+  {
+    "timestamp": "2026-03-21T13:01:46.064356",
+    "symbol": "NIGHTUSDT",
+    "direction": "LONG",
+    "price": 0.04287,
+    "qty": "4665.267086540704",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T13:09:16.594433",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2634,
+    "qty": "759.301442672741",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T14:53:38.975528",
+    "symbol": "ETHFIUSDT",
+    "direction": "SHORT",
+    "price": 0.5967,
+    "qty": "502.76520864756156",
+    "leverage": 30,
+    "score": 143,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T14:53:39.059196",
+    "symbol": "VVVUSDT",
+    "direction": "SHORT",
+    "price": 6.143,
+    "qty": "32.55738238645613",
+    "leverage": 20,
+    "score": 129,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T14:53:39.551619",
+    "symbol": "PHAUSDT",
+    "direction": "SHORT",
+    "price": 0.04,
+    "qty": "5000.0",
+    "leverage": 20,
+    "score": 134,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T14:53:39.752039",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02078,
+    "qty": "9624.63907603465",
+    "leverage": 20,
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T14:53:39.822048",
+    "symbol": "BTRUSDT",
+    "direction": "SHORT",
+    "price": 0.1563,
+    "qty": "1279.5905310300705",
+    "leverage": 20,
+    "score": 132,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T18:58:44.044884",
+    "symbol": "CYSUSDT",
+    "direction": "SHORT",
+    "price": 0.5686,
+    "qty": "527.6116778051354",
+    "leverage": 30,
+    "score": 138,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T18:58:44.344312",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04807,
+    "qty": "4160.599126274184",
+    "leverage": 20,
+    "score": 126,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T18:58:44.706960",
+    "symbol": "STOUSDT",
+    "direction": "SHORT",
+    "price": 0.10415,
+    "qty": "4800.7681228996635",
+    "leverage": 50,
+    "score": 156,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T19:02:02.666331",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04809,
+    "qty": "2079.4",
+    "notional": 100.0,
+    "margin_usdt": 10.0,
+    "leverage": 10,
+    "trail_pct": 0.03,
+    "low_liq_mode": false,
+    "htf_aligned": true,
+    "score": 121,
+    "signals": [
+      "Near High-Vol Resistance Node (0.32% below)",
+      "HTF Alignment (1H RSI 65.5) \u2014 deeply overbought",
+      "RSI 66.3 (rollover zone)",
+      "Near BB upper band (85%) \u2014 overbought",
+      "Price 6.7% above EMA21 (mean-reversion opportunity)"
+    ],
+    "entry_order_id": "b386d656-405e-497e-869b-239ea55553ed",
+    "trail_order_id": "ecc2dc9c-fdf7-4d4e-a926-b449b0793b55",
+    "trail_ok": true,
+    "tp_order_ids": [
+      "719ef9fb-9b2c-4304-98ba-a6ff76efe542",
+      "38a337b8-d731-4157-8557-661223eb5497",
+      "7171a98c-feaf-4310-aad8-0869398dcbe6"
+    ],
+    "tp_ok": true,
+    "dry_run": false,
+    "status": "entered",
+    "pnl": 0
+  },
+  {
+    "timestamp": "2026-03-21T19:02:11.408537",
+    "symbol": "BTRUSDT",
+    "direction": "SHORT",
+    "price": 0.1543,
+    "qty": "324.0",
+    "notional": 49.99,
+    "margin_usdt": 5.0,
+    "leverage": 10,
+    "trail_pct": 0.008,
+    "low_liq_mode": true,
+    "htf_aligned": true,
+    "score": 148,
+    "signals": [
+      "EMA Curling Down (Slope \u0394 -0.069) \u2014 Momentum loss",
+      "Low Liquidity (Spread 0.19%)",
+      "HTF Alignment (1H RSI 65.7) \u2014 deeply overbought",
+      "RSI 65.2 (rollover zone)",
+      "Price above/at BB upper band (91%) \u2014 extreme overbought"
+    ],
+    "entry_order_id": "a8b3aa8a-85eb-4d0b-80fc-69d61ffbaf6b",
+    "trail_order_id": "b1042d62-419a-4278-b74b-b1f0a64d4846",
+    "trail_ok": true,
+    "tp_order_ids": [
+      "04bfc69a-abb6-4a91-9eb5-75aab7eff09b",
+      "62fddb51-cf3a-4bdd-85c8-28ea24959418",
+      "16be77a9-7457-4bb3-b486-95cf24178629"
+    ],
+    "tp_ok": true,
+    "dry_run": false,
+    "status": "entered",
+    "pnl": 0
+  },
+  {
+    "timestamp": "2026-03-21T19:30:21.066671",
+    "symbol": "BTRUSDT",
+    "direction": "SHORT",
+    "price": 0.1545,
+    "qty": "324.0",
+    "score": 148,
+    "status": "closed",
+    "reason": "exchange_stop",
+    "pnl": -0.0309,
+    "hold_time_seconds": 1689
+  },
+  {
+    "timestamp": "2026-03-21T20:04:58.666815",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.3994,
+    "qty": "142.91839359725597",
+    "leverage": 20,
+    "score": 127,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T20:39:22.559753",
+    "symbol": "ATHUSDT",
+    "direction": "SHORT",
+    "price": 0.007958,
+    "qty": "12565.971349585323",
+    "leverage": 10,
+    "score": 120,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T21:05:23.412944",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2089.77,
+    "qty": "0.04785215597888763",
+    "leverage": 10,
+    "score": 115,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T21:07:47.733357",
+    "symbol": "UNIUSDT",
+    "direction": "LONG",
+    "price": 3.496,
+    "qty": "28.60411899313501",
+    "leverage": 10,
+    "score": 120,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T22:04:49.745827",
+    "symbol": "PHAUSDT",
+    "direction": "SHORT",
+    "price": 0.04035,
+    "qty": "4956.629491945478",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T23:33:13.438207",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.04978,
+    "qty": "4017.6777822418644",
+    "leverage": 20,
+    "score": 130,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T23:33:14.027363",
+    "symbol": "VVVUSDT",
+    "direction": "SHORT",
+    "price": 5.969,
+    "qty": "16.753224995811692",
+    "leverage": 10,
+    "score": 121,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T23:33:14.800835",
+    "symbol": "HUMAUSDT",
+    "direction": "LONG",
+    "price": 0.0149,
+    "qty": "13422.818791946309",
+    "leverage": 20,
+    "score": 125,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T23:35:52.275872",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2594,
+    "qty": "385.5050115651503",
+    "leverage": 10,
+    "score": 118,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-21T23:38:56.509160",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 6.408,
+    "qty": "31.210986267166042",
+    "leverage": 20,
+    "score": 128,
+    "status": "simulated_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:40:54.785153",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005855,
+    "qty": "17079.0",
+    "leverage": 10,
+    "score": 119,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:40:54.821854",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.4157,
+    "qty": "70.63",
+    "leverage": 10,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:40:54.890919",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2584,
+    "qty": "773.99",
+    "leverage": 20,
+    "score": 131,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:40:55.383469",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02419,
+    "qty": "4133.93",
+    "leverage": 10,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:46:03.123434",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2584,
+    "qty": "1160.99",
+    "leverage": 30,
+    "score": 139,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:46:03.192050",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.4161,
+    "qty": "70.61",
+    "leverage": 10,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T00:46:04.700508",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02421,
+    "qty": "4130.52",
+    "leverage": 10,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T01:41:52.019334",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2575,
+    "qty": "776.69",
+    "leverage": 20,
+    "score": 131,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T01:41:53.432713",
+    "symbol": "VIRTUALUSDT",
+    "direction": "LONG",
+    "price": 0.6743,
+    "qty": "593.0",
+    "leverage": 40,
+    "score": 152,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T02:11:12.314587",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.224,
+    "qty": "10.8",
+    "leverage": 10,
+    "score": 123,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T02:11:48.814633",
+    "symbol": "u1000SHIBUSDT",
+    "direction": "LONG",
+    "price": 0.005793,
+    "qty": "34524.0",
+    "leverage": 20,
+    "score": 132,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T03:11:26.686421",
+    "symbol": "LTCUSDT",
+    "direction": "LONG",
+    "price": 54.57,
+    "qty": "3.66",
+    "leverage": 20.0,
+    "score": 129,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T03:16:17.249973",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.4113,
+    "qty": "141.71",
+    "leverage": 20.0,
+    "score": 127,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T11:48:03.614242",
+    "symbol": "XLMUSDT",
+    "direction": "LONG",
+    "price": 0.15877,
+    "qty": "1259.0",
+    "leverage": 20.0,
+    "score": 127,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T11:48:07.500163",
+    "symbol": "TURBOUSDT",
+    "direction": "SHORT",
+    "price": 0.001109,
+    "qty": "290644.0",
+    "leverage": 50.0,
+    "score": 159,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T11:48:28.303117",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02416,
+    "qty": "2187.79",
+    "leverage": 10.0,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T12:18:47.622914",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2557,
+    "qty": "391.23",
+    "leverage": 10.0,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T12:18:51.645995",
+    "symbol": "FETUSDT",
+    "direction": "LONG",
+    "price": 0.210717899,
+    "qty": "676.0",
+    "leverage": 20.0,
+    "score": 127,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T13:33:56.248459",
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "price": 0.0974,
+    "qty": "1026.0",
+    "leverage": 10.0,
+    "score": 123,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T13:33:59.637128",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.9203,
+    "qty": "182.0",
+    "leverage": 20.0,
+    "score": 128,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T14:28:30.453851",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 107.04,
+    "qty": "2.8",
+    "leverage": 30.0,
+    "score": 140,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T14:28:34.195538",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.3902,
+    "qty": "99.53",
+    "leverage": 20.0,
+    "score": 128,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T15:48:18.749135",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2513,
+    "qty": "796.49",
+    "leverage": 20.0,
+    "score": 128,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T16:22:26.562946",
+    "symbol": "TRUMPUSDT",
+    "direction": "LONG",
+    "price": 3.224935484,
+    "qty": "31.0",
+    "leverage": 10.0,
+    "score": 116,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T17:39:56.955357",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.250399219,
+    "qty": "799.36",
+    "leverage": 20.0,
+    "score": 128,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:05:08.873555",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2506,
+    "qty": "399.2",
+    "leverage": 10.0,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:05:13.301559",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 106.45,
+    "qty": "1.6",
+    "leverage": 20.0,
+    "score": 133,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:40:51.240319",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 8.633,
+    "qty": "34.75",
+    "leverage": 30.0,
+    "score": 144,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:40:56.747843",
+    "symbol": "u1000PEPEUSDT",
+    "direction": "LONG",
+    "price": 0.0032677,
+    "qty": "62534.0",
+    "leverage": 30.0,
+    "score": 136,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:46:49.649115",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2046.85,
+    "qty": "0.09",
+    "leverage": 20.0,
+    "score": 130,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:52:35.867167",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.3793,
+    "qty": "289.79",
+    "leverage": 40.0,
+    "score": 153,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T20:52:42.167110",
+    "symbol": "AVAXUSDT",
+    "direction": "LONG",
+    "price": 9.037,
+    "qty": "29.7",
+    "leverage": 30.0,
+    "score": 136,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:15:14.200199",
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "price": 0.1151,
+    "qty": "868.8",
+    "leverage": 10.0,
+    "score": 120,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:20:59.840107",
+    "symbol": "ONDOUSDT",
+    "direction": "LONG",
+    "price": 0.2469,
+    "qty": "830.0",
+    "leverage": 30.0,
+    "score": 140,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:26:43.792661",
+    "symbol": "ARBUSDT",
+    "direction": "LONG",
+    "price": 0.0934,
+    "qty": "659.0",
+    "leverage": 10.0,
+    "score": 124,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:51:35.193197",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2515,
+    "qty": "397.45",
+    "leverage": 10.0,
+    "score": 122,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:51:37.251617",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 106.581764706,
+    "qty": "1.7",
+    "leverage": 20.0,
+    "score": 133,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:57:20.775932",
+    "symbol": "LINKUSDT",
+    "direction": "LONG",
+    "price": 8.693,
+    "qty": "23.0",
+    "leverage": 20.0,
+    "score": 133,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T21:57:23.438860",
+    "symbol": "u1000PEPEUSDT",
+    "direction": "LONG",
+    "price": 0.0032995,
+    "qty": "55222.0",
+    "leverage": 20.0,
+    "score": 132,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T22:16:48.610928",
+    "symbol": "ETHUSDT",
+    "direction": "LONG",
+    "price": 2049.05,
+    "qty": "0.08",
+    "leverage": 20.0,
+    "score": 130,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-22T22:37:05.904041",
+    "symbol": "XRPUSDT",
+    "direction": "LONG",
+    "price": 1.3889,
+    "qty": "143.94",
+    "leverage": 20.0,
+    "score": 126,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T01:34:11.232671",
+    "symbol": "XAUUSDT",
+    "direction": "LONG",
+    "price": 4335.653913043,
+    "qty": "0.023",
+    "leverage": 10.0,
+    "score": 124,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T02:39:37.128649",
+    "symbol": "ADAUSDT",
+    "direction": "LONG",
+    "price": 0.2493,
+    "qty": "401.28",
+    "leverage": 10.0,
+    "score": 123,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T02:53:25.292590",
+    "symbol": "SUIUSDT",
+    "direction": "LONG",
+    "price": 0.902,
+    "qty": "169.0",
+    "leverage": 20.0,
+    "score": 127,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T03:38:17.989792",
+    "symbol": "AAVEUSDT",
+    "direction": "LONG",
+    "price": 105.7,
+    "qty": "1.0",
+    "leverage": 20.0,
+    "score": 131,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:10:55.076057",
+    "symbol": "KITEUSDT",
+    "direction": "SHORT",
+    "price": 0.22592,
+    "qty": "881.6",
+    "leverage": 20.0,
+    "score": 134,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:18:37.583080",
+    "symbol": "TONUSDT",
+    "direction": "SHORT",
+    "price": 1.2985,
+    "qty": "153.0",
+    "leverage": 20.0,
+    "score": 126,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:20:34.253519",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.023821312,
+    "qty": "8378.0",
+    "leverage": 20.0,
+    "score": 133,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:29:14.184609",
+    "symbol": "PTUSDT",
+    "direction": "SHORT",
+    "price": 0.499,
+    "qty": "400.0",
+    "leverage": 20.0,
+    "score": 126,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:42:40.638495",
+    "symbol": "TURBOUSDT",
+    "direction": "SHORT",
+    "price": 0.001167285,
+    "qty": "158527.0",
+    "leverage": 20.0,
+    "score": 127,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:59:24.608455",
+    "symbol": "KITEUSDT",
+    "direction": "SHORT",
+    "price": 0.228842215,
+    "qty": "873.2",
+    "leverage": 20.0,
+    "score": 144,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T07:59:32.228337",
+    "symbol": "DUSKUSDT",
+    "direction": "SHORT",
+    "price": 0.105118142,
+    "qty": "1900.0",
+    "leverage": 20.0,
+    "score": 151,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:06:24.057248",
+    "symbol": "ETHFIUSDT",
+    "direction": "LONG",
+    "price": 0.5396,
+    "qty": "185.0",
+    "leverage": 10.0,
+    "score": 121,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:06:32.079623",
+    "symbol": "XTIUSDT",
+    "direction": "LONG",
+    "price": 93.3,
+    "qty": "1.07",
+    "leverage": 10.0,
+    "score": 117,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:23:04.263624",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 7.472576923,
+    "qty": "26.0",
+    "leverage": 20.0,
+    "score": 133,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:33:17.546443",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02354,
+    "qty": "4255.31",
+    "leverage": 10.0,
+    "score": 120,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:33:47.662555",
+    "symbol": "WAXPUSDT",
+    "direction": "SHORT",
+    "price": 0.00769,
+    "qty": "12970.0",
+    "leverage": 10.0,
+    "score": 120,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:52:05.520131",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02336,
+    "qty": "3745.0",
+    "leverage": 10.0,
+    "score": 119,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T08:57:51.529657",
+    "symbol": "KAITOUSDT",
+    "direction": "SHORT",
+    "price": 0.3955,
+    "qty": "252.0",
+    "leverage": 10.0,
+    "score": 116,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T09:02:52.811809",
+    "symbol": "TONUSDT",
+    "direction": "SHORT",
+    "price": 1.3049,
+    "qty": "153.0",
+    "leverage": 20.0,
+    "score": 129,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T09:32:30.474546",
+    "symbol": "OPNUSDT",
+    "direction": "LONG",
+    "price": 0.243132661,
+    "qty": "823.3",
+    "leverage": 20.0,
+    "score": 130,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T09:46:30.650832",
+    "symbol": "PTUSDT",
+    "direction": "SHORT",
+    "price": 0.4979,
+    "qty": "200.0",
+    "leverage": 10.0,
+    "score": 124,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T10:13:19.642300",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02414,
+    "qty": "12225.0",
+    "leverage": 30.0,
+    "score": 144,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T10:19:04.679209",
+    "symbol": "KAITOUSDT",
+    "direction": "SHORT",
+    "price": 0.4033,
+    "qty": "495.0",
+    "leverage": 20.0,
+    "score": 134,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T10:19:10.586502",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 7.411,
+    "qty": "27.0",
+    "leverage": 20.0,
+    "score": 125,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T10:28:20.127391",
+    "symbol": "XBRUSDT",
+    "direction": "LONG",
+    "price": 101.696938776,
+    "qty": "0.98",
+    "leverage": 10.0,
+    "score": 127,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T10:50:04.987256",
+    "symbol": "GUNUSDT",
+    "direction": "SHORT",
+    "price": 0.02384,
+    "qty": "3172.0",
+    "leverage": 10.0,
+    "score": 124,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T11:03:53.892121",
+    "symbol": "OPNUSDT",
+    "direction": "LONG",
+    "price": 0.244257892,
+    "qty": "818.6",
+    "leverage": 20.0,
+    "score": 140,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T11:15:31.594908",
+    "symbol": "XTIUSDT",
+    "direction": "LONG",
+    "price": 86.222931034,
+    "qty": "1.16",
+    "leverage": 10.0,
+    "score": 120,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T11:24:35.656137",
+    "symbol": "OPNUSDT",
+    "direction": "LONG",
+    "price": 0.2421,
+    "qty": "826.4",
+    "leverage": 20.0,
+    "score": 136,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T11:38:42.981858",
+    "symbol": "DUSKUSDT",
+    "direction": "SHORT",
+    "price": 0.10182,
+    "qty": "1963.0",
+    "leverage": 20.0,
+    "score": 126,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T11:40:41.358308",
+    "symbol": "ROBOUSDT",
+    "direction": "LONG",
+    "price": 0.02316,
+    "qty": "4319.65",
+    "leverage": 10.0,
+    "score": 114,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T11:55:18.946476",
+    "symbol": "KAITOUSDT",
+    "direction": "SHORT",
+    "price": 0.3951,
+    "qty": "394.0",
+    "leverage": 20.0,
+    "score": 126,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T12:09:51.372369",
+    "symbol": "WIFUSDT",
+    "direction": "SHORT",
+    "price": 0.1841,
+    "qty": "542.0",
+    "leverage": 10.0,
+    "score": 114,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T12:09:55.623353",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 7.4396,
+    "qty": "40.0",
+    "leverage": 30.0,
+    "score": 143,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T13:01:50.812118",
+    "symbol": "TAOUSDT",
+    "direction": "SHORT",
+    "price": 286.15,
+    "qty": "0.34",
+    "leverage": 10.0,
+    "score": 123,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T13:35:50.487868",
+    "symbol": "TONUSDT",
+    "direction": "SHORT",
+    "price": 1.2991,
+    "qty": "172.0",
+    "leverage": 40.0,
+    "score": 154,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T13:40:42.938723",
+    "symbol": "u1000PEPEUSDT",
+    "direction": "SHORT",
+    "price": 0.00349,
+    "qty": "28640.0",
+    "leverage": 10.0,
+    "score": 121,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T13:47:13.787263",
+    "symbol": "KAITOUSDT",
+    "direction": "SHORT",
+    "price": 0.3908,
+    "qty": "866.0",
+    "leverage": 50.0,
+    "score": 157,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T14:04:31.849353",
+    "symbol": "KAITOUSDT",
+    "direction": "SHORT",
+    "price": 0.393048151,
+    "qty": "1271.0",
+    "leverage": 50.0,
+    "score": 155,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T14:04:37.814418",
+    "symbol": "HUMAUSDT",
+    "direction": "SHORT",
+    "price": 0.01731,
+    "qty": "9303.0",
+    "leverage": 20.0,
+    "score": 171,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T14:33:21.992378",
+    "symbol": "SIGNUSDT",
+    "direction": "SHORT",
+    "price": 0.054709677,
+    "qty": "3659.6",
+    "leverage": 20.0,
+    "score": 154,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T14:33:58.891875",
+    "symbol": "TONUSDT",
+    "direction": "SHORT",
+    "price": 1.2988,
+    "qty": "192.0",
+    "leverage": 50.0,
+    "score": 159,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T14:54:29.670697",
+    "symbol": "KAITOUSDT",
+    "direction": "SHORT",
+    "price": 0.396024901,
+    "qty": "1261.0",
+    "leverage": 50.0,
+    "score": 155,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T15:25:29.016764",
+    "symbol": "DUSKUSDT",
+    "direction": "SHORT",
+    "price": 0.10275,
+    "qty": "1459.0",
+    "leverage": 20.0,
+    "score": 137,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T15:30:30.815042",
+    "symbol": "TONUSDT",
+    "direction": "SHORT",
+    "price": 1.3033,
+    "qty": "261.0",
+    "leverage": 50.0,
+    "score": 162,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T15:39:09.378154",
+    "symbol": "HUMAUSDT",
+    "direction": "SHORT",
+    "price": 0.01762,
+    "qty": "11363.0",
+    "leverage": 20.0,
+    "score": 154,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T15:45:45.811928",
+    "symbol": "DEXEUSDT",
+    "direction": "SHORT",
+    "price": 7.517575758,
+    "qty": "33.0",
+    "leverage": 30.0,
+    "score": 143,
+    "status": "live_entry"
+  },
+  {
+    "timestamp": "2026-03-23T19:02:41.481340",
+    "symbol": "FARTCOINUSDT",
+    "direction": "LONG",
+    "price": 0.17740266,
+    "qty": "2256.0",
+    "leverage": 40.0,
+    "score": 148,
+    "status": "live_entry"
+  }
+]

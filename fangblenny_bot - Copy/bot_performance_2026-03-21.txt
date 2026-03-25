@@ -1,0 +1,28 @@
+# Bot Performance Report: 2026-03-21
+
+### Overall Performance Summary
+*   **Initial Balance:** 100.00 USDT
+*   **Current Equity:** ~108.79 USDT (+8.79%)
+*   **Current Balance (Liquid):** 39.85 USDT
+*   **Locked Margin (Open Trades):** 50.00 USDT
+*   **Unrealized PnL (uPnL):** ~18.94 USDT
+
+### Trade Statistics (Closed)
+*   **Total Closed Trades:** 15
+*   **Wins:** 6 (includes 3 partial take-profits)
+*   **Losses:** 9
+*   **Win Rate:** 40%
+*   **Realized PnL:** -5.25 USDT (approx., before fees)
+*   **Estimated Fees:** ~5.50 USDT
+
+### Active Positions (as of 08:30 UTC)
+1.  **STOUSDT (Short):** +16.74 USDT uPnL (Significant winner, already hit one partial TP of 12.5 USDT).
+2.  **WAXPUSDT (Short):** +4.19 USDT uPnL.
+3.  **XAGUSDT (Long):** -0.22 USDT uPnL.
+4.  **XAUUSDT (Long):** -0.31 USDT uPnL.
+5.  **ETHFIUSDT (Short):** -1.46 USDT uPnL.
+
+### Observations
+*   **Performance:** While the win rate on closed trades is relatively low (40%), the bot is currently in profit overall due to a strong winner in STOUSDT and effective use of trailing stops/partial take-profits.
+*   **Connectivity:** The logs show some "Connection reset by peer" errors on the WebSocket, but the bot has been successfully reconnecting and maintaining its monitoring loop.
+*   **Strategy:** The bot is aggressively capturing gains via partial TPs, which helps offset the string of small stop-outs.

@@ -1,0 +1,98 @@
+[
+  {
+    "symbol": "ENAUSDT",
+    "direction": "LONG",
+    "score": 137,
+    "entry": 0.09660557786561265,
+    "exit": 0.0988317526007905,
+    "pnl_usdt": 34.56593476840431,
+    "pnl_pct": 2.304395651226954,
+    "hold_candles": 11,
+    "exit_reason": "trail_stop",
+    "signals": [
+      "Bullish Divergence (Price LL vs RSI HL) \u2014 sellers exhausted",
+      "RSI 20.9 (extremely oversold)",
+      "Price at/below BB lower (-5%) \u2014 extreme oversold",
+      "Price 4.9% below EMA21 (mean-reversion opportunity)",
+      "Stretch bonus: Deeply oversold RSI + Below EMA21",
+      "Volume spike 2.4x (capitulation/demand)",
+      "-16.4% crash (capitulation)",
+      "Near 24h low (0.9% above)"
+    ],
+    "slippage_pct": 0.10940711462450733,
+    "is_low_liq": false
+  },
+  {
+    "symbol": "OPUSDT",
+    "direction": "LONG",
+    "score": 137,
+    "entry": 0.15956080762060504,
+    "exit": 0.15461784263915856,
+    "pnl_usdt": -46.46784873262473,
+    "pnl_pct": -3.097856582174982,
+    "hold_candles": 1,
+    "exit_reason": "trail_stop",
+    "signals": [
+      "Bullish Divergence (Price LL vs RSI HL) \u2014 sellers exhausted",
+      "RSI 16.6 (extremely oversold)",
+      "Price at/below BB lower (9%) \u2014 extreme oversold",
+      "Price 6.7% below EMA21 (mean-reversion opportunity)",
+      "Stretch bonus: Deeply oversold RSI + Below EMA21",
+      "Volume spike 2.3x (capitulation/demand)",
+      "-17.4% crash (capitulation)",
+      "Near 24h low (1.1% above)"
+    ],
+    "slippage_pct": 0.10088307440719092,
+    "is_low_liq": false
+  },
+  {
+    "symbol": "BCHUSDT",
+    "direction": "LONG",
+    "score": 131,
+    "entry": 475.960487312921,
+    "exit": 501.43579063330236,
+    "pnl_usdt": 53.523987808745574,
+    "pnl_pct": 5.352398780874558,
+    "hold_candles": 34,
+    "exit_reason": "trail_stop",
+    "signals": [
+      "EMA Slope Flattening \u2014 Downtrend slowing",
+      "High Liquidity (Spread 0.00%)",
+      "Bullish Divergence (Price LL vs RSI HL) \u2014 sellers exhausted",
+      "RSI 23.0 (extremely oversold)",
+      "Near BB lower (25%) \u2014 oversold",
+      "Price 3.6% below EMA21 (mean-reversion opportunity)",
+      "Stretch bonus: Deeply oversold RSI + Below EMA21",
+      "Volume spike 2.8x (capitulation/demand)",
+      "-13.9% dip (oversold bounce)",
+      "Near 24h low (0.6% above)"
+    ],
+    "slippage_pct": 0.061069084222454065,
+    "is_low_liq": false
+  },
+  {
+    "symbol": "BCHUSDT",
+    "direction": "LONG",
+    "score": 131,
+    "entry": 445.0916475004383,
+    "exit": 449.2719660692959,
+    "pnl_usdt": 9.39204002666327,
+    "pnl_pct": 0.939204002666327,
+    "hold_candles": 20,
+    "exit_reason": "trail_stop",
+    "signals": [
+      "EMA Slope Flattening \u2014 Downtrend slowing",
+      "High Liquidity (Spread 0.00%)",
+      "Bullish Divergence (Price LL vs RSI HL) \u2014 sellers exhausted",
+      "RSI 24.4 (extremely oversold)",
+      "Price at/below BB lower (7%) \u2014 extreme oversold",
+      "Price 3.0% below EMA21 (mean-reversion opportunity)",
+      "Stretch bonus: Deeply oversold RSI + Below EMA21",
+      "Elevated volume 1.5x",
+      "-7.7% dip (oversold bounce)",
+      "Near 24h low (1.0% above)"
+    ],
+    "slippage_pct": 0.061069084222454065,
+    "is_low_liq": false
+  }
+]
