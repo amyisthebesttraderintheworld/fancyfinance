@@ -4,17 +4,22 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from backtest_service import BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
 from dashboard_access import DashboardAccessError, verify_member_dashboard_token
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
 from stripe_service import StripeService
+
+
+DASHBOARD_ASSETS_DIR = Path(__file__).resolve().parent / "dashboard_assets"
+DASHBOARD_LOGO_PATH = DASHBOARD_ASSETS_DIR / "logo.png"
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
@@ -549,6 +554,12 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard():
         return HTMLResponse(build_dashboard_html(APP_NAME, __version__, auth_required=bool(auth_token)))
+
+    @app.get("/dashboard/assets/logo.png")
+    def dashboard_logo():
+        if not DASHBOARD_LOGO_PATH.exists():
+            raise HTTPException(status_code=404, detail="Dashboard logo not found")
+        return FileResponse(DASHBOARD_LOGO_PATH, media_type="image/png")
 
     @app.get("/dashboard/member", response_class=HTMLResponse)
     def member_dashboard():

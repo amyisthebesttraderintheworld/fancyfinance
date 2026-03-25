@@ -132,21 +132,23 @@ def build_dashboard_html(
       }
 
       .brand-mark {
-        width: 42px;
-        height: 42px;
-        border-radius: 14px;
-        display: grid;
-        place-items: center;
-        font-family: "Space Grotesk", sans-serif;
-        font-weight: 700;
-        color: hsl(220 20% 4%);
-        background: var(--gradient-primary);
-        box-shadow: var(--shadow-glow);
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+      }
+
+      .brand-logo {
+        display: block;
+        width: auto;
+        height: 58px;
+        max-width: min(34vw, 230px);
+        object-fit: contain;
+        filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.35));
       }
 
       .brand-copy {
         display: grid;
-        gap: 4px;
+        gap: 5px;
       }
 
       .brand-title {
@@ -917,6 +919,11 @@ def build_dashboard_html(
           width: 100%;
           flex-wrap: wrap;
         }
+
+        .brand-logo {
+          height: 52px;
+          max-width: min(60vw, 220px);
+        }
       }
 
       @media (max-width: 560px) {
@@ -947,6 +954,11 @@ def build_dashboard_html(
         .price-line-labels {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+
+        .brand-logo {
+          height: 46px;
+          max-width: min(70vw, 210px);
+        }
       }
     </style>
   </head>
@@ -954,7 +966,9 @@ def build_dashboard_html(
     <div class="shell">
       <header class="topbar surface">
         <div class="brand-lockup">
-          <div class="brand-mark">F</div>
+          <div class="brand-mark">
+            <img class="brand-logo" src="/dashboard/assets/logo.png" alt="FancyFinance logo" />
+          </div>
           <div class="brand-copy">
             <div class="eyebrow">Telegram-first algorithmic trading</div>
             <div class="brand-title">__BRAND_TITLE__</div>

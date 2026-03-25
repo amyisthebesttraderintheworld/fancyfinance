@@ -202,6 +202,18 @@ def test_dashboard_page_renders(sample_config):
 
     assert response.status_code == 200
     assert "FancyFinance Control Center" in response.text
+    assert '/dashboard/assets/logo.png' in response.text
+
+
+def test_dashboard_logo_route_serves_png(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/assets/logo.png")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert len(response.content) > 0
 
 
 def test_dashboard_data_requires_auth(sample_config):
