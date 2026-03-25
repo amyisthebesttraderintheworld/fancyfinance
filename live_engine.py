@@ -142,6 +142,9 @@ class LiveEngine(Simulator):
 
         stop_loss = self._extract_price_field(raw_position, "stopLossRp", "stopLossEp", "stopLoss") or 0.0
         take_profit = self._extract_price_field(raw_position, "takeProfitRp", "takeProfitEp", "takeProfit") or 0.0
+        leverage = self._extract_price_field(raw_position, "leverageRr", "leverageEr", "leverage")
+        resolved_leverage = int(leverage) if leverage and leverage > 0 else None
+        margin_used = abs(entry_price * qty) / leverage if leverage and leverage > 0 else None
         open_time = int(time.time() * 1000)
 
         return Position(
@@ -152,6 +155,10 @@ class LiveEngine(Simulator):
             stop_loss=stop_loss,
             take_profit=take_profit,
             open_time=open_time,
+            leverage=resolved_leverage,
+            margin_used=margin_used,
+            high_water=entry_price if direction == "long" else None,
+            low_water=entry_price if direction == "short" else None,
         )
 
     def _set_scanner_position_flags(self):
@@ -229,17 +236,19 @@ class LiveEngine(Simulator):
                 )
 
         for symbol, position in reconciled_positions.items():
-            self.db.update_position(
-                symbol,
-                {
-                    "symbol": symbol,
-                    "direction": position.direction,
-                    "entry_price": position.entry_price,
-                    "qty": position.quantity,
-                    "stop_loss": position.stop_loss,
-                    "take_profit": position.take_profit,
-                },
-            )
+                self.db.update_position(
+                    symbol,
+                    {
+                        "symbol": symbol,
+                        "direction": position.direction,
+                        "entry_price": position.entry_price,
+                        "qty": position.quantity,
+                        "stop_loss": position.stop_loss,
+                        "take_profit": position.take_profit,
+                        "margin_used": position.margin_used,
+                        "leverage": position.leverage,
+                    },
+                )
 
         self.positions = reconciled_positions
         self._set_scanner_position_flags()
@@ -264,6 +273,10 @@ class LiveEngine(Simulator):
                     position.stop_loss = stop_loss
                 if take_profit is not None and not position.take_profit:
                     position.take_profit = take_profit
+                if not position.leverage:
+                    position.leverage = int(self.market_scan_settings.leverage)
+                if position.margin_used is None and position.leverage:
+                    position.margin_used = abs(position.entry_price * position.quantity) / max(float(position.leverage), 1.0)
                 return position
 
             if expected_direction is None:
@@ -471,10 +484,13 @@ class LiveEngine(Simulator):
                         "qty": position.quantity,
                         "stop_loss": position.stop_loss,
                         "take_profit": position.take_profit,
+                        "margin_used": position.margin_used,
+                        "leverage": position.leverage,
                     },
                 )
                 self.notifier.send_message(
-                    f"🔵 LIVE ENTRY: {symbol} {side} Qty: {position.quantity:.4f} @ {position.entry_price:.2f}"
+                    f"🔵 LIVE ENTRY: {symbol} {side} Qty: {position.quantity:.4f} @ {position.entry_price:.2f} "
+                    f"Margin: ${float(position.margin_used or 0.0):.2f} @ {int(position.leverage or 0)}x"
                 )
                 self.logger.info(f"Live entry {symbol} {direction} @ {position.entry_price} Qty: {position.quantity}")
             else:
@@ -525,6 +541,8 @@ class LiveEngine(Simulator):
                             "qty": remaining_position.quantity,
                             "stop_loss": remaining_position.stop_loss,
                             "take_profit": remaining_position.take_profit,
+                            "margin_used": remaining_position.margin_used,
+                            "leverage": remaining_position.leverage,
                         },
                     )
                     self.notifier.send_message(

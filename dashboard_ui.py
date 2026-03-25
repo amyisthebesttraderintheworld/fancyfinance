@@ -400,7 +400,9 @@ def build_dashboard_html(
         font-weight: 600;
       }
 
-      input {
+      input,
+      select,
+      textarea {
         width: 100%;
         border-radius: 14px;
         border: 1px solid var(--border);
@@ -412,13 +414,72 @@ def build_dashboard_html(
         transition: border-color 140ms ease, box-shadow 140ms ease;
       }
 
-      input::placeholder {
+      textarea {
+        min-height: 140px;
+        resize: vertical;
+        font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+      }
+
+      input::placeholder,
+      textarea::placeholder {
         color: color-mix(in srgb, var(--muted-foreground) 75%, transparent);
       }
 
-      input:focus {
+      input:focus,
+      select:focus,
+      textarea:focus {
         border-color: rgba(47, 208, 111, 0.45);
         box-shadow: 0 0 0 4px rgba(47, 208, 111, 0.12);
+      }
+
+      input[type="checkbox"] {
+        width: auto;
+        min-height: auto;
+        padding: 0;
+        box-shadow: none;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+      }
+
+      .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .toggle-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--foreground);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .result-shell {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(6, 10, 9, 0.88);
+      }
+
+      .result-shell pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--foreground);
       }
 
       .button-row {
@@ -1149,6 +1210,103 @@ def build_dashboard_html(
           <div class="panel surface">
             <div class="panel-header">
               <div>
+                <h2 class="panel-title">Strategy Lab</h2>
+                <div class="panel-subtitle">Configure one strategy profile, save it to the engine, and run matching backtests from the dashboard.</div>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label class="field-label" for="strategy-symbol">Backtest Symbol</label>
+                <input id="strategy-symbol" type="text" placeholder="BTCUSD or leave blank for universe" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-timeframe">Timeframe</label>
+                <select id="strategy-timeframe">
+                  <option value="1m">1m</option>
+                  <option value="3m">3m</option>
+                  <option value="5m">5m</option>
+                  <option value="15m">15m</option>
+                  <option value="30m">30m</option>
+                  <option value="1H">1H</option>
+                  <option value="2H">2H</option>
+                  <option value="4H">4H</option>
+                  <option value="6H">6H</option>
+                  <option value="12H">12H</option>
+                  <option value="1D">1D</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-candles">Candles</label>
+                <input id="strategy-candles" type="number" min="100" step="100" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-direction">Direction</label>
+                <select id="strategy-direction">
+                  <option value="LONG">LONG</option>
+                  <option value="SHORT">SHORT</option>
+                  <option value="BOTH">BOTH</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-min-score">Min Score</label>
+                <input id="strategy-min-score" type="number" min="0" step="1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-min-signals">Min Signals</label>
+                <input id="strategy-min-signals" type="number" min="1" step="1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-min-score-gap">Score Gap</label>
+                <input id="strategy-min-score-gap" type="number" min="0" step="1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-leverage">Leverage</label>
+                <input id="strategy-leverage" type="number" min="1" step="1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-margin">Margin / Trade</label>
+                <input id="strategy-margin" type="number" min="1" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-max-margin">Max Margin</label>
+                <input id="strategy-max-margin" type="number" min="1" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-stop-loss-pct">Stop Loss Pct</label>
+                <input id="strategy-stop-loss-pct" type="number" min="0" step="0.001" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-take-profit-pct">Take Profit Pct</label>
+                <input id="strategy-take-profit-pct" type="number" min="0" step="0.001" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-trail-pct">Trail Pct</label>
+                <input id="strategy-trail-pct" type="number" min="0" step="0.001" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-max-hold">Max Hold Candles</label>
+                <input id="strategy-max-hold" type="number" min="0" step="1" />
+              </div>
+              <div class="form-field">
+                <label class="field-label" for="strategy-cooldown">Cooldown Candles</label>
+                <input id="strategy-cooldown" type="number" min="0" step="1" />
+              </div>
+            </div>
+            <div style="margin-top: 12px;">
+              <label class="toggle-chip"><input id="strategy-csv" type="checkbox" /> Include CSV in backtest response</label>
+            </div>
+            <div class="button-row" style="margin-top: 14px;">
+              <button class="primary" id="save-strategy-btn">Save Strategy</button>
+              <button class="secondary" id="run-backtest-btn">Run Backtest</button>
+            </div>
+            <div class="message" id="strategy-message"></div>
+            <div class="message" id="backtest-message"></div>
+            <div class="result-shell" id="backtest-result"><pre>Backtest results will appear here.</pre></div>
+          </div>
+
+          <div class="panel surface">
+            <div class="panel-header">
+              <div>
                 <h2 class="panel-title">Performance</h2>
                 <div class="panel-subtitle">Realized outcomes from the current engine session.</div>
               </div>
@@ -1269,6 +1427,9 @@ def build_dashboard_html(
         tokenInput: document.getElementById("api-token"),
         authMessage: document.getElementById("auth-message"),
         controlMessage: document.getElementById("control-message"),
+        strategyMessage: document.getElementById("strategy-message"),
+        backtestMessage: document.getElementById("backtest-message"),
+        backtestResult: document.getElementById("backtest-result"),
         statusDot: document.getElementById("hero-status-dot"),
         statusText: document.getElementById("hero-status-text"),
         modeBadge: document.getElementById("mode-badge"),
@@ -1468,6 +1629,145 @@ def build_dashboard_html(
         document.getElementById("setup-chips").innerHTML = chips
           .map(([label, value]) => `<div class="chip ${toneForStatus(value)}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`)
           .join("");
+      }
+
+      function setStrategyField(id, value) {
+        const node = document.getElementById(id);
+        if (!node) {
+          return;
+        }
+        if (node.type === "checkbox") {
+          node.checked = !!value;
+          return;
+        }
+        node.value = value === null || value === undefined ? "" : String(value);
+      }
+
+      function collectStrategyProfile() {
+        return {
+          timeframe: document.getElementById("strategy-timeframe")?.value || "1m",
+          candles: Number(document.getElementById("strategy-candles")?.value || 100),
+          min_score: Number(document.getElementById("strategy-min-score")?.value || 0),
+          min_signals: Number(document.getElementById("strategy-min-signals")?.value || 1),
+          leverage: Number(document.getElementById("strategy-leverage")?.value || 1),
+          margin: Number(document.getElementById("strategy-margin")?.value || 1),
+          max_margin: Number(document.getElementById("strategy-max-margin")?.value || 1),
+          stop_loss_pct: Number(document.getElementById("strategy-stop-loss-pct")?.value || 0),
+          take_profit_pct: Number(document.getElementById("strategy-take-profit-pct")?.value || 0),
+          trail_pct: Number(document.getElementById("strategy-trail-pct")?.value || 0),
+          max_hold: Number(document.getElementById("strategy-max-hold")?.value || 0),
+          direction: document.getElementById("strategy-direction")?.value || "BOTH",
+          min_score_gap: Number(document.getElementById("strategy-min-score-gap")?.value || 0),
+          cooldown: Number(document.getElementById("strategy-cooldown")?.value || 0),
+          csv: !!document.getElementById("strategy-csv")?.checked,
+        };
+      }
+
+      function renderStrategy(strategy) {
+        const profile = strategy?.profile || {};
+        setStrategyField("strategy-timeframe", profile.timeframe || "1m");
+        setStrategyField("strategy-candles", profile.candles ?? 100);
+        setStrategyField("strategy-min-score", profile.min_score ?? 0);
+        setStrategyField("strategy-min-signals", profile.min_signals ?? 1);
+        setStrategyField("strategy-leverage", profile.leverage ?? 1);
+        setStrategyField("strategy-margin", profile.margin ?? 1);
+        setStrategyField("strategy-max-margin", profile.max_margin ?? profile.margin ?? 1);
+        setStrategyField("strategy-stop-loss-pct", profile.stop_loss_pct ?? 0);
+        setStrategyField("strategy-take-profit-pct", profile.take_profit_pct ?? 0);
+        setStrategyField("strategy-trail-pct", profile.trail_pct ?? 0);
+        setStrategyField("strategy-max-hold", profile.max_hold ?? 0);
+        setStrategyField("strategy-direction", profile.direction || "BOTH");
+        setStrategyField("strategy-min-score-gap", profile.min_score_gap ?? 0);
+        setStrategyField("strategy-cooldown", profile.cooldown ?? 0);
+        setStrategyField("strategy-csv", !!profile.csv);
+      }
+
+      function renderBacktestResult(payload) {
+        if (!els.backtestResult) {
+          return;
+        }
+        if (!payload || typeof payload !== "object") {
+          els.backtestResult.innerHTML = "<pre>Backtest results will appear here.</pre>";
+          return;
+        }
+        const report = payload.report || {};
+        const lines = [
+          `Scope: ${payload.scope_label || payload.symbol || "--"}`,
+          `Timeframe: ${payload.timeframe || "--"}`,
+          `Range: ${payload.start_date || "--"} -> ${payload.end_date || "--"}`,
+          `Candles: ${payload.candles ?? "--"}`,
+          `Final balance: ${formatMoney(report.final_balance)}`,
+          `Return: ${report.total_return == null ? "--" : `${formatMaybeNumber(report.total_return, 2)}%`}`,
+          `Trades: ${report.total_trades ?? "--"}`,
+          `Win rate: ${report.win_rate == null ? "--" : `${formatMaybeNumber(report.win_rate, 2)}%`}`,
+          `Max drawdown: ${report.max_drawdown == null ? "--" : `${formatMaybeNumber(report.max_drawdown, 2)}%`}`,
+          `Sharpe: ${report.sharpe_ratio ?? "--"}`,
+          `Profit factor: ${report.profit_factor ?? "--"}`,
+        ];
+        if (Array.isArray(payload.top_symbols) && payload.top_symbols.length) {
+          lines.push("");
+          lines.push("Top symbols:");
+          payload.top_symbols.slice(0, 5).forEach((item) => {
+            lines.push(`- ${item.symbol}: ${formatMaybeNumber(item.total_return, 2)}% (${item.total_trades} trades)`);
+          });
+        }
+        if (payload.csv) {
+          lines.push("");
+          lines.push("CSV:");
+          lines.push(payload.csv);
+        }
+        els.backtestResult.innerHTML = `<pre>${escapeHtml(lines.join("\n"))}</pre>`;
+      }
+
+      async function saveStrategyConfig() {
+        try {
+          const response = await fetch("/strategy/config", {
+            method: "POST",
+            headers: { ...headers(), "content-type": "application/json" },
+            body: JSON.stringify({ profile: collectStrategyProfile() }),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.detail || `Save failed: ${response.status}`);
+          }
+          renderStrategy(payload.strategy || {});
+          setMessage(els.strategyMessage, "Strategy saved and applied to the engine.");
+        } catch (error) {
+          setMessage(els.strategyMessage, error.message || "Could not save strategy.", true);
+        }
+      }
+
+      async function runBacktestRequest() {
+        try {
+          const profile = collectStrategyProfile();
+          const params = new URLSearchParams();
+          const symbol = (document.getElementById("strategy-symbol")?.value || "").trim().toUpperCase();
+          if (symbol) {
+            params.set("symbol", symbol);
+          }
+          Object.entries(profile).forEach(([key, value]) => {
+            if (key === "csv") {
+              params.set("csv_output", String(value));
+            } else {
+              params.set(key, String(value));
+            }
+          });
+          const response = await fetch(`/backtest/run?${params.toString()}`, {
+            method: "POST",
+            headers: headers(),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.detail || `Backtest failed: ${response.status}`);
+          }
+          if (payload.strategy_profile) {
+            renderStrategy({ profile: payload.strategy_profile });
+          }
+          renderBacktestResult(payload);
+          setMessage(els.backtestMessage, "Backtest complete.");
+        } catch (error) {
+          setMessage(els.backtestMessage, error.message || "Backtest failed.", true);
+        }
       }
 
       function toPct(value, low, high) {
@@ -1741,6 +2041,12 @@ def build_dashboard_html(
                 const unrealizedPnl = positionUpnl(position);
                 const pnlClass = unrealizedPnl === null ? "" : unrealizedPnl >= 0 ? "positive" : "negative";
                 const notional = Number.isFinite(entry) && Number.isFinite(quantity) ? Math.abs(entry * quantity) : null;
+                const marginUsed = position.margin_used === null || position.margin_used === undefined || Number.isNaN(Number(position.margin_used))
+                  ? null
+                  : Number(position.margin_used);
+                const leverage = position.leverage === null || position.leverage === undefined || Number.isNaN(Number(position.leverage))
+                  ? null
+                  : Number(position.leverage);
                 const userPill = position.user_id === null || position.user_id === undefined
                   ? ""
                   : `<span class="position-pill user">Acct ${escapeHtml(position.user_id)}</span>`;
@@ -1776,6 +2082,14 @@ def build_dashboard_html(
                         <span class="value">${formatMaybeNumber(position.quantity, 4)}</span>
                       </div>
                       <div class="position-stat">
+                        <span class="label">Margin</span>
+                        <span class="value">${marginUsed === null ? "--" : formatMoney(marginUsed)}</span>
+                      </div>
+                      <div class="position-stat">
+                        <span class="label">Leverage</span>
+                        <span class="value">${leverage === null ? "--" : `${formatMaybeNumber(leverage, 0)}x`}</span>
+                      </div>
+                      <div class="position-stat">
                         <span class="label">Stop</span>
                         <span class="value">${formatMaybeNumber(position.stop_loss, 4)}</span>
                       </div>
@@ -1785,6 +2099,7 @@ def build_dashboard_html(
                       </div>
                     </div>
                     <div class="position-footer">
+                      <span>${marginUsed === null ? "Margin --" : `Margin ${escapeHtml(formatMoney(marginUsed))}${leverage === null ? "" : ` @ ${escapeHtml(formatMaybeNumber(leverage, 0))}x`}`}</span>
                       <span>${notional == null ? "Notional --" : `Notional ${escapeHtml(formatMoney(notional))}`}</span>
                       <span>${mark === null ? "Live mark pending" : "Live mark online"}</span>
                       <span>${unrealizedPnl == null ? "uPnL waiting" : (unrealizedPnl >= 0 ? "Position green" : "Position red")}</span>
@@ -1955,11 +2270,12 @@ def build_dashboard_html(
         els.statusText.textContent = snapshot.running ? (snapshot.paused ? "Running, but paused" : "Engine live") : "Engine stopped";
 
         if (memberAccess) {
-          setMessage(els.controlMessage, "Read-only member access active. Telegram controls stay in the bot.", false);
+          setMessage(els.controlMessage, "Engine controls stay in Telegram. Strategy and backtesting tools are available here.", false);
         }
 
         renderWallet(portfolio);
         renderSetup(config);
+        renderStrategy(payload.strategy || {});
         renderPositions(payload.positions || []);
         renderTrades(payload.recent_trades || []);
         renderActivity(payload.activity || []);
@@ -2034,6 +2350,8 @@ def build_dashboard_html(
       const saveTokenBtn = document.getElementById("save-token-btn");
       const clearTokenBtn = document.getElementById("clear-token-btn");
       const refreshBtn = document.getElementById("refresh-btn");
+      const saveStrategyBtn = document.getElementById("save-strategy-btn");
+      const runBacktestBtn = document.getElementById("run-backtest-btn");
       const pauseBtn = document.getElementById("pause-btn");
       const resumeBtn = document.getElementById("resume-btn");
       const shutdownBtn = document.getElementById("shutdown-btn");
@@ -2061,6 +2379,12 @@ def build_dashboard_html(
 
       if (refreshBtn) {
         refreshBtn.addEventListener("click", loadDashboard);
+      }
+      if (saveStrategyBtn) {
+        saveStrategyBtn.addEventListener("click", () => saveStrategyConfig());
+      }
+      if (runBacktestBtn) {
+        runBacktestBtn.addEventListener("click", () => runBacktestRequest());
       }
       if (pauseBtn) {
         pauseBtn.addEventListener("click", () => runControl("pause"));

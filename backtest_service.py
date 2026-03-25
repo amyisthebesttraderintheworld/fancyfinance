@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 from copy import deepcopy
 from datetime import datetime, time, timedelta
 from typing import Any, Optional
@@ -8,9 +10,10 @@ import pandas as pd
 
 from backtester import Backtester
 from common import get_logger, load_historical_data
+from strategy_profile import normalize_strategy_profile
 
 logger = get_logger("BacktestService")
-ALLOWED_REMOTE_CANDLE_COUNTS = {500, 1000}
+ALLOWED_REMOTE_CANDLE_COUNTS = {100, 500, 1000}
 
 
 class BacktestServiceError(Exception):
@@ -292,7 +295,26 @@ def _run_backtester(config: dict, symbol: str, timeframe: str, frame: pd.DataFra
         "wins": wins,
         "losses": losses,
         "trade_pnls": trade_pnls,
+        "trades": [dict(trade.__dict__) for trade in backtester.trades],
     }
+
+
+def _apply_strategy_profile(config: dict, strategy_profile: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    normalized = normalize_strategy_profile(config, strategy_profile or {}, current=config.get("strategy_profile") or {})
+    config["strategy_profile"] = normalized
+    config.setdefault("strategy", {})
+    config["strategy"]["timeframe"] = normalized["timeframe"]
+    return normalized
+
+
+def _trades_to_csv(trades: list[dict[str, Any]]) -> str:
+    if not trades:
+        return ""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(trades[0].keys()))
+    writer.writeheader()
+    writer.writerows(trades)
+    return output.getvalue()
 
 
 def load_backtest_dataframe(
@@ -323,15 +345,17 @@ def run_backtest(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     timeframe: Optional[str] = None,
+    strategy_profile: Optional[dict[str, Any]] = None,
+    csv_output: bool = False,
 ) -> dict[str, Any]:
     config = deepcopy(base_config or {})
+    normalized_profile = _apply_strategy_profile(config, strategy_profile)
     resolved_start, resolved_end, resolved_timeframe = _resolve_requested_range(
         config,
         start_date,
         end_date,
         timeframe,
     )
-    config.setdefault("strategy", {})
     config["strategy"]["timeframe"] = resolved_timeframe
 
     frame = load_backtest_dataframe(config, symbol, resolved_start, resolved_end, resolved_timeframe)
@@ -342,14 +366,18 @@ def run_backtest(
 
     result = _run_backtester(config, symbol, resolved_timeframe, frame)
 
-    return {
+    payload = {
         "symbol": symbol,
         "timeframe": resolved_timeframe,
         "start_date": resolved_start,
         "end_date": resolved_end,
         "candles": int(len(frame)),
         "report": result["report"],
+        "strategy_profile": normalized_profile,
     }
+    if csv_output:
+        payload["csv"] = _trades_to_csv(result.get("trades") or [])
+    return payload
 
 
 def run_backtest_recent(
@@ -357,6 +385,8 @@ def run_backtest_recent(
     symbol: str,
     timeframe: Optional[str] = None,
     candles: int = 500,
+    strategy_profile: Optional[dict[str, Any]] = None,
+    csv_output: bool = False,
 ) -> dict[str, Any]:
     if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
         raise BacktestServiceError(
@@ -364,8 +394,8 @@ def run_backtest_recent(
         )
 
     config = deepcopy(base_config or {})
+    normalized_profile = _apply_strategy_profile(config, strategy_profile)
     resolved_timeframe = timeframe or config.get("strategy", {}).get("timeframe") or "1m"
-    config.setdefault("strategy", {})
     config["strategy"]["timeframe"] = resolved_timeframe
 
     frame = _fetch_remote_recent_dataset(config, symbol, resolved_timeframe, candles)
@@ -376,7 +406,7 @@ def run_backtest_recent(
 
     result = _run_backtester(config, symbol, resolved_timeframe, frame)
 
-    return {
+    payload = {
         "symbol": symbol,
         "timeframe": resolved_timeframe,
         "start_date": result["start_date"],
@@ -384,13 +414,19 @@ def run_backtest_recent(
         "candles": result["candles"],
         "report": result["report"],
         "window": f"latest_{candles}_candles",
+        "strategy_profile": normalized_profile,
     }
+    if csv_output:
+        payload["csv"] = _trades_to_csv(result.get("trades") or [])
+    return payload
 
 
 def run_backtest_recent_universe(
     base_config: dict,
     timeframe: Optional[str] = None,
     candles: int = 500,
+    strategy_profile: Optional[dict[str, Any]] = None,
+    csv_output: bool = False,
 ) -> dict[str, Any]:
     if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
         raise BacktestServiceError(
@@ -398,12 +434,12 @@ def run_backtest_recent_universe(
         )
 
     config = deepcopy(base_config or {})
+    normalized_profile = _apply_strategy_profile(config, strategy_profile)
     symbols = _scanner_picked_symbols(config)
     if not symbols:
         raise BacktestServiceError("The scanner did not pick any assets for a universe backtest right now.")
 
     resolved_timeframe = timeframe or config.get("strategy", {}).get("timeframe") or "1m"
-    config.setdefault("strategy", {})
     config["strategy"]["timeframe"] = resolved_timeframe
 
     client = _create_exchange_client(config)
@@ -461,7 +497,7 @@ def run_backtest_recent_universe(
         reverse=True,
     )
 
-    return {
+    payload = {
         "symbol": "SCANNER_UNIVERSE",
         "scope": "universe",
         "scope_label": "scanner universe",
@@ -487,7 +523,15 @@ def run_backtest_recent_universe(
         "capital_model": "Each asset ran independently with the same starting balance.",
         "wins": total_wins,
         "losses": total_losses,
+        "strategy_profile": normalized_profile,
     }
+    if csv_output:
+        flattened = []
+        for item in per_symbol:
+            for trade in item.get("trades", []) or []:
+                flattened.append({"symbol": item["symbol"], **trade})
+        payload["csv"] = _trades_to_csv(flattened)
+    return payload
 
 
 def format_backtest_summary(result: dict[str, Any]) -> str:

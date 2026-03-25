@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from common import Candle, Position, Trade, apply_slippage, calculate_fee, calculate_position_size, get_logger
+from common import Candle, Position, Trade, apply_slippage, calculate_fee, get_logger
+from fang_engine_runtime import build_trade_protection_from_settings, resolve_scan_settings
 from scanner_long import LongScanner
 from scanner_short import ShortScanner
 
@@ -27,6 +28,8 @@ class Backtester:
         self.trades: list[Trade] = []
         self.equity_curve = []
         self.last_report = None
+        self.scan_settings = resolve_scan_settings(config)
+        self._cooldown_until_candle: dict[str, int] = {}
 
     def _periods_per_year(self) -> int:
         timeframe = self.config.get('strategy', {}).get('timeframe', '1m')
@@ -45,7 +48,10 @@ class Backtester:
         self.balance = self.initial_balance
         self.equity_curve = []
         
-        for index, row in df.iterrows():
+        self.scan_settings = resolve_scan_settings(self.config)
+        self._cooldown_until_candle = {}
+
+        for candle_index, (index, row) in enumerate(df.iterrows()):
             timestamp = int(index.timestamp() * 1000)
             candle = Candle(
                 timestamp=timestamp,
@@ -65,16 +71,32 @@ class Backtester:
                 pos = self.positions[symbol]
                 exit_price = None
                 reason = None
+
+                if pos.direction == 'long':
+                    pos.high_water = max(float(pos.high_water or pos.entry_price), float(candle.high))
+                    if float(pos.trail_pct or 0.0) > 0 and pos.high_water > 0:
+                        pos.stop_loss = max(float(pos.stop_loss), pos.high_water * (1.0 - float(pos.trail_pct)))
+                elif pos.direction == 'short':
+                    pos.low_water = min(float(pos.low_water or pos.entry_price), float(candle.low))
+                    if float(pos.trail_pct or 0.0) > 0 and pos.low_water > 0:
+                        pos.stop_loss = min(float(pos.stop_loss), pos.low_water * (1.0 + float(pos.trail_pct)))
+
+                if (
+                    int(pos.max_hold_candles or 0) > 0
+                    and timestamp - pos.open_time >= int(pos.max_hold_candles) * int(self.scan_settings.candle_seconds) * 1000
+                ):
+                    exit_price = candle.close
+                    reason = "Max Hold"
                 
                 # Check SL/TP
-                if pos.direction == 'long':
+                if exit_price is None and pos.direction == 'long':
                     if candle.low <= pos.stop_loss:
                         exit_price = pos.stop_loss # Assume execution at SL (gap risk ignored for simplicity)
                         reason = "Stop Loss"
                     elif candle.high >= pos.take_profit:
                         exit_price = pos.take_profit
                         reason = "Take Profit"
-                elif pos.direction == 'short':
+                elif exit_price is None and pos.direction == 'short':
                     if candle.high >= pos.stop_loss:
                         exit_price = pos.stop_loss
                         reason = "Stop Loss"
@@ -119,10 +141,16 @@ class Backtester:
                     ))
                     
                     del self.positions[symbol]
+                    if self.scan_settings.cooldown_candles > 0:
+                        self._cooldown_until_candle[symbol] = candle_index + int(self.scan_settings.cooldown_candles)
                     # Notify scanners of flat position if needed (simple scanners here handle logic internally based on update return)
             
             # Entry Logic (only if no position)
             if symbol not in self.positions and len(self.positions) < self.config['risk'].get('max_positions', 1):
+                if self._cooldown_until_candle.get(symbol, -1) > candle_index:
+                    self.equity_curve.append({'timestamp': timestamp, 'balance': self.balance})
+                    continue
+
                 signal = None
                 if long_signal and long_signal.direction == 'long':
                     signal = long_signal
@@ -130,12 +158,30 @@ class Backtester:
                     signal = short_signal
                 
                 if signal:
-                    sl_dist = abs(signal.entry_price - signal.stop_loss)
-                    qty = calculate_position_size(self.balance, self.risk_per_trade, sl_dist, signal.entry_price)
+                    if self.scan_settings.direction != "BOTH" and signal.direction.upper() != self.scan_settings.direction:
+                        signal = None
+                    score_payload = getattr(signal, "score", None) or {}
+                    score_total = int((score_payload or {}).get("total") or 0)
+                    signals_count = len((score_payload or {}).get("signals") or [])
+
+                if signal:
+                    if score_total < int(self.scan_settings.min_score):
+                        signal = None
+                    elif signals_count < int(self.scan_settings.min_signals):
+                        signal = None
+
+                if signal:
+                    qty = (float(self.scan_settings.margin_usdt) * float(self.scan_settings.leverage)) / max(float(signal.entry_price), 1e-8)
                     
                     if qty > 0:
                         adjusted_entry_price = apply_slippage(signal.entry_price, self.slippage, signal.direction)
                         fee = calculate_fee(qty, adjusted_entry_price, self.fee_rate)
+                        protection = build_trade_protection_from_settings(
+                            adjusted_entry_price,
+                            qty,
+                            signal.direction.upper(),
+                            self.scan_settings,
+                        )
                         
                         # Simplified: fee deducted from balance, not reducing qty
                         self.balance -= fee 
@@ -145,9 +191,17 @@ class Backtester:
                             direction=signal.direction,
                             entry_price=adjusted_entry_price,
                             quantity=qty,
-                            stop_loss=signal.stop_loss,
-                            take_profit=signal.take_profit,
-                            open_time=timestamp
+                            stop_loss=protection["stop_price"],
+                            take_profit=protection["take_profit"],
+                            open_time=timestamp,
+                            leverage=int(self.scan_settings.leverage),
+                            margin_used=float(self.scan_settings.margin_usdt),
+                            score=score_total,
+                            signals_count=signals_count,
+                            trail_pct=float(self.scan_settings.trail_pct),
+                            high_water=adjusted_entry_price if signal.direction == "long" else None,
+                            low_water=adjusted_entry_price if signal.direction == "short" else None,
+                            max_hold_candles=int(self.scan_settings.max_hold_candles),
                         )
             
             self.equity_curve.append({'timestamp': timestamp, 'balance': self.balance})

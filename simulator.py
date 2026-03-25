@@ -24,6 +24,7 @@ from exchange_manager import ExchangeManager
 from fang_engine_runtime import build_entry_plan, resolve_scan_settings, run_market_scan
 from scanner_long import LongScanner
 from scanner_short import ShortScanner
+from strategy_profile import normalize_strategy_profile
 from supabase_client import SupabaseManager
 
 WS_PING_INTERVAL_SECONDS = 20
@@ -47,6 +48,9 @@ class SimulationSession:
     short_scanners: dict[str, ShortScanner] = field(default_factory=dict)
     active_api_user_id: Optional[int] = None
     runtime_api_ready: bool = False
+    strategy_profile: dict[str, Any] = field(default_factory=dict)
+    market_scan_settings: Any = None
+    symbol_cooldowns: dict[str, int] = field(default_factory=dict)
 
 
 class Simulator:
@@ -70,6 +74,8 @@ class Simulator:
         self.fee_rate = config["backtest"]["fee_rate"]
         self.slippage = config["backtest"]["slippage"]
         self.symbols = config.get("symbols") or exchange_config.get("symbols", [])
+        self.default_strategy_profile = normalize_strategy_profile(config)
+        self.market_scan_settings = resolve_scan_settings(config, self.default_strategy_profile)
 
         self._user_scoped_simulation = str(config.get("mode") or "").strip().lower() == "simulation"
         self._user_sessions: dict[int, SimulationSession] = {}
@@ -82,7 +88,6 @@ class Simulator:
         self._websocket = None
         self._subscribed_symbols: set[str] = set()
         self.use_market_scan_engine = True
-        self.market_scan_settings = resolve_scan_settings(config)
 
         ws_urls = {
             "phemex": "wss://ws.phemex.com",
@@ -174,8 +179,50 @@ class Simulator:
 
     def _build_session(self, user_id: Optional[int]) -> SimulationSession:
         session = SimulationSession(user_id=user_id, balance=self.initial_balance)
+        stored_profile = self.db.get_user_strategy_config(user_id) if user_id is not None else None
+        session.strategy_profile = normalize_strategy_profile(
+            self.config,
+            stored_profile or self.default_strategy_profile,
+            current=self.default_strategy_profile,
+        )
+        session.market_scan_settings = resolve_scan_settings(self.config, session.strategy_profile)
         self._start_new_session(session)
         return session
+
+    def _settings_for_session(self, session: Optional[SimulationSession] = None):
+        target = session or self._global_session
+        return getattr(target, "market_scan_settings", None) or self.market_scan_settings
+
+    def get_strategy_config(self, user_id: Optional[int] = None) -> dict[str, Any]:
+        if self._user_scoped_simulation and user_id is not None:
+            session = self.get_user_session(user_id, create=True)
+            if session is not None and session.strategy_profile:
+                return dict(session.strategy_profile)
+
+        session = self._global_session
+        if session.strategy_profile:
+            return dict(session.strategy_profile)
+        return dict(self.default_strategy_profile)
+
+    def set_strategy_config(self, strategy_config: dict[str, Any], user_id: Optional[int] = None) -> dict[str, Any]:
+        current = self.get_strategy_config(user_id)
+        normalized = normalize_strategy_profile(self.config, strategy_config, current=current)
+
+        if self._user_scoped_simulation and user_id is not None:
+            session = self.get_user_session(user_id, create=True)
+            if session is not None:
+                session.strategy_profile = dict(normalized)
+                session.market_scan_settings = resolve_scan_settings(self.config, session.strategy_profile)
+            self.db.store_user_strategy_config(int(user_id), normalized)
+            return normalized
+
+        self.default_strategy_profile = dict(normalized)
+        self.market_scan_settings = resolve_scan_settings(self.config, self.default_strategy_profile)
+        self._global_session.strategy_profile = dict(normalized)
+        self._global_session.market_scan_settings = self.market_scan_settings
+        self.config.setdefault("strategy", {})
+        self.config["strategy"]["timeframe"] = normalized["timeframe"]
+        return normalized
 
     def _normalize_user_id(self, user_id: Optional[int], chat_id: Optional[int] = None) -> Optional[int]:
         candidate = user_id if user_id is not None else chat_id
@@ -336,23 +383,37 @@ class Simulator:
         if not self.use_market_scan_engine or target.is_paused:
             return []
 
+        settings = self._settings_for_session(target)
         max_positions = int(self.config["risk"].get("max_positions", 1))
         available_slots = max_positions - len(target.positions)
         if available_slots <= 0:
             return []
-        if target.balance < self.market_scan_settings.margin_usdt:
+        if target.balance < settings.margin_usdt:
+            return []
+        locked_margin = sum(float(getattr(position, "margin_used", 0.0) or 0.0) for position in target.positions.values())
+        if locked_margin + settings.margin_usdt > settings.max_margin_usdt:
             return []
 
+        now_ms = int(time.time() * 1000)
+        expired = [symbol for symbol, expires_at in target.symbol_cooldowns.items() if int(expires_at or 0) <= now_ms]
+        for symbol in expired:
+            target.symbol_cooldowns.pop(symbol, None)
+
         candidates = run_market_scan(
-            self.market_scan_settings,
+            settings,
             in_position=set(target.positions.keys()),
             available_slots=available_slots,
         )
         plans: list[dict[str, Any]] = []
         for result, direction in candidates:
-            plan = build_entry_plan(result, direction, self.market_scan_settings)
+            plan = build_entry_plan(result, direction, settings)
             if not plan or not plan.get("symbol"):
                 continue
+            if plan["symbol"] in target.symbol_cooldowns:
+                continue
+            if locked_margin + float(plan.get("margin_used") or settings.margin_usdt) > settings.max_margin_usdt:
+                continue
+            locked_margin += float(plan.get("margin_used") or settings.margin_usdt)
             plans.append(plan)
         return plans
 
@@ -498,6 +559,7 @@ class Simulator:
         if session.is_paused:
             return
 
+        settings = self._settings_for_session(session)
         self._ensure_symbol_state(symbol, session=session)
         candle.symbol = symbol
 
@@ -511,6 +573,27 @@ class Simulator:
             pos = session.positions[symbol]
             exit_price = None
             reason = None
+
+            if pos.direction == "long":
+                pos.high_water = max(float(pos.high_water or pos.entry_price), float(candle.high))
+                if float(pos.trail_pct or 0.0) > 0 and pos.high_water > 0:
+                    trailed_stop = pos.high_water * (1.0 - float(pos.trail_pct))
+                    pos.stop_loss = max(float(pos.stop_loss or trailed_stop), trailed_stop)
+            elif pos.direction == "short":
+                current_low = float(candle.low)
+                existing_low = float(pos.low_water or pos.entry_price)
+                pos.low_water = min(existing_low, current_low)
+                if float(pos.trail_pct or 0.0) > 0 and pos.low_water > 0:
+                    trailed_stop = pos.low_water * (1.0 + float(pos.trail_pct))
+                    pos.stop_loss = min(float(pos.stop_loss or trailed_stop), trailed_stop)
+
+            if (
+                exit_price is None
+                and int(pos.max_hold_candles or 0) > 0
+                and int(candle.timestamp) - int(pos.open_time) >= int(pos.max_hold_candles) * int(settings.candle_seconds) * 1000
+            ):
+                exit_price = candle.close
+                reason = "Max Hold"
 
             if pos.direction == "long":
                 if candle.low <= pos.stop_loss:
@@ -626,11 +709,18 @@ class Simulator:
                             is_entry=True,
                             stop_loss=plan["stop_loss"],
                             take_profit=plan["take_profit"],
+                            leverage=plan.get("leverage"),
+                            margin_used=plan.get("margin_used"),
+                            score=plan.get("score"),
+                            signals_count=plan.get("signals_count"),
+                            trail_pct=plan.get("trail_pct"),
+                            max_hold_candles=plan.get("max_hold_candles"),
                         )
             except Exception as exc:
                 self.logger.error(f"Market scan loop error: {exc}")
 
-            sleep_seconds = max(5, int(self.market_scan_settings.interval_seconds))
+            runtime_settings = [self._settings_for_session(session) for session in self._runtime_sessions()]
+            sleep_seconds = max(5, min((int(settings.interval_seconds) for settings in runtime_settings), default=int(self.market_scan_settings.interval_seconds)))
             for _ in range(sleep_seconds):
                 if not self.is_running:
                     return
@@ -698,15 +788,40 @@ class Simulator:
         stop_loss=None,
         take_profit=None,
         reason=None,
+        leverage: Optional[int] = None,
+        margin_used: Optional[float] = None,
+        score: Optional[int] = None,
+        signals_count: Optional[int] = None,
+        trail_pct: Optional[float] = None,
+        max_hold_candles: Optional[int] = None,
     ):
         adjusted_direction = direction if is_entry else ("short" if direction == "long" else "long")
         adjusted_price = apply_slippage(price, self.slippage, adjusted_direction)
         fee = calculate_fee(qty, adjusted_price, self.fee_rate)
         notify_user_id = session.user_id
+        settings = self._settings_for_session(session)
 
         if is_entry:
             session.balance -= fee
-            position = Position(symbol, direction, adjusted_price, qty, stop_loss, take_profit, int(time.time() * 1000))
+            resolved_margin = float(margin_used if margin_used is not None else settings.margin_usdt)
+            resolved_leverage = int(leverage if leverage is not None else settings.leverage)
+            position = Position(
+                symbol,
+                direction,
+                adjusted_price,
+                qty,
+                stop_loss,
+                take_profit,
+                int(time.time() * 1000),
+                leverage=resolved_leverage,
+                margin_used=resolved_margin,
+                score=score,
+                signals_count=signals_count,
+                trail_pct=float(trail_pct if trail_pct is not None else settings.trail_pct),
+                high_water=adjusted_price if direction == "long" else None,
+                low_water=adjusted_price if direction == "short" else None,
+                max_hold_candles=int(max_hold_candles if max_hold_candles is not None else settings.max_hold_candles),
+            )
             position.mark_price = adjusted_price
             position.current_pnl = 0.0
             session.positions[symbol] = position
@@ -720,6 +835,10 @@ class Simulator:
                     "price": adjusted_price,
                     "qty": qty,
                     "type": "entry",
+                    "margin_used": resolved_margin,
+                    "leverage": resolved_leverage,
+                    "score": score,
+                    "signals_count": signals_count,
                 },
                 session=session,
             )
@@ -733,12 +852,17 @@ class Simulator:
                     "qty": qty,
                     "stop_loss": stop_loss,
                     "take_profit": take_profit,
+                    "margin_used": resolved_margin,
+                    "leverage": resolved_leverage,
+                    "score": score,
+                    "signals_count": signals_count,
                 },
                 user_id=session.user_id,
             )
 
             self.notifier.send_message(
-                f"🔵 SIM ENTRY: {direction.upper()} {symbol} @ {adjusted_price:.2f} Qty: {qty:.4f}",
+                f"🔵 SIM ENTRY: {direction.upper()} {symbol} @ {adjusted_price:.2f} Qty: {qty:.4f} "
+                f"Margin: ${resolved_margin:.2f} @ {resolved_leverage}x",
                 user_id=notify_user_id,
             )
             self.logger.info(f"Entry {symbol} {direction} @ {adjusted_price} for user {session.user_id or 'global'}")
@@ -769,6 +893,8 @@ class Simulator:
         self.db.remove_position(symbol, user_id=session.user_id)
 
         del session.positions[symbol]
+        if int(settings.cooldown_candles or 0) > 0:
+            session.symbol_cooldowns[symbol] = int(time.time() * 1000) + (int(settings.cooldown_candles) * int(settings.candle_seconds) * 1000)
         self.notifier.send_message(
             f"🔴 SIM EXIT: {direction.upper()} {symbol} @ {adjusted_price:.2f} PnL: {pnl:.2f} Reason: {reason}",
             user_id=notify_user_id,
@@ -785,7 +911,8 @@ class Simulator:
         for symbol, position in target.positions.items():
             lines.append(
                 f"{symbol}: {position.direction.upper()} | Entry {position.entry_price:.4f} | "
-                f"Qty {position.quantity:.4f} | SL {position.stop_loss:.4f} | TP {position.take_profit:.4f}"
+                f"Qty {position.quantity:.4f} | Margin ${float(position.margin_used or 0.0):.2f} | "
+                f"Lev {int(position.leverage or 0)}x | SL {position.stop_loss:.4f} | TP {position.take_profit:.4f}"
             )
         return "\n".join(lines)
 
@@ -817,6 +944,7 @@ class Simulator:
         session.balance = self.initial_balance
         session.positions = {}
         session.trade_history = []
+        session.symbol_cooldowns = {}
         session.is_paused = False
         session.safety_paused_until = 0.0
         self._start_new_session(session)

@@ -123,6 +123,14 @@ class Position:
     open_time: int
     mark_price: Optional[float] = None
     current_pnl: Optional[float] = None
+    leverage: Optional[int] = None
+    margin_used: Optional[float] = None
+    score: Optional[int] = None
+    signals_count: Optional[int] = None
+    trail_pct: Optional[float] = None
+    high_water: Optional[float] = None
+    low_water: Optional[float] = None
+    max_hold_candles: Optional[int] = None
 
 @dataclass
 class Trade:

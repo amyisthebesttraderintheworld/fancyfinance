@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 from core import bot_core
+from strategy_profile import normalize_strategy_profile
 
 
 TIMEFRAME_TO_SECONDS = {
@@ -28,13 +29,23 @@ class FangScanSettings:
     direction: str
     timeframe: str
     interval_seconds: int
+    candle_seconds: int
     min_score: int
     min_score_gap: int
+    min_signals: int
     min_volume: int
     max_workers: int
     rate_limit_rps: float
     margin_usdt: float
+    max_margin_usdt: float
     candles: int
+    leverage: int
+    stop_loss_pct: float
+    take_profit_pct: float
+    trail_pct: float
+    max_hold_candles: int
+    cooldown_candles: int
+    csv: bool
     symbols: Optional[list[str]] = None
 
 
@@ -69,28 +80,84 @@ def _default_scan_interval_seconds(timeframe: str) -> int:
     return max(60, min(candle_seconds, 300))
 
 
-def resolve_scan_settings(config: dict[str, Any]) -> FangScanSettings:
+def build_trade_protection_from_settings(
+    entry_price: float,
+    total_qty: float,
+    direction: str,
+    settings: FangScanSettings,
+    qty_rounder=None,
+) -> dict[str, Any]:
+    protection = bot_core.build_trade_protection(
+        entry_price,
+        total_qty,
+        direction.upper(),
+        qty_rounder=qty_rounder,
+    )
+
+    stop_loss_pct = settings.stop_loss_pct if settings.stop_loss_pct > 0 else settings.trail_pct
+    if stop_loss_pct <= 0 and settings.trail_pct > 0:
+        stop_loss_pct = settings.trail_pct
+
+    if stop_loss_pct > 0:
+        if direction.upper() == "LONG":
+            stop_price = entry_price * (1.0 - stop_loss_pct)
+        else:
+            stop_price = entry_price * (1.0 + stop_loss_pct)
+        protection["stop_price"] = float(stop_price)
+        protection["original_stop"] = float(stop_price)
+
+    if settings.take_profit_pct > 0:
+        if direction.upper() == "LONG":
+            tp1_px = entry_price * (1.0 + (settings.take_profit_pct * 0.5))
+            tp2_px = entry_price * (1.0 + (settings.take_profit_pct * 0.75))
+            tp3_px = entry_price * (1.0 + settings.take_profit_pct)
+        else:
+            tp1_px = entry_price * (1.0 - (settings.take_profit_pct * 0.5))
+            tp2_px = entry_price * (1.0 - (settings.take_profit_pct * 0.75))
+            tp3_px = entry_price * (1.0 - settings.take_profit_pct)
+        protection["take_profit"] = float(tp3_px)
+        stages = list(protection.get("tp_stages") or [])
+        if len(stages) >= 3:
+            stages[0]["price"] = float(tp1_px)
+            stages[1]["price"] = float(tp2_px)
+            stages[2]["price"] = float(tp3_px)
+            protection["tp_stages"] = stages
+
+    return protection
+
+
+def resolve_scan_settings(config: dict[str, Any], overrides: Optional[dict[str, Any]] = None) -> FangScanSettings:
     exchange_id = str(config.get("exchange", "phemex")).lower()
     exchange_cfg = config.get(exchange_id, {})
     configured_symbols = config.get("symbols") or exchange_cfg.get("symbols") or []
     scan_all_symbols = bool(exchange_cfg.get("scan_all_symbols", False))
+    profile = normalize_strategy_profile(config, overrides)
 
-    timeframe = _normalize_timeframe(
-        os.getenv("BOT_TIMEFRAME", config.get("strategy", {}).get("timeframe", "1m"))
-    )
+    timeframe = _normalize_timeframe(profile["timeframe"])
+    candle_seconds = TIMEFRAME_TO_SECONDS.get(timeframe, 60)
     interval_seconds = _int_env("BOT_SCAN_INTERVAL", _default_scan_interval_seconds(timeframe))
 
     return FangScanSettings(
-        direction=_normalize_direction(os.getenv("BOT_DIRECTION", "BOTH")),
+        direction=_normalize_direction(profile["direction"]),
         timeframe=timeframe,
         interval_seconds=max(15, interval_seconds),
-        min_score=max(0, _int_env("BOT_MIN_SCORE", 125)),
-        min_score_gap=max(0, _int_env("BOT_MIN_SCORE_GAP", 30)),
+        candle_seconds=candle_seconds,
+        min_score=max(0, int(profile["min_score"])),
+        min_score_gap=max(0, int(profile["min_score_gap"])),
+        min_signals=max(1, int(profile["min_signals"])),
         min_volume=max(0, _int_env("BOT_MIN_VOLUME", 1_000_000)),
         max_workers=max(1, _int_env("BOT_MAX_WORKERS", 25)),
         rate_limit_rps=max(0.1, _float_env("BOT_RATE_LIMIT_RPS", 8.0)),
-        margin_usdt=max(1.0, _float_env("BOT_MARGIN_USDT", float(bot_core.MARGIN_USDT))),
-        candles=max(50, _int_env("BOT_CANDLES", 100)),
+        margin_usdt=max(1.0, float(profile["margin"])),
+        max_margin_usdt=max(float(profile["margin"]), float(profile["max_margin"])),
+        candles=max(50, int(profile["candles"])),
+        leverage=max(1, int(profile["leverage"])),
+        stop_loss_pct=max(0.0, float(profile["stop_loss_pct"])),
+        take_profit_pct=max(0.0, float(profile["take_profit_pct"])),
+        trail_pct=max(0.0, float(profile["trail_pct"])),
+        max_hold_candles=max(0, int(profile["max_hold"])),
+        cooldown_candles=max(0, int(profile["cooldown"])),
+        csv=bool(profile["csv"]),
         symbols=list(configured_symbols) if configured_symbols and not scan_all_symbols else None,
     )
 
@@ -144,13 +211,23 @@ def build_entry_plan(
     if price <= 0.0:
         return None
 
-    leverage = max(1, int(bot_core.get_score_leverage(score)))
+    signals = list(result.get("signals") or [])
+    signals_count = len(signals)
+    if signals_count < settings.min_signals:
+        return None
+
+    leverage = max(1, int(settings.leverage or bot_core.get_score_leverage(score)))
     notional = settings.margin_usdt * leverage
     quantity = notional / price if price > 0 else 0.0
     if quantity <= 0.0:
         return None
 
-    protection = bot_core.build_trade_protection(price, max(quantity, 1e-8), direction.upper())
+    protection = build_trade_protection_from_settings(
+        price,
+        max(quantity, 1e-8),
+        direction.upper(),
+        settings,
+    )
     return {
         "symbol": str(result.get("inst_id") or "").strip(),
         "direction": direction.lower(),
@@ -159,6 +236,10 @@ def build_entry_plan(
         "stop_loss": float(protection["stop_price"]),
         "take_profit": float(protection["take_profit"]),
         "score": score,
-        "signals": list(result.get("signals") or []),
+        "signals": signals,
+        "signals_count": signals_count,
         "leverage": leverage,
+        "margin_used": settings.margin_usdt,
+        "trail_pct": settings.trail_pct,
+        "max_hold_candles": settings.max_hold_candles,
     }

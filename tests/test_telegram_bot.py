@@ -14,6 +14,7 @@ from telegram_bot import (
     menu_button_handler,
     proxy_command,
     button_handler,
+    set_config_command,
     verify_email_command,
     setup_api_command,
     unlock_api_command,
@@ -499,6 +500,129 @@ async def test_backtest_command_rejects_invalid_candle_count(mock_update, mock_c
 
     mock_update.message.reply_text.assert_called_once()
     assert "only support" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_backtest_command_supports_flag_profile(mock_update, mock_context, mock_config, monkeypatch):
+    telegram_bot.config = mock_config
+    active_engine = MagicMock()
+    active_engine.get_strategy_config.return_value = {
+        "timeframe": "1m",
+        "candles": 500,
+        "min_score": 45,
+        "min_signals": 1,
+        "leverage": 3,
+        "margin": 10.0,
+        "max_margin": 30.0,
+        "stop_loss_pct": 0.02,
+        "take_profit_pct": 0.04,
+        "trail_pct": 0.01,
+        "max_hold": 0,
+        "direction": "BOTH",
+        "min_score_gap": 30,
+        "cooldown": 0,
+        "csv": False,
+    }
+    monkeypatch.setattr(telegram_bot, "active_engine", active_engine)
+    mock_context.args = [
+        "--timeframe", "15m",
+        "--candles", "1000",
+        "--min-score", "5",
+        "--min-signals", "4",
+        "--leverage", "5",
+        "--margin", "10",
+        "--max-margin", "150",
+        "--direction", "SHORT",
+        "--csv",
+        "BTCUSD",
+    ]
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
+        with patch(
+            "telegram_bot.run_backtest_recent",
+            return_value={
+                "symbol": "BTCUSD",
+                "timeframe": "15m",
+                "start_date": "2026-03-24 00:00:00",
+                "end_date": "2026-03-24 08:19:00",
+                "candles": 1000,
+                "window": "latest_1000_candles",
+                "csv": "symbol,return\nBTCUSD,5.0",
+                "report": {
+                    "final_balance": 10500.0,
+                    "total_return": 5.0,
+                    "total_trades": 12,
+                    "win_rate": 58.33,
+                    "max_drawdown": -3.2,
+                    "sharpe_ratio": 1.42,
+                    "profit_factor": 1.8,
+                },
+            },
+        ) as backtest_mock:
+            await backtest_command(mock_update, mock_context)
+
+    assert mock_update.message.reply_text.call_count == 2
+    assert "configured backtest" in mock_update.message.reply_text.call_args_list[0].args[0]
+    assert "CSV" in mock_update.message.reply_text.call_args_list[1].args[0]
+    call = backtest_mock.call_args.args
+    assert call[1] == "BTCUSD"
+    assert call[2] == "15m"
+    assert call[3] == 1000
+    assert call[4]["direction"] == "SHORT"
+    assert call[4]["leverage"] == 5
+    assert call[5] is True
+
+
+@pytest.mark.asyncio
+async def test_set_config_command_updates_active_engine_profile(mock_update, mock_context, mock_config, monkeypatch):
+    telegram_bot.config = mock_config
+    active_engine = MagicMock()
+    active_engine.set_strategy_config.return_value = {
+        "timeframe": "15m",
+        "candles": 1000,
+        "min_score": 5,
+        "min_signals": 4,
+        "leverage": 5,
+        "margin": 10.0,
+        "max_margin": 150.0,
+        "stop_loss_pct": 0.04,
+        "take_profit_pct": 0.08,
+        "trail_pct": 0.025,
+        "max_hold": 72,
+        "direction": "SHORT",
+        "min_score_gap": 2,
+        "cooldown": 2,
+        "csv": True,
+    }
+    monkeypatch.setattr(telegram_bot, "active_engine", active_engine)
+    mock_context.args = [
+        "--timeframe", "15m",
+        "--candles", "1000",
+        "--min-score", "5",
+        "--min-signals", "4",
+        "--leverage", "5",
+        "--margin", "10",
+        "--max-margin", "150",
+        "--stop-loss-pct", "0.04",
+        "--take-profit-pct", "0.08",
+        "--trail-pct", "0.025",
+        "--max-hold", "72",
+        "--direction", "SHORT",
+        "--min-score-gap", "2",
+        "--cooldown", "2",
+        "--csv",
+    ]
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
+        await set_config_command(mock_update, mock_context)
+
+    active_engine.set_strategy_config.assert_called_once()
+    _, kwargs = active_engine.set_strategy_config.call_args
+    assert kwargs["user_id"] == 12345
+    message = mock_update.message.reply_text.call_args[0][0]
+    assert "Strategy Updated" in message
+    assert "15m" in message
+    assert "SHORT" in message
 
 
 @pytest.mark.asyncio

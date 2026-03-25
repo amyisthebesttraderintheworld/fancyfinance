@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 import threading
 import time
@@ -11,11 +12,12 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from backtest_service import BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
+from backtest_service import ALLOWED_REMOTE_CANDLE_COUNTS, BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
 from dashboard_access import DashboardAccessError, verify_member_dashboard_token
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
 from stripe_service import StripeService
+from strategy_profile import normalize_strategy_profile
 
 
 DASHBOARD_ASSETS_DIR = Path(__file__).resolve().parent / "dashboard_assets"
@@ -68,6 +70,19 @@ def _coerce_float(value: Any) -> Optional[float]:
     if number != number:
         return None
     return number
+
+
+def _coerce_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _invoke_with_supported_kwargs(func, *args, **kwargs):
+    parameters = inspect.signature(func).parameters
+    supported = {key: value for key, value in kwargs.items() if key in parameters}
+    return func(*args, **supported)
 
 
 def _uses_user_sessions(engine) -> bool:
@@ -332,7 +347,7 @@ def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[floa
             resolved_mark_price = position.get("current_price")
         if resolved_mark_price is None:
             resolved_mark_price = mark_price
-        return {
+        payload = {
             "symbol": symbol,
             "direction": position.get("direction"),
             "entry_price": position.get("entry_price"),
@@ -343,11 +358,20 @@ def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[floa
             "mark_price": resolved_mark_price,
             "current_pnl": position.get("current_pnl", position.get("pnl")),
         }
+        for key, value in (
+            ("leverage", position.get("leverage")),
+            ("margin_used", position.get("margin_used", position.get("margin"))),
+            ("score", position.get("score")),
+            ("signals_count", position.get("signals_count")),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
 
     resolved_mark_price = getattr(position, "mark_price", None)
     if resolved_mark_price is None:
         resolved_mark_price = mark_price
-    return {
+    payload = {
         "symbol": symbol,
         "direction": getattr(position, "direction", None),
         "entry_price": getattr(position, "entry_price", None),
@@ -358,6 +382,11 @@ def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[floa
         "mark_price": resolved_mark_price,
         "current_pnl": getattr(position, "current_pnl", None),
     }
+    for key in ("leverage", "margin_used", "score", "signals_count"):
+        value = getattr(position, key, None)
+        if value is not None:
+            payload[key] = value
+    return payload
 
 
 def _positions_payload(engine, user_id: Optional[int] = None):
@@ -524,6 +553,20 @@ def _config_summary(engine, auth_token: Optional[str]):
     }
 
 
+def _strategy_payload(engine, user_id: Optional[int] = None):
+    getter = getattr(engine, "get_strategy_config", None)
+    if callable(getter):
+        profile = getter(user_id)
+    else:
+        profile = normalize_strategy_profile(getattr(engine, "config", {}), {})
+    return {
+        "profile": profile,
+        "timeframes": ["1m", "3m", "5m", "15m", "30m", "1H", "2H", "4H", "6H", "12H", "1D"],
+        "directions": ["LONG", "SHORT", "BOTH"],
+        "allowed_backtest_candles": sorted({100, *ALLOWED_REMOTE_CANDLE_COUNTS}),
+    }
+
+
 def _user_summary(engine):
     db = getattr(engine, "db", None)
     if db and hasattr(db, "get_user_summary"):
@@ -555,6 +598,7 @@ def _dashboard_payload(engine, auth_token: Optional[str]):
         "portfolio": _portfolio_summary(snapshot, positions),
         "activity": _activity_payload(engine, recent_trades=trades),
         "users": _user_summary(engine),
+        "strategy": _strategy_payload(engine),
     }
 
 
@@ -575,12 +619,16 @@ def _member_dashboard_payload(engine, user_id: int):
         "activity": _activity_payload(engine, user_id=user_id, recent_trades=trades),
         "config": {},
         "users": {},
+        "strategy": _strategy_payload(engine, user_id=user_id),
     }
 
 
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
     stripe_service = StripeService(engine.config)
+
+    def _authorized_actor(provided_token: Optional[str]) -> Optional[int]:
+        return _authorize_dashboard_request(auth_token, provided_token)
 
     @app.get("/", response_class=RedirectResponse)
     def root():
@@ -621,6 +669,32 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     def dashboard_member_data(x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
         user_id = _authorize_member_dashboard(auth_token, x_api_key or access)
         return _member_dashboard_payload(engine, user_id)
+
+    @app.post("/strategy/config")
+    async def strategy_config_save(request: Request, x_api_key: Optional[str] = Header(default=None)):
+        actor_user_id = _authorized_actor(x_api_key)
+        setter = getattr(engine, "set_strategy_config", None)
+        if not callable(setter):
+            raise HTTPException(status_code=503, detail="Strategy configuration is unavailable")
+
+        try:
+            raw_payload = await request.json()
+        except Exception:
+            raw_payload = {}
+        payload = raw_payload.get("profile") if isinstance(raw_payload, dict) and isinstance(raw_payload.get("profile"), dict) else raw_payload
+        if not isinstance(payload, dict):
+            payload = {}
+
+        try:
+            profile = setter(payload, user_id=actor_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        return {
+            "ok": True,
+            "member_access": actor_user_id is not None,
+            "strategy": {"profile": profile},
+        }
 
     @app.get("/health")
     def health():
@@ -681,31 +755,79 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         end: Optional[str] = None,
         timeframe: Optional[str] = None,
         candles: Optional[int] = None,
+        min_score: Optional[int] = None,
+        min_signals: Optional[int] = None,
+        leverage: Optional[int] = None,
+        margin: Optional[float] = None,
+        max_margin: Optional[float] = None,
+        stop_loss_pct: Optional[float] = None,
+        take_profit_pct: Optional[float] = None,
+        trail_pct: Optional[float] = None,
+        max_hold: Optional[int] = None,
+        direction: Optional[str] = None,
+        min_score_gap: Optional[int] = None,
+        cooldown: Optional[int] = None,
+        csv_output: Optional[bool] = None,
         x_api_key: Optional[str] = Header(default=None),
     ):
-        _authorize(auth_token, x_api_key)
+        actor_user_id = _authorized_actor(x_api_key)
+        getter = getattr(engine, "get_strategy_config", None)
+        base_profile = getter(actor_user_id) if callable(getter) else normalize_strategy_profile(engine.config, {})
+        strategy_profile = normalize_strategy_profile(
+            engine.config,
+            {
+                "timeframe": timeframe,
+                "candles": candles,
+                "min_score": min_score,
+                "min_signals": min_signals,
+                "leverage": leverage,
+                "margin": margin,
+                "max_margin": max_margin,
+                "stop_loss_pct": stop_loss_pct,
+                "take_profit_pct": take_profit_pct,
+                "trail_pct": trail_pct,
+                "max_hold": max_hold,
+                "direction": direction,
+                "min_score_gap": min_score_gap,
+                "cooldown": cooldown,
+                "csv": csv_output,
+            },
+            current=base_profile,
+        )
+        resolved_timeframe = timeframe or strategy_profile["timeframe"]
+        resolved_candles = int(candles or strategy_profile["candles"])
+        include_csv = bool(strategy_profile.get("csv"))
         try:
             if candles is not None:
                 if not symbol:
-                    return run_backtest_recent_universe(
+                    return _invoke_with_supported_kwargs(
+                        run_backtest_recent_universe,
                         engine.config,
-                        timeframe=timeframe,
-                        candles=int(candles),
+                        timeframe=resolved_timeframe,
+                        candles=resolved_candles,
+                        strategy_profile=strategy_profile,
+                        csv_output=include_csv,
                     )
-                return run_backtest_recent(
+                return _invoke_with_supported_kwargs(
+                    run_backtest_recent,
                     engine.config,
                     symbol=symbol,
-                    timeframe=timeframe,
-                    candles=int(candles),
+                    timeframe=resolved_timeframe,
+                    candles=resolved_candles,
+                    strategy_profile=strategy_profile,
+                    csv_output=include_csv,
                 )
             if not symbol:
                 raise BacktestServiceError("A symbol is required for date-range backtests. Use `candles=500` or `candles=1000` for scanner-universe runs.")
-            return run_backtest(
+            return _invoke_with_supported_kwargs(
+                run_backtest,
                 engine.config,
                 symbol=symbol,
                 start_date=start,
                 end_date=end,
-                timeframe=timeframe,
+                timeframe=resolved_timeframe,
+                strategy_profile=strategy_profile,
+                csv_output=include_csv,
             )
         except BacktestServiceError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

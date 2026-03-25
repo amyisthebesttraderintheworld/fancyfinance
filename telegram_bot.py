@@ -38,6 +38,7 @@ from backtest_service import (
     run_backtest_recent_universe,
 )
 from stripe_service import StripeService
+from strategy_profile import normalize_strategy_profile, parse_flag_args, strategy_profile_summary
 from supabase_client import DEFAULT_TRIAL_DAYS, FREE_MEMBERSHIP, PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
 
 cmd_queue = None
@@ -265,7 +266,8 @@ def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
     allowed = " or ".join(str(value) for value in sorted(ALLOWED_REMOTE_CANDLE_COUNTS))
     return (
         "📈 *Free Backtesting*\n\n"
-        "Use: `/backtest [symbol] [timeframe] [500|1000]`\n\n"
+        "Use: `/backtest [symbol] [timeframe] [100|500|1000]`\n"
+        "or `/backtest --timeframe 15m --candles 1000 --min-score 5 --min-signals 4 --leverage 5 --margin 10 --max-margin 150 --stop-loss-pct 0.04 --take-profit-pct 0.08 --trail-pct 0.025 --max-hold 72 --direction SHORT --min-score-gap 2 --cooldown 2 --csv`\n\n"
         "If you omit the symbol, FancyFinance backtests the full scanner universe from the latest Phemex candles.\n\n"
         f"Examples:\n"
         f"• `/backtest`\n"
@@ -275,6 +277,23 @@ def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
         f"• `/backtest {default_symbol} {default_timeframe} {_default_backtest_candles()}`\n\n"
         f"Phemex can only return the latest *{allowed} candles* per backtest run. "
         "Run `/start_trial` or `/subscribe` if you want simulation or live access."
+    )
+
+
+def _current_strategy_profile(user_id: int | None = None) -> dict:
+    getter = getattr(active_engine, "get_strategy_config", None)
+    if callable(getter):
+        return getter(user_id)
+    return normalize_strategy_profile(config or {}, {})
+
+
+def _set_config_usage_text() -> str:
+    return (
+        "🧠 *Strategy Config*\n\n"
+        "Use `/set_config --timeframe 15m --candles 1000 --min-score 5 --min-signals 4 --leverage 5 --margin 10 "
+        "--max-margin 150 --stop-loss-pct 0.04 --take-profit-pct 0.08 --trail-pct 0.025 --max-hold 72 "
+        "--direction SHORT --min-score-gap 2 --cooldown 2 --csv`\n\n"
+        "Any omitted field keeps its current value."
     )
 
 
@@ -894,11 +913,76 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.get_or_create_user(user.id, user.username or "", user.first_name or "")
 
     args = context.args or []
+    base_profile = _current_strategy_profile(user.id)
     exchange_key = (config or {}).get("exchange", "phemex")
     exchange_config = (config or {}).get(exchange_key, {})
     default_symbol = (exchange_config.get("symbols") or ["BTCUSD"])[0]
-    default_timeframe = ((config or {}).get("strategy") or {}).get("timeframe", "1m")
-    default_candles = _default_backtest_candles()
+    default_timeframe = base_profile.get("timeframe", ((config or {}).get("strategy") or {}).get("timeframe", "1m"))
+    default_candles = base_profile.get("candles", _default_backtest_candles())
+
+    if any(str(arg or "").startswith("--") for arg in args):
+        try:
+            parsed = parse_flag_args(args)
+            symbol = parsed.pop("symbol", None)
+            profile = normalize_strategy_profile(config or {}, parsed, current=base_profile)
+        except ValueError:
+            await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
+            return
+
+        candles = int(profile["candles"])
+        if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
+            await _reply(
+                update,
+                f"❌ Phemex backtests only support `{sorted(ALLOWED_REMOTE_CANDLE_COUNTS)}` candles per run.\n\n"
+                + _backtest_usage_text(default_symbol, default_timeframe),
+                parse_mode="Markdown",
+            )
+            return
+
+        scope_label = f"`{symbol}`" if symbol else "*all scanner-picked assets*"
+        await _reply(
+            update,
+            f"⏳ Running your configured backtest for {scope_label} on `{profile['timeframe']}` using `{candles}` candles...",
+            parse_mode="Markdown",
+        )
+
+        try:
+            if symbol:
+                result = await asyncio.to_thread(
+                    run_backtest_recent,
+                    config or {},
+                    symbol,
+                    profile["timeframe"],
+                    candles,
+                    profile,
+                    bool(profile.get("csv")),
+                )
+            else:
+                result = await asyncio.to_thread(
+                    run_backtest_recent_universe,
+                    config or {},
+                    profile["timeframe"],
+                    candles,
+                    profile,
+                    bool(profile.get("csv")),
+                )
+        except BacktestServiceError as exc:
+            await _reply(update, f"❌ {exc}", parse_mode="Markdown")
+            return
+        except Exception as exc:
+            logger.error(f"Unexpected configured backtest failure for {symbol or 'scanner universe'}: {exc}")
+            await _reply(
+                update,
+                "❌ Backtest failed unexpectedly. Please try again shortly.",
+                parse_mode="Markdown",
+            )
+            return
+
+        summary = format_backtest_summary(result)
+        if result.get("csv"):
+            summary += "\n*CSV:* included in the dashboard/API response for this run."
+        await _reply(update, summary, parse_mode="Markdown")
+        return
 
     if len(args) > 3:
         await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
@@ -934,6 +1018,8 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 symbol,
                 timeframe,
                 candles,
+                base_profile,
+                bool(base_profile.get("csv")),
             )
         else:
             result = await asyncio.to_thread(
@@ -941,6 +1027,8 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 config or {},
                 timeframe,
                 candles,
+                base_profile,
+                bool(base_profile.get("csv")),
             )
     except BacktestServiceError as exc:
         await _reply(update, f"❌ {exc}", parse_mode="Markdown")
@@ -955,6 +1043,42 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await _reply(update, format_backtest_summary(result), parse_mode="Markdown")
+
+
+async def set_config_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user:
+        return
+
+    db.get_or_create_user(user.id, user.username or "", user.first_name or "")
+    args = context.args or []
+    if not args:
+        await _reply(update, _set_config_usage_text(), parse_mode="Markdown")
+        return
+
+    try:
+        parsed = parse_flag_args(args)
+        parsed.pop("symbol", None)
+        if not parsed:
+            raise ValueError("no config fields provided")
+        profile = normalize_strategy_profile(config or {}, parsed, current=_current_strategy_profile(user.id))
+    except ValueError:
+        await _reply(update, _set_config_usage_text(), parse_mode="Markdown")
+        return
+
+    setter = getattr(active_engine, "set_strategy_config", None)
+    if callable(setter):
+        profile = setter(parsed, user_id=user.id)
+    else:
+        db.store_user_strategy_config(user.id, profile)
+
+    await _reply(
+        update,
+        "🧠 *Strategy Updated*\n\n"
+        + strategy_profile_summary(profile)
+        + "\n\nThis profile now feeds dashboard backtests and the current engine runtime for your account.",
+        parse_mode="Markdown",
+    )
 
 
 async def grant_pro_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1153,6 +1277,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/dashboard_api - Get your gated member dashboard token and link\n"
         "/rotate_dashboard_key - Mint a fresh member dashboard token\n"
         "/backtest - Run a free Phemex backtest on one market or the scanner universe\n"
+        "/set_config - Save a strategy profile for dashboard, sim, and live\n"
         f"/subscribe - Start the {trial_days}-day Trial Pro / Pro checkout\n"
         "/manage_subscription - Open billing portal\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
@@ -1201,6 +1326,7 @@ async def set_commands(application: Application):
         BotCommand("dashboard_api", "Get your member dashboard token"),
         BotCommand("rotate_dashboard_key", "Refresh your member dashboard token"),
         BotCommand("backtest", "Run a free market or universe backtest"),
+        BotCommand("set_config", "Save your strategy profile"),
         BotCommand("subscribe", "Start Trial Pro / Stripe checkout"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
@@ -1342,6 +1468,7 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("dashboard_api", dashboard_api_command))
     application.add_handler(CommandHandler("rotate_dashboard_key", rotate_dashboard_key_command))
     application.add_handler(CommandHandler("backtest", backtest_command))
+    application.add_handler(CommandHandler("set_config", set_config_command))
     application.add_handler(CommandHandler("subscribe", subscribe_command))
     application.add_handler(CommandHandler("manage_subscription", manage_subscription_command))
     application.add_handler(CommandHandler("unlock_api", unlock_api_command))

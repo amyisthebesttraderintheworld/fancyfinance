@@ -90,6 +90,7 @@ class SupabaseManager:
         self._trades: List[Dict[str, Any]] = []
         self._trade_user_scope_warning_logged = False
         self._position_user_scope_warning_logged = False
+        self._strategy_config_warning_logged = False
 
         if create_client and self.url and self.key:
             try:
@@ -330,6 +331,15 @@ class SupabaseManager:
             "kdf_iterations": int(metadata.get("kdf_iterations") or PBKDF2_ITERATIONS),
         }
 
+    def _warn_missing_strategy_config_column(self):
+        if self._strategy_config_warning_logged:
+            return
+        self._strategy_config_warning_logged = True
+        self.logger.warning(
+            "user_configs is missing the strategy_config_json column. Strategy settings are cached locally only "
+            "until the database schema is expanded."
+        )
+
     def _pack_legacy_vault_columns(self, vault_record: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "api_key_enc": vault_record["encrypted_blob"],
@@ -384,6 +394,49 @@ class SupabaseManager:
             "requires_passphrase": False,
             "version": "legacy" if has_legacy else None,
         }
+
+    def get_user_strategy_config(self, user_id: int) -> Optional[Dict[str, Any]]:
+        config = self._fetch_user_config(user_id)
+        if not config:
+            return None
+
+        raw = config.get("strategy_config_json")
+        if isinstance(raw, dict):
+            return dict(raw)
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        return dict(parsed) if isinstance(parsed, dict) else None
+
+    def store_user_strategy_config(self, user_id: int, strategy_config: Dict[str, Any]) -> bool:
+        cached = dict(self._user_configs.get(user_id) or {})
+        cached["user_id"] = user_id
+        cached["strategy_config_json"] = json.dumps(strategy_config, separators=(",", ":"))
+        cached["updated_at"] = self._now()
+        self._user_configs[user_id] = cached
+
+        if not self.client:
+            return True
+
+        try:
+            self.client.table("user_configs").upsert(
+                {
+                    "user_id": user_id,
+                    "strategy_config_json": cached["strategy_config_json"],
+                    "updated_at": cached["updated_at"],
+                },
+                on_conflict="user_id",
+            ).execute()
+            return True
+        except Exception as exc:
+            if "strategy_config_json" in str(exc):
+                self._warn_missing_strategy_config_column()
+                return False
+            self.logger.error(f"Failed to store strategy config for user {user_id}: {exc}")
+            return False
 
     def store_user_api_keys(
         self,

@@ -7,6 +7,7 @@ import api
 from api import create_app
 from common import Position
 from dashboard_access import generate_member_dashboard_token
+from strategy_profile import normalize_strategy_profile
 
 
 def _build_engine(sample_config):
@@ -463,3 +464,38 @@ def test_backtest_run_endpoint_supports_scanner_universe_recent_mode(sample_conf
     payload = response.json()
     assert payload["scope"] == "universe"
     assert payload["candles"] == 1000
+
+
+def test_strategy_config_endpoint_saves_member_profile(sample_config):
+    engine = _build_user_scoped_engine(sample_config)
+    base_profile = normalize_strategy_profile(sample_config, {})
+    saved = {}
+
+    def set_strategy_config(payload, user_id=None):
+        saved["payload"] = payload
+        saved["user_id"] = user_id
+        return normalize_strategy_profile(sample_config, payload, current=base_profile)
+
+    engine.get_strategy_config = lambda user_id=None: dict(base_profile)
+    engine.set_strategy_config = MagicMock(side_effect=set_strategy_config)
+
+    app = create_app(engine, auth_token="secret-token")
+    client = TestClient(app)
+    member_token = generate_member_dashboard_token("secret-token", 12345)
+
+    response = client.post(
+        "/strategy/config",
+        json={"profile": {"timeframe": "15m", "margin": 10, "leverage": 5, "direction": "SHORT"}},
+        headers={"x-api-key": member_token},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["member_access"] is True
+    assert payload["strategy"]["profile"]["timeframe"] == "15m"
+    assert payload["strategy"]["profile"]["margin"] == 10.0
+    assert payload["strategy"]["profile"]["leverage"] == 5
+    assert payload["strategy"]["profile"]["direction"] == "SHORT"
+    assert saved["user_id"] == 12345
+    assert saved["payload"]["timeframe"] == "15m"
