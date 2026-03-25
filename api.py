@@ -2,18 +2,29 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
 
+from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
     if expected_token and provided_token != expected_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _trade_count(engine) -> int:
@@ -25,6 +36,7 @@ def _trade_count(engine) -> int:
 
 
 def _snapshot(engine):
+    symbols = list(engine.symbols)
     return {
         "app": APP_NAME,
         "version": __version__,
@@ -35,14 +47,150 @@ def _snapshot(engine):
         "paused": engine.is_paused,
         "balance": engine.balance,
         "initial_balance": engine.config.get("backtest", {}).get("initial_balance"),
-        "symbols": engine.symbols,
+        "symbols": symbols,
+        "symbol_count": len(symbols),
         "open_positions": len(engine.positions),
         "trade_count": _trade_count(engine),
     }
 
 
+def _serialize_position(symbol: str, position: Any) -> Dict[str, Any]:
+    if isinstance(position, dict):
+        return {
+            "symbol": symbol,
+            "direction": position.get("direction"),
+            "entry_price": position.get("entry_price"),
+            "quantity": position.get("quantity", position.get("qty")),
+            "stop_loss": position.get("stop_loss"),
+            "take_profit": position.get("take_profit"),
+        }
+
+    return {
+        "symbol": symbol,
+        "direction": getattr(position, "direction", None),
+        "entry_price": getattr(position, "entry_price", None),
+        "quantity": getattr(position, "quantity", None),
+        "stop_loss": getattr(position, "stop_loss", None),
+        "take_profit": getattr(position, "take_profit", None),
+    }
+
+
+def _positions_payload(engine):
+    return [_serialize_position(symbol, position) for symbol, position in engine.positions.items()]
+
+
+def _recent_trades(engine, limit: int = 20):
+    db = getattr(engine, "db", None)
+    if db and hasattr(db, "get_recent_trades"):
+        return db.get_recent_trades(limit=limit)
+    return list(getattr(engine, "trade_history", []))[-limit:]
+
+
+def _performance_summary(engine, trades):
+    exit_trades = [trade for trade in trades if trade.get("type") == "exit" and trade.get("pnl") is not None]
+    wins = sum(1 for trade in exit_trades if float(trade.get("pnl", 0)) > 0)
+    losses = sum(1 for trade in exit_trades if float(trade.get("pnl", 0)) < 0)
+    total_closed = len(exit_trades)
+    realized_pnl = sum(float(trade.get("pnl", 0) or 0) for trade in exit_trades)
+    initial_balance = engine.config.get("backtest", {}).get("initial_balance") or 0
+
+    return {
+        "wins": wins,
+        "losses": losses,
+        "closed_trades": total_closed,
+        "win_rate": round((wins / total_closed) * 100, 1) if total_closed else 0.0,
+        "realized_pnl": round(realized_pnl, 2),
+        "return_percent": round((realized_pnl / initial_balance) * 100, 2) if initial_balance else 0.0,
+    }
+
+
+def _runtime_summary(engine):
+    queue_depth = None
+    command_queue = getattr(engine, "command_queue", None)
+    if command_queue is not None and hasattr(command_queue, "qsize"):
+        try:
+            queue_depth = command_queue.qsize()
+        except Exception:  # pragma: no cover - defensive
+            queue_depth = None
+
+    remaining_seconds = max(getattr(engine, "safety_paused_until", 0) - time.time(), 0)
+    return {
+        "engine_status": "paused" if engine.is_paused else ("running" if engine.is_running else "stopped"),
+        "websocket_connected": getattr(engine, "_websocket", None) is not None,
+        "command_queue_depth": queue_depth,
+        "safety_pause_remaining_seconds": int(remaining_seconds),
+        "safety_paused_until": (
+            datetime.fromtimestamp(getattr(engine, "safety_paused_until", 0), tz=timezone.utc).isoformat()
+            if remaining_seconds
+            else None
+        ),
+    }
+
+
+def _config_summary(engine, auth_token: Optional[str]):
+    exchange_config = engine.config.get(engine.exchange_id, {})
+    telegram_config = engine.config.get("telegram", {})
+    email_config = engine.config.get("email", {})
+    db = getattr(engine, "db", None)
+    cipher = getattr(db, "cipher", None)
+
+    return {
+        "timeframe": engine.config.get("strategy", {}).get("timeframe"),
+        "market_type": exchange_config.get("market_type") or exchange_config.get("symbol_type") or "swap",
+        "scan_all_symbols": bool(exchange_config.get("scan_all_symbols", False)),
+        "testnet": bool(exchange_config.get("testnet", False)),
+        "telegram_polling_enabled": _coerce_bool(telegram_config.get("polling_enabled", True)),
+        "telegram_notifications_enabled": bool(telegram_config.get("enable_notifications", False)),
+        "email_webhook_configured": bool(email_config.get("confirm_webhook_url")),
+        "supabase_configured": bool(getattr(db, "url", "")) and bool(getattr(db, "key", "")),
+        "supabase_connected": getattr(db, "client", None) is not None,
+        "encryption_status": getattr(cipher, "status", "unknown"),
+        "using_fallback_encryption": bool(getattr(cipher, "using_fallback_key", False)),
+        "api_token_required": bool(auth_token),
+    }
+
+
+def _user_summary(engine):
+    db = getattr(engine, "db", None)
+    if db and hasattr(db, "get_user_summary"):
+        return db.get_user_summary(limit=15)
+    return {
+        "total": 0,
+        "verified": 0,
+        "unverified": 0,
+        "with_api_keys": 0,
+        "recent": [],
+    }
+
+
+def _dashboard_payload(engine, auth_token: Optional[str]):
+    trades = _recent_trades(engine)
+    return {
+        "snapshot": _snapshot(engine),
+        "runtime": _runtime_summary(engine),
+        "config": _config_summary(engine, auth_token),
+        "positions": _positions_payload(engine),
+        "recent_trades": trades,
+        "performance": _performance_summary(engine, trades),
+        "users": _user_summary(engine),
+    }
+
+
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
+
+    @app.get("/", response_class=RedirectResponse)
+    def root():
+        return RedirectResponse(url="/dashboard", status_code=307)
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard():
+        return HTMLResponse(build_dashboard_html(APP_NAME, __version__, auth_required=bool(auth_token)))
+
+    @app.get("/dashboard/data")
+    def dashboard_data(x_api_key: Optional[str] = Header(default=None)):
+        _authorize(auth_token, x_api_key)
+        return _dashboard_payload(engine, auth_token)
 
     @app.get("/health")
     def health():
@@ -52,16 +200,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     def stats(x_api_key: Optional[str] = Header(default=None)):
         _authorize(auth_token, x_api_key)
         payload = _snapshot(engine)
-        payload["positions"] = {
-            symbol: {
-                "direction": position.direction,
-                "entry_price": position.entry_price,
-                "quantity": position.quantity,
-                "stop_loss": position.stop_loss,
-                "take_profit": position.take_profit,
-            }
-            for symbol, position in engine.positions.items()
-        }
+        payload["positions"] = {position["symbol"]: position for position in _positions_payload(engine)}
         return payload
 
     @app.post("/control/pause")

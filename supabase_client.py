@@ -23,16 +23,22 @@ load_dotenv()
 class CipherManager:
     def __init__(self):
         self.logger = get_logger("Cipher")
+        self.using_fallback_key = False
+        self.status = "configured"
         raw_key = os.getenv("MASTER_ENCRYPTION_KEY")
         if raw_key:
             key = raw_key.encode() if isinstance(raw_key, str) else raw_key
         else:
             key = Fernet.generate_key()
+            self.using_fallback_key = True
+            self.status = "missing"
             self.logger.warning("MASTER_ENCRYPTION_KEY not found. Using temporary in-memory key.")
 
         try:
             self.cipher = Fernet(key)
         except Exception:
+            self.using_fallback_key = True
+            self.status = "invalid"
             self.logger.warning(
                 "MASTER_ENCRYPTION_KEY invalid. Expected a Fernet key. Falling back to temporary in-memory key."
             )
@@ -304,3 +310,56 @@ class SupabaseManager:
             except Exception as exc:
                 self.logger.error(f"Failed to fetch recent trades: {exc}")
         return self._trades[-limit:]
+
+    def get_user_summary(self, limit: int = 25) -> Dict[str, Any]:
+        recent_users = list(self._users.values())
+        total_users = len(recent_users)
+        verified_users = sum(1 for user in recent_users if user.get("is_verified"))
+        api_key_users = len(self._user_configs)
+
+        if self.client:
+            try:
+                recent_response = (
+                    self.client.table("users")
+                    .select("telegram_id, username, first_name, email, pending_email, is_verified, created_at, updated_at")
+                    .order("created_at", desc=True)
+                    .limit(limit)
+                    .execute()
+                )
+                recent_users = recent_response.data or recent_users
+
+                total_response = (
+                    self.client.table("users")
+                    .select("telegram_id", count="exact")
+                    .limit(1)
+                    .execute()
+                )
+                verified_response = (
+                    self.client.table("users")
+                    .select("telegram_id", count="exact")
+                    .eq("is_verified", True)
+                    .limit(1)
+                    .execute()
+                )
+                config_response = (
+                    self.client.table("user_configs")
+                    .select("user_id", count="exact")
+                    .limit(1)
+                    .execute()
+                )
+
+                total_users = total_response.count if total_response.count is not None else total_users
+                verified_users = (
+                    verified_response.count if verified_response.count is not None else verified_users
+                )
+                api_key_users = config_response.count if config_response.count is not None else api_key_users
+            except Exception as exc:
+                self.logger.error(f"Failed to build user summary: {exc}")
+
+        return {
+            "total": total_users,
+            "verified": verified_users,
+            "unverified": max(total_users - verified_users, 0),
+            "with_api_keys": api_key_users,
+            "recent": recent_users[:limit],
+        }
