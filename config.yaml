@@ -56,6 +56,16 @@ email:
   confirm_webhook_url: "${EMAIL_CONFIRM_WEBHOOK_URL:-}"  # n8n /webhook-test/... for editor testing, /webhook/... for live
   confirm_webhook_timeout_seconds: 15
 
+stripe:
+  secret_key: "${STRIPE_SECRET_KEY:-}"
+  webhook_secret: "${STRIPE_WEBHOOK_SECRET:-}"
+  price_id: "${STRIPE_PRICE_ID:-}"
+  success_url: "${STRIPE_SUCCESS_URL:-}"
+  cancel_url: "${STRIPE_CANCEL_URL:-}"
+  portal_return_url: "${STRIPE_PORTAL_RETURN_URL:-}"
+  timeout_seconds: 20
+  webhook_tolerance_seconds: 300
+
 supabase:
   url: "${SUPABASE_URL:-}"
   service_role_key: "${SUPABASE_SERVICE_ROLE_KEY:-}"

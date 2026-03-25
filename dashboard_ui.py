@@ -580,6 +580,18 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
                 <div class="label">API Keys Stored</div>
                 <div class="value" id="users-api-keys">--</div>
               </div>
+              <div class="mini-card">
+                <div class="label">Free</div>
+                <div class="value" id="users-free">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Pro</div>
+                <div class="value" id="users-pro">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Expired</div>
+                <div class="value" id="users-expired">--</div>
+              </div>
             </div>
             <div style="margin-top: 18px;" id="users-wrap"></div>
           </div>
@@ -677,6 +689,9 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
           ["Telegram Polling", config.telegram_polling_enabled ? "Enabled" : "Disabled"],
           ["Notifications", config.telegram_notifications_enabled ? "Enabled" : "Disabled"],
           ["Email Webhook", config.email_webhook_configured ? "Configured" : "Missing"],
+          ["Stripe Checkout", config.stripe_checkout_configured ? "Configured" : "Missing"],
+          ["Stripe Webhook", config.stripe_webhook_configured ? "Configured" : "Missing"],
+          ["Stripe Portal", config.stripe_portal_configured ? "Configured" : "Missing"],
           ["Scan Scope", config.scan_all_symbols ? `All ${{
             config.market_type || "markets"
           }}` : "Configured list"],
@@ -770,6 +785,9 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
         setText("users-verified", formatMaybeNumber(summary.verified, 0));
         setText("users-unverified", formatMaybeNumber(summary.unverified, 0));
         setText("users-api-keys", formatMaybeNumber(summary.with_api_keys, 0));
+        setText("users-free", formatMaybeNumber(summary.free, 0));
+        setText("users-pro", formatMaybeNumber(summary.pro, 0));
+        setText("users-expired", formatMaybeNumber(summary.expired, 0));
 
         const wrap = document.getElementById("users-wrap");
         const users = summary.recent || [];
@@ -784,7 +802,9 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
               <tr>
                 <th>User</th>
                 <th>Email</th>
-                <th>Status</th>
+                <th>Verification</th>
+                <th>Plan</th>
+                <th>Membership</th>
                 <th>Joined</th>
               </tr>
             </thead>
@@ -798,6 +818,8 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
                     </td>
                     <td>${{escapeHtml(user.email || user.pending_email || "Not set")}}</td>
                     <td>${{user.is_verified ? "Verified" : "Pending"}}</td>
+                    <td>${{escapeHtml((user.membership_tier || "free").toUpperCase())}}</td>
+                    <td>${{escapeHtml(user.membership_status || "free")}}</td>
                     <td>${{escapeHtml(formatTimestamp(user.created_at))}}</td>
                   </tr>
                 `).join("")

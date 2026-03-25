@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import queue
+from datetime import datetime, time, timezone
 
 from telegram import (
     BotCommand,
@@ -26,7 +27,8 @@ from telegram.ext import (
 from common import SettingsManager, get_logger
 from email_service import EmailService
 from fancyfinance import APP_NAME, __version__
-from supabase_client import SupabaseManager
+from stripe_service import StripeService
+from supabase_client import FREE_MEMBERSHIP, PRO_MEMBERSHIP, SupabaseManager
 
 cmd_queue = None
 config = None
@@ -112,6 +114,71 @@ MENU_BUTTON_COMMANDS = {
 }
 
 
+def _admin_ids() -> list[int]:
+    telegram_cfg = (config or {}).get("telegram", {})
+    return telegram_cfg.get("admin_chat_ids", [])
+
+
+def _is_admin_chat(chat_id: int) -> bool:
+    return chat_id in _admin_ids()
+
+
+def _format_membership(summary: dict | None) -> tuple[str, str, str]:
+    if not summary:
+        return "Free", "Free access", "Backtesting only"
+
+    tier = "Pro" if summary.get("tier") == PRO_MEMBERSHIP else "Free"
+    status = summary.get("status", "free")
+    expires_at = summary.get("expires_at")
+
+    if summary.get("tier") == PRO_MEMBERSHIP and status == "active":
+        status_label = "Active ✅"
+    elif summary.get("tier") == PRO_MEMBERSHIP and status == "expired":
+        status_label = f"Expired ❌ ({expires_at or 'renew required'})"
+    else:
+        status_label = "Free access"
+
+    access = ["Backtesting"]
+    if summary.get("can_simulation"):
+        access.append("Simulation")
+    if summary.get("can_live"):
+        access.append("Live")
+    return tier, status_label, ", ".join(access)
+
+
+def _paid_upgrade_message(summary: dict | None) -> str:
+    tier, status_label, _ = _format_membership(summary)
+    return (
+        "🔒 *Paid Membership Required*\n\n"
+        "Simulation and live trading are only available on the paid plan.\n\n"
+        f"*Current plan:* {tier}\n"
+        f"*Membership status:* {status_label}\n\n"
+        "Backtesting remains free. Ask an admin to upgrade your account before using paid features."
+    )
+
+
+def _parse_membership_expiry(raw_value: str) -> str | None:
+    raw_value = str(raw_value).strip()
+    if not raw_value:
+        return None
+
+    try:
+        if len(raw_value) == 10:
+            date_value = datetime.strptime(raw_value, "%Y-%m-%d").date()
+            return datetime.combine(date_value, time(23, 59, 59), tzinfo=timezone.utc).isoformat()
+
+        parsed = datetime.fromisoformat(raw_value)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.isoformat()
+    except ValueError:
+        return None
+
+
+def _stripe_service() -> StripeService:
+    return StripeService(config or {})
+
+
 async def _send_welcome_menu(target):
     await _reply(target, _welcome_menu_text(), parse_mode="Markdown", reply_markup=get_main_menu())
 
@@ -171,6 +238,15 @@ async def menu_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    membership = db.get_membership_summary(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if not membership or not membership.get("can_live"):
+        await _reply(update, _paid_upgrade_message(membership), parse_mode="Markdown")
+        return
+
     if not context.args or len(context.args) < 2:
         await _reply(
             update,
@@ -236,26 +312,47 @@ async def confirm_email_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     if db.confirm_email_verification(update.effective_user.id, context.args[0]):
-        await _reply(update, "✅ *Email verified!*", parse_mode="Markdown")
+        membership = db.get_membership_summary(
+            update.effective_user.id,
+            update.effective_user.username or "",
+            update.effective_user.first_name or "",
+        )
+        if membership and membership.get("can_live"):
+            message = "✅ *Email verified!*\n\nYour account is now eligible for live mode once API keys are stored."
+        else:
+            message = (
+                "✅ *Email verified!*\n\n"
+                "Your account is verified, but simulation and live mode still require a paid membership."
+            )
+        await _reply(update, message, parse_mode="Markdown")
     else:
         await _reply(update, "❌ Invalid or expired verification code.", parse_mode="Markdown")
 
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    user = db.get_or_create_user(user_id, "", "")
+    user = db.get_or_create_user(user_id, update.effective_user.username or "", update.effective_user.first_name or "")
     if not user:
         await _reply(update, "❌ Could not retrieve profile.")
         return
 
     status = "Verified ✅" if user.get("is_verified") else "Unverified ❌"
     email = user.get("email") or "Not linked"
+    membership = db.get_membership_summary(
+        user_id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    plan_name, membership_status, access = _format_membership(membership)
     message = (
         f"👤 *{APP_NAME} Profile*\n\n"
         f"• *Telegram ID:* `{user_id}`\n"
         f"• *Email:* `{email}`\n"
         f"• *Status:* {status}\n\n"
-        "Use `/verify_email` to update your email or `/setup_api` to secure exchange keys."
+        f"• *Plan:* {plan_name}\n"
+        f"• *Membership:* {membership_status}\n"
+        f"• *Access:* {access}\n\n"
+        "Use `/verify_email` to update your email, `/plans` to compare tiers, or `/setup_api` once paid access is active."
     )
     await _reply(update, message, parse_mode="Markdown")
 
@@ -269,12 +366,196 @@ async def signup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ *Signup successful!* Welcome to {APP_NAME}, {user.first_name}.\n\n"
             "Next steps:\n"
             "1. Accept the risk disclosure with `/start`\n"
-            "2. Secure your API keys with `/setup_api`",
+            "2. Verify your email with `/verify_email`\n"
+            "3. Check `/plans` if you want simulation or live access",
             parse_mode="Markdown",
         )
         return
 
     await _reply(update, "❌ Signup failed. Please ensure Supabase is configured.")
+
+
+async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    membership = db.get_membership_summary(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    plan_name, membership_status, access = _format_membership(membership)
+    text = (
+        f"💳 *{APP_NAME} Plans*\n\n"
+        "*Free*\n"
+        "• Backtesting access\n"
+        "• Telegram onboarding\n"
+        "• Email verification\n\n"
+        "*Pro*\n"
+        "• Simulation mode\n"
+        "• Live trading mode\n"
+        "• Secure API key storage\n"
+        "• Dashboard and control access\n\n"
+        f"*Your current plan:* {plan_name}\n"
+        f"*Membership status:* {membership_status}\n"
+        f"*Current access:* {access}\n\n"
+        "Use `/subscribe` to upgrade or `/manage_subscription` if you already have a paid plan."
+    )
+    await _reply(update, text, parse_mode="Markdown")
+
+
+async def subscription_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await plans_command(update, context)
+
+
+async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    stripe_service = _stripe_service()
+    if not stripe_service.is_checkout_configured():
+        await _reply(
+            update,
+            "❌ Stripe checkout is not configured yet. Ask the admin to set the Stripe Railway variables.",
+            parse_mode="Markdown",
+        )
+        return
+
+    user = db.get_or_create_user(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if not user:
+        await _reply(update, "❌ Could not load your user profile.")
+        return
+
+    try:
+        session = await asyncio.to_thread(stripe_service.create_checkout_session, user)
+    except Exception as exc:
+        logger.error(f"Failed to create Stripe checkout session: {exc}")
+        await _reply(
+            update,
+            "❌ Could not create a payment session right now. Please try again shortly.",
+            parse_mode="Markdown",
+        )
+        return
+
+    checkout_url = session.get("url")
+    if not checkout_url:
+        await _reply(update, "❌ Stripe did not return a checkout URL.")
+        return
+
+    await _reply(
+        update,
+        "💳 *Upgrade to Pro*\n\n"
+        "Use the secure Stripe checkout link below to activate your paid membership:\n"
+        f"{checkout_url}\n\n"
+        "After payment succeeds, your Pro access should activate automatically.",
+        parse_mode="Markdown",
+    )
+
+
+async def manage_subscription_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = db.get_or_create_user(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if not user:
+        await _reply(update, "❌ Could not load your user profile.")
+        return
+
+    stripe_customer_id = user.get("stripe_customer_id")
+    if not stripe_customer_id:
+        await _reply(
+            update,
+            "You do not have a Stripe customer record yet. Use `/subscribe` first.",
+            parse_mode="Markdown",
+        )
+        return
+
+    stripe_service = _stripe_service()
+    if not stripe_service.is_portal_configured():
+        await _reply(
+            update,
+            "❌ Stripe billing portal is not configured yet. Ask the admin to set the Stripe return URL.",
+            parse_mode="Markdown",
+        )
+        return
+
+    try:
+        session = await asyncio.to_thread(
+            stripe_service.create_customer_portal_session,
+            customer_id=stripe_customer_id,
+        )
+    except Exception as exc:
+        logger.error(f"Failed to create Stripe portal session: {exc}")
+        await _reply(update, "❌ Could not open the billing portal right now.", parse_mode="Markdown")
+        return
+
+    portal_url = session.get("url")
+    if not portal_url:
+        await _reply(update, "❌ Stripe did not return a billing portal URL.")
+        return
+
+    await _reply(
+        update,
+        f"🧾 *Manage Subscription*\n\nOpen your Stripe billing portal here:\n{portal_url}",
+        parse_mode="Markdown",
+    )
+
+
+async def grant_pro_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin_chat(update.effective_chat.id):
+        await _reply(update, "Unauthorized.")
+        return
+
+    if not context.args:
+        await _reply(update, "Usage: `/grant_pro <telegram_id> [YYYY-MM-DD]`", parse_mode="Markdown")
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+    except ValueError:
+        await _reply(update, "Telegram ID must be numeric.")
+        return
+
+    expires_at = None
+    if len(context.args) > 1:
+        expires_at = _parse_membership_expiry(context.args[1])
+        if not expires_at:
+            await _reply(update, "Expiry must be `YYYY-MM-DD` or a valid ISO datetime.", parse_mode="Markdown")
+            return
+
+    membership = db.set_membership(target_user_id, PRO_MEMBERSHIP, expires_at=expires_at)
+    if not membership:
+        await _reply(update, "❌ Failed to grant Pro access.")
+        return
+
+    expiry_note = f"\n*Expires:* {membership.get('membership_expires_at')}" if membership.get("membership_expires_at") else ""
+    await _reply(
+        update,
+        f"✅ Pro membership granted for `{target_user_id}`.{expiry_note}",
+        parse_mode="Markdown",
+    )
+
+
+async def revoke_pro_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin_chat(update.effective_chat.id):
+        await _reply(update, "Unauthorized.")
+        return
+
+    if not context.args:
+        await _reply(update, "Usage: `/revoke_pro <telegram_id>`", parse_mode="Markdown")
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+    except ValueError:
+        await _reply(update, "Telegram ID must be numeric.")
+        return
+
+    membership = db.set_membership(target_user_id, FREE_MEMBERSHIP)
+    if not membership:
+        await _reply(update, "❌ Failed to revoke Pro access.")
+        return
+
+    await _reply(update, f"✅ Pro access revoked for `{target_user_id}`.", parse_mode="Markdown")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -407,6 +688,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start - Show legal notice or main menu\n"
         "/signup - Create your user profile\n"
         "/profile - View verification status\n"
+        "/plans - Compare free vs paid access\n"
+        "/subscription - View your current membership\n"
+        "/subscribe - Open Stripe checkout for Pro\n"
+        "/manage_subscription - Open billing portal\n"
         "/setup_api - Securely store exchange API keys\n"
         "/verify_email - Start email verification\n"
         "/confirm_email - Complete email verification\n"
@@ -416,6 +701,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/reset - Reset simulation\n"
         "/set_balance <amount> - Set simulation balance\n"
         "/shutdown - Stop the engine\n"
+        "/grant_pro <telegram_id> [YYYY-MM-DD] - Admin only\n"
+        "/revoke_pro <telegram_id> - Admin only\n"
     )
     await _reply(update, text)
 
@@ -430,10 +717,8 @@ async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = parts[1:]
     chat_id = update.effective_chat.id
 
-    telegram_cfg = (config or {}).get("telegram", {})
-    admin_ids = telegram_cfg.get("admin_chat_ids", [])
     admin_only_commands = {"/pause", "/resume", "/reset", "/set_balance", "/shutdown", "/emergency_stop"}
-    if command in admin_only_commands and chat_id not in admin_ids:
+    if command in admin_only_commands and not _is_admin_chat(chat_id):
         await _reply(update, "Unauthorized.")
         return
 
@@ -450,6 +735,10 @@ async def set_commands(application: Application):
         BotCommand("agree", "Accept risk disclosure and open menu"),
         BotCommand("signup", "Create your profile"),
         BotCommand("profile", "View verification status"),
+        BotCommand("plans", "See free vs paid access"),
+        BotCommand("subscription", "View your membership"),
+        BotCommand("subscribe", "Upgrade to Pro with Stripe"),
+        BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("status", "Check bot status"),
         BotCommand("verify_email", "Link your email address"),
         BotCommand("confirm_email", "Verify email with 6-digit code"),
@@ -510,6 +799,10 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("agree", agree_command))
     application.add_handler(CommandHandler("signup", signup_command))
+    application.add_handler(CommandHandler("plans", plans_command))
+    application.add_handler(CommandHandler("subscription", subscription_command))
+    application.add_handler(CommandHandler("subscribe", subscribe_command))
+    application.add_handler(CommandHandler("manage_subscription", manage_subscription_command))
     application.add_handler(CommandHandler("verify_email", verify_email_command))
     application.add_handler(CommandHandler("confirm_email", confirm_email_command))
     application.add_handler(CommandHandler("profile", profile_command))
@@ -518,6 +811,8 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("setup_api", setup_api_command))
     application.add_handler(CommandHandler("settings", settings_command))
     application.add_handler(CommandHandler("set", set_value_command))
+    application.add_handler(CommandHandler("grant_pro", grant_pro_command))
+    application.add_handler(CommandHandler("revoke_pro", revoke_pro_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.Regex(r"^✅ I Agree$"), agree_command))
     application.add_handler(MessageHandler(filters.Regex(r"^❌ I Disagree$"), disagree_message))

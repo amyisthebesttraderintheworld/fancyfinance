@@ -1,7 +1,17 @@
 import pytest
 import queue
 from unittest.mock import MagicMock, AsyncMock, patch
-from telegram_bot import agree_command, start, help_command, menu_button_handler, proxy_command, button_handler, verify_email_command
+from telegram_bot import (
+    agree_command,
+    start,
+    help_command,
+    menu_button_handler,
+    proxy_command,
+    button_handler,
+    verify_email_command,
+    subscribe_command,
+    manage_subscription_command,
+)
 import telegram_bot # to get global variables if needed
 
 @pytest.fixture
@@ -187,3 +197,53 @@ async def test_menu_button_handler_routes_settings(mock_update, mock_context):
 
     mock_update.message.reply_text.assert_called()
     assert "Persistent Settings" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_subscribe_command_returns_checkout_url(mock_update, mock_context, mock_config):
+    telegram_bot.config = {
+        **mock_config,
+        "stripe": {
+            "secret_key": "sk_test_123",
+            "price_id": "price_123",
+            "success_url": "https://example.com/success",
+            "cancel_url": "https://example.com/cancel",
+        },
+    }
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345, "email": "user@example.com"}):
+        with patch("telegram_bot.StripeService") as mock_stripe:
+            mock_stripe.return_value.is_checkout_configured.return_value = True
+            mock_stripe.return_value.create_checkout_session.return_value = {"url": "https://checkout.stripe.com/pay/cs_test"}
+
+            await subscribe_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called()
+    assert "checkout.stripe.com" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_manage_subscription_command_returns_portal_url(mock_update, mock_context, mock_config):
+    telegram_bot.config = {
+        **mock_config,
+        "stripe": {
+            "secret_key": "sk_test_123",
+            "portal_return_url": "https://example.com/dashboard",
+        },
+    }
+
+    with patch.object(
+        telegram_bot.db,
+        "get_or_create_user",
+        return_value={"telegram_id": 12345, "stripe_customer_id": "cus_123"},
+    ):
+        with patch("telegram_bot.StripeService") as mock_stripe:
+            mock_stripe.return_value.is_portal_configured.return_value = True
+            mock_stripe.return_value.create_customer_portal_session.return_value = {
+                "url": "https://billing.stripe.com/session/test"
+            }
+
+            await manage_subscription_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called()
+    assert "billing.stripe.com" in mock_update.message.reply_text.call_args[0][0]

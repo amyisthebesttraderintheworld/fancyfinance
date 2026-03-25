@@ -7,11 +7,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
+from stripe_service import StripeService
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
@@ -131,6 +132,7 @@ def _config_summary(engine, auth_token: Optional[str]):
     exchange_config = engine.config.get(engine.exchange_id, {})
     telegram_config = engine.config.get("telegram", {})
     email_config = engine.config.get("email", {})
+    stripe_service = StripeService(engine.config)
     db = getattr(engine, "db", None)
     cipher = getattr(db, "cipher", None)
 
@@ -142,6 +144,9 @@ def _config_summary(engine, auth_token: Optional[str]):
         "telegram_polling_enabled": _coerce_bool(telegram_config.get("polling_enabled", True)),
         "telegram_notifications_enabled": bool(telegram_config.get("enable_notifications", False)),
         "email_webhook_configured": bool(email_config.get("confirm_webhook_url")),
+        "stripe_checkout_configured": stripe_service.is_checkout_configured(),
+        "stripe_webhook_configured": stripe_service.is_webhook_configured(),
+        "stripe_portal_configured": stripe_service.is_portal_configured(),
         "supabase_configured": bool(getattr(db, "url", "")) and bool(getattr(db, "key", "")),
         "supabase_connected": getattr(db, "client", None) is not None,
         "encryption_status": getattr(cipher, "status", "unknown"),
@@ -159,6 +164,9 @@ def _user_summary(engine):
         "verified": 0,
         "unverified": 0,
         "with_api_keys": 0,
+        "free": 0,
+        "pro": 0,
+        "expired": 0,
         "recent": [],
     }
 
@@ -178,6 +186,7 @@ def _dashboard_payload(engine, auth_token: Optional[str]):
 
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
+    stripe_service = StripeService(engine.config)
 
     @app.get("/", response_class=RedirectResponse)
     def root():
@@ -195,6 +204,46 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok", **_snapshot(engine)}
+
+    @app.get("/billing/success", response_class=HTMLResponse)
+    def billing_success():
+        return HTMLResponse(
+            """
+            <html><body style="font-family: sans-serif; padding: 32px; background: #0f172a; color: white;">
+            <h1>Subscription Activated</h1>
+            <p>Your Stripe checkout completed successfully.</p>
+            <p>Return to Telegram and use <strong>/profile</strong> or <strong>/plans</strong> to confirm your Pro access.</p>
+            </body></html>
+            """
+        )
+
+    @app.get("/billing/cancel", response_class=HTMLResponse)
+    def billing_cancel():
+        return HTMLResponse(
+            """
+            <html><body style="font-family: sans-serif; padding: 32px; background: #0f172a; color: white;">
+            <h1>Checkout Canceled</h1>
+            <p>No payment was completed.</p>
+            <p>You can return to Telegram and run <strong>/subscribe</strong> whenever you're ready.</p>
+            </body></html>
+            """
+        )
+
+    @app.post("/billing/stripe/webhook")
+    async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Header(default=None, alias="stripe-signature")):
+        payload = await request.body()
+        db = getattr(engine, "db", None)
+        if db is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+
+        try:
+            return stripe_service.process_webhook(
+                payload=payload,
+                signature_header=stripe_signature or "",
+                db=db,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/stats")
     def stats(x_api_key: Optional[str] = Header(default=None)):

@@ -98,6 +98,18 @@ def main():
     # Dynamic API Key Loading
     if args.user_id:
         db = SupabaseManager()
+        if config["mode"] in ["simulation", "live"] and not db.user_can_access_mode(args.user_id, config["mode"]):
+            logger.error(
+                f"User {args.user_id} does not have an active paid membership required for {config['mode']} mode."
+            )
+            return
+
+        if config["mode"] == "live":
+            user = db.get_or_create_user(args.user_id, "", "")
+            if not user or not user.get("is_verified"):
+                logger.error(f"User {args.user_id} must verify their email before live mode can start.")
+                return
+
         user_keys = db.get_user_api_keys(args.user_id)
         if user_keys:
             config[exchange_id]['api_key'] = user_keys['api_key']
