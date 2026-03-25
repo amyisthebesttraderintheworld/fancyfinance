@@ -1,7 +1,7 @@
 import pytest
 import queue
 from unittest.mock import MagicMock, AsyncMock, patch
-from telegram_bot import agree_command, start, help_command, proxy_command, button_handler, verify_email_command
+from telegram_bot import agree_command, start, help_command, menu_button_handler, proxy_command, button_handler, verify_email_command
 import telegram_bot # to get global variables if needed
 
 @pytest.fixture
@@ -162,3 +162,28 @@ async def test_agree_command_sends_menu(mock_update, mock_context):
     assert mock_update.message.reply_text.call_count == 2
     assert "Agreement recorded" in mock_update.message.reply_text.call_args_list[0].args[0]
     assert "Trading Bot Connected" in mock_update.message.reply_text.call_args_list[1].args[0]
+
+
+@pytest.mark.asyncio
+async def test_menu_button_handler_routes_status(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    telegram_bot.cmd_queue = queue.Queue()
+    mock_update.message.text = "📊 Status"
+    mock_update.effective_chat.id = 99999
+
+    await menu_button_handler(mock_update, mock_context)
+
+    assert not telegram_bot.cmd_queue.empty()
+    cmd, args, chat_id = telegram_bot.cmd_queue.get()
+    assert cmd == "/status"
+    assert chat_id == 99999
+
+
+@pytest.mark.asyncio
+async def test_menu_button_handler_routes_settings(mock_update, mock_context):
+    mock_update.message.text = "⚙️ Settings"
+
+    await menu_button_handler(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called()
+    assert "Persistent Settings" in mock_update.message.reply_text.call_args[0][0]

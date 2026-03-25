@@ -63,19 +63,19 @@ def _is_truthy(value) -> bool:
 def get_main_menu():
     keyboard = [
         [
-            InlineKeyboardButton("📊 Status", callback_data="cmd_status"),
-            InlineKeyboardButton("⚙️ Settings", callback_data="cmd_settings"),
+            KeyboardButton("📊 Status"),
+            KeyboardButton("⚙️ Settings"),
         ],
         [
-            InlineKeyboardButton("⏸ Pause", callback_data="cmd_pause"),
-            InlineKeyboardButton("▶️ Resume", callback_data="cmd_resume"),
+            KeyboardButton("⏸ Pause"),
+            KeyboardButton("▶️ Resume"),
         ],
         [
-            InlineKeyboardButton("🆘 Emergency Stop", callback_data="cmd_emergency_stop"),
-            InlineKeyboardButton("🛑 Shutdown", callback_data="cmd_shutdown"),
+            KeyboardButton("🆘 Emergency Stop"),
+            KeyboardButton("🛑 Shutdown"),
         ],
     ]
-    return InlineKeyboardMarkup(keyboard)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
 
 
 def get_agreement_keyboard():
@@ -100,6 +100,16 @@ def _record_user_agreement(user_id) -> bool:
         "Boolean",
         "User agreement to Terms & Conditions",
     )
+
+
+MENU_BUTTON_COMMANDS = {
+    "📊 Status": "/status",
+    "⚙️ Settings": "/settings",
+    "⏸ Pause": "/pause",
+    "▶️ Resume": "/resume",
+    "🆘 Emergency Stop": "/emergency_stop",
+    "🛑 Shutdown": "/shutdown",
+}
 
 
 async def _send_welcome_menu(target):
@@ -141,6 +151,23 @@ async def disagree_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "No problem. Use /start whenever you want to review the disclosure again.",
         reply_markup=ReplyKeyboardRemove(),
     )
+
+
+async def menu_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = getattr(update, "message", None)
+    text = getattr(message, "text", "")
+    command = MENU_BUTTON_COMMANDS.get(text)
+    if not command:
+        return
+
+    logger.info(f"Telegram menu button received: {text}")
+
+    if command == "/settings":
+        await settings_command(update, context)
+        return
+
+    update.message.text = command
+    await proxy_command(update, context)
 
 
 async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -494,6 +521,12 @@ def run_bot(engine, command_queue):
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.Regex(r"^✅ I Agree$"), agree_command))
     application.add_handler(MessageHandler(filters.Regex(r"^❌ I Disagree$"), disagree_message))
+    application.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(📊 Status|⚙️ Settings|⏸ Pause|▶️ Resume|🆘 Emergency Stop|🛑 Shutdown)$"),
+            menu_button_handler,
+        )
+    )
 
     for command in ["status", "pause", "resume", "reset", "set_balance", "shutdown", "emergency_stop"]:
         application.add_handler(CommandHandler(command, proxy_command))
