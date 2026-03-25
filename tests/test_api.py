@@ -207,6 +207,7 @@ def test_dashboard_page_renders(sample_config):
     assert '/favicon.ico' in response.text
     assert '/privacy-policy' in response.text
     assert '/terms-of-use' in response.text
+    assert 'lines.join("\\n")' in response.text
 
 
 def test_dashboard_logo_route_serves_png(sample_config):

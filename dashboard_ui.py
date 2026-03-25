@@ -1770,7 +1770,7 @@ def build_dashboard_html(
           lines.push("CSV:");
           lines.push(payload.csv);
         }
-        els.backtestResult.innerHTML = `<pre>${escapeHtml(lines.join("\n"))}</pre>`;
+        els.backtestResult.innerHTML = `<pre>${escapeHtml(lines.join("\\n"))}</pre>`;
       }
 
       async function saveStrategyConfig() {
