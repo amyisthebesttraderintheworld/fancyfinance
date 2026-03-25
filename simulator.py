@@ -4,6 +4,7 @@ import asyncio
 import json
 import queue
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import requests
@@ -71,6 +72,23 @@ class Simulator:
             "phemex": "wss://ws.phemex.com",
         }
         self.ws_url = ws_urls.get(self.exchange_id, "")
+        self._start_new_session()
+
+    def _now_iso(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def _start_new_session(self):
+        self.session_started_at = self._now_iso()
+        self.session_started_epoch = time.time()
+
+    def _record_trade_event(self, trade_data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = dict(trade_data)
+        payload.setdefault("timestamp", int(time.time() * 1000))
+        payload.setdefault("created_at", self._now_iso())
+        self.trade_history.append(payload)
+        if len(self.trade_history) > 500:
+            self.trade_history = self.trade_history[-500:]
+        return payload
 
     def _runtime_api_ready(self) -> bool:
         api_key = self.config.get(self.exchange_id, {}).get("api_key") or self.config.get("api_key")
@@ -400,7 +418,7 @@ class Simulator:
             self.positions[symbol] = position
             self._subscribe_symbol(symbol)
 
-            self.db.log_trade(
+            entry_payload = self._record_trade_event(
                 {
                     "symbol": symbol,
                     "direction": direction,
@@ -409,6 +427,7 @@ class Simulator:
                     "type": "entry",
                 }
             )
+            self.db.log_trade(entry_payload)
             self.db.update_position(
                 symbol,
                 {
@@ -433,9 +452,8 @@ class Simulator:
 
         pnl -= fee
         self.balance += pnl
-        self.trade_history.append({"symbol": symbol, "pnl": pnl, "timestamp": time.time()})
 
-        self.db.log_trade(
+        exit_payload = self._record_trade_event(
             {
                 "symbol": symbol,
                 "direction": direction,
@@ -446,6 +464,7 @@ class Simulator:
                 "reason": reason,
             }
         )
+        self.db.log_trade(exit_payload)
         self.db.remove_position(symbol)
 
         del self.positions[symbol]
@@ -506,6 +525,7 @@ class Simulator:
             self.balance = self.config["backtest"]["initial_balance"]
             self.positions = {}
             self.trade_history = []
+            self._start_new_session()
             for scanner in self.long_scanners.values():
                 scanner.reset()
             for scanner in self.short_scanners.values():

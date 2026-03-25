@@ -65,6 +65,7 @@ async def test_live_engine_order_placement(live_engine, mock_notifier):
         take_profit=None,
     )
     assert "BTCUSD" in live_engine.positions
+    assert live_engine.trade_history[-1]["type"] == "entry"
     subscribe_symbol.assert_called_once_with("BTCUSD")
     mock_notifier.send_message.assert_called()
     assert "LIVE ENTRY" in mock_notifier.send_message.call_args[0][0]
@@ -92,6 +93,7 @@ async def test_live_engine_order_exit(live_engine, mock_notifier):
     # Should place sell order
     live_engine.client.place_order.assert_called_with("BTCUSD", "Sell", 0.1, reduce_only=True)
     assert "BTCUSD" not in live_engine.positions
+    assert live_engine.trade_history[-1]["type"] == "exit"
     mock_notifier.send_message.assert_called()
     assert "LIVE EXIT" in mock_notifier.send_message.call_args[0][0]
 

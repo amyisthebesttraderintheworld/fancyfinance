@@ -452,7 +452,7 @@ class LiveEngine(Simulator):
                 if position is None:
                     raise RuntimeError(f"Entry order for {symbol} did not produce a reconciled position.")
 
-                self.db.log_trade(
+                entry_payload = self._record_trade_event(
                     {
                         "symbol": symbol,
                         "direction": direction,
@@ -461,6 +461,7 @@ class LiveEngine(Simulator):
                         "type": "entry",
                     }
                 )
+                self.db.log_trade(entry_payload)
                 self.db.update_position(
                     symbol,
                     {
@@ -496,7 +497,7 @@ class LiveEngine(Simulator):
                         else:
                             pnl = (existing_position.entry_price - fill_price) * existing_position.quantity
 
-                    self.db.log_trade(
+                    exit_payload = self._record_trade_event(
                         {
                             "symbol": symbol,
                             "direction": direction,
@@ -507,6 +508,7 @@ class LiveEngine(Simulator):
                             "reason": reason,
                         }
                     )
+                    self.db.log_trade(exit_payload)
                     self.db.remove_position(symbol)
                     self.notifier.send_message(
                         f"🔴 LIVE EXIT: {symbol} {side} Qty: {float(qty):.4f} @ {fill_price:.2f} Reason: {reason}"

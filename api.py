@@ -69,6 +69,7 @@ def _snapshot(engine):
         "app": APP_NAME,
         "version": __version__,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "session_started_at": getattr(engine, "session_started_at", None),
         "mode": engine.config.get("mode"),
         "exchange": engine.exchange_id,
         "running": engine.is_running,
@@ -108,10 +109,14 @@ def _positions_payload(engine):
 
 
 def _recent_trades(engine, limit: int = 20):
+    history = list(getattr(engine, "trade_history", []) or [])
+    if history:
+        return history[-limit:]
+
     db = getattr(engine, "db", None)
     if db and hasattr(db, "get_recent_trades"):
-        return db.get_recent_trades(limit=limit)
-    return list(getattr(engine, "trade_history", []))[-limit:]
+        return db.get_recent_trades(limit=limit, since=getattr(engine, "session_started_at", None))
+    return []
 
 
 def _performance_summary(engine, trades):

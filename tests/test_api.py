@@ -69,7 +69,19 @@ def _build_engine(sample_config):
             open_time=1711320000000,
         )
     }
-    engine.trade_history = [{"symbol": "BTCUSD", "pnl": 125.5, "timestamp": 1711321200}]
+    engine.trade_history = [
+        {
+            "symbol": "BTCUSD",
+            "direction": "long",
+            "price": 42000.0,
+            "qty": 0.1,
+            "type": "exit",
+            "pnl": 125.5,
+            "created_at": "2026-03-25T12:05:00+00:00",
+            "timestamp": 1742904300000,
+        }
+    ]
+    engine.session_started_at = "2026-03-25T12:00:00+00:00"
     engine.command_queue = SimpleNamespace(qsize=lambda: 3)
     engine.safety_paused_until = 0
     engine._websocket = object()
@@ -109,6 +121,24 @@ def test_dashboard_data_returns_live_payload(sample_config):
     assert payload["performance"]["realized_pnl"] == 125.5
     assert payload["users"]["total"] == 2
     assert payload["positions"][0]["symbol"] == "BTCUSD"
+    assert payload["recent_trades"][0]["type"] == "exit"
+
+
+def test_dashboard_data_filters_db_trades_to_current_session(sample_config):
+    engine = _build_engine(sample_config)
+    engine.trade_history = []
+    engine.session_started_at = "2026-03-25T12:00:00+00:00"
+    engine.db.get_recent_trades.return_value = []
+    app = create_app(engine, auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/data", headers={"x-api-key": "secret-token"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["recent_trades"] == []
+    assert payload["performance"]["realized_pnl"] == 0.0
+    engine.db.get_recent_trades.assert_called_once_with(limit=20, since="2026-03-25T12:00:00+00:00")
 
 
 def test_dashboard_data_accepts_member_token_for_read_only_payload(sample_config):

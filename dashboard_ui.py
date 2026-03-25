@@ -842,7 +842,7 @@ def build_dashboard_html(
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Recent Trades</h2>
-                <div class="panel-subtitle">Latest entries and exits from storage.</div>
+                <div class="panel-subtitle">Entries and exits from the current engine session.</div>
               </div>
             </div>
             <div id="trades-wrap"></div>
@@ -864,7 +864,7 @@ def build_dashboard_html(
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Performance</h2>
-                <div class="panel-subtitle">Realized outcomes from stored trade history.</div>
+                <div class="panel-subtitle">Realized outcomes from the current engine session.</div>
               </div>
             </div>
             <div class="list-grid">
@@ -1004,7 +1004,12 @@ def build_dashboard_html(
         if (!value) {
           return "--";
         }
-        const date = new Date(value);
+        let normalizedValue = value;
+        if (typeof value === "number" || /^\\d+(\\.\\d+)?$/.test(String(value))) {
+          const numeric = Number(value);
+          normalizedValue = numeric < 1e12 ? numeric * 1000 : numeric;
+        }
+        const date = new Date(normalizedValue);
         if (Number.isNaN(date.getTime())) {
           return String(value);
         }
@@ -1130,7 +1135,7 @@ def build_dashboard_html(
       function renderTrades(trades) {
         const wrap = document.getElementById("trades-wrap");
         if (!trades || !trades.length) {
-          wrap.innerHTML = '<div class="empty">No trades logged yet.</div>';
+          wrap.innerHTML = '<div class="empty">No trades logged in this session yet.</div>';
           return;
         }
 

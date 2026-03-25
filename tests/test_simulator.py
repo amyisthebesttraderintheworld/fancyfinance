@@ -59,6 +59,8 @@ async def test_simulator_process_candle_entry(sim, mock_notifier):
     # Should have executed entry
     assert symbol in sim.positions
     assert sim.positions[symbol].direction == 'long'
+    assert sim.trade_history[-1]["type"] == "entry"
+    assert sim.trade_history[-1]["symbol"] == symbol
     mock_notifier.send_message.assert_called()
     assert "SIM ENTRY" in mock_notifier.send_message.call_args[0][0]
 
@@ -84,6 +86,8 @@ async def test_simulator_process_candle_exit_sl(sim, mock_notifier):
     
     # Position should be closed
     assert symbol not in sim.positions
+    assert sim.trade_history[-1]["type"] == "exit"
+    assert sim.trade_history[-1]["reason"] == "Stop Loss"
     mock_notifier.send_message.assert_called()
     assert "SIM EXIT" in mock_notifier.send_message.call_args[0][0]
     assert "Stop Loss" in mock_notifier.send_message.call_args[0][0]

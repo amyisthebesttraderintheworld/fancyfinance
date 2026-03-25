@@ -814,14 +814,16 @@ class SupabaseManager:
             return False
 
     def log_trade(self, trade_data: Dict[str, Any]) -> bool:
-        payload = {**trade_data, "created_at": self._now()}
+        payload = {"created_at": self._now(), **trade_data}
         self._trades.append(payload)
 
         if not self.client:
             return True
 
         try:
-            self.client.table("trades").insert(payload).execute()
+            db_payload = dict(payload)
+            db_payload.pop("timestamp", None)
+            self.client.table("trades").insert(db_payload).execute()
             return True
         except Exception as exc:
             self.logger.error(f"Failed to log trade: {exc}")
@@ -858,26 +860,35 @@ class SupabaseManager:
         if self.client:
             try:
                 response = self.client.table("positions").select("*").execute()
-                if response.data:
-                    self._positions = {item["symbol"]: item for item in response.data if item.get("symbol")}
+                self._positions = {
+                    item["symbol"]: item for item in (response.data or []) if item.get("symbol")
+                }
             except Exception as exc:
                 self.logger.error(f"Failed to list open positions: {exc}")
         return list(self._positions.values())
 
-    def get_recent_trades(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_recent_trades(self, limit: int = 50, since: Optional[str] = None) -> List[Dict[str, Any]]:
+        since_dt = self._parse_datetime(since)
+
         if self.client:
             try:
-                response = (
-                    self.client.table("trades")
-                    .select("*")
-                    .order("created_at", desc=True)
-                    .limit(limit)
-                    .execute()
-                )
-                if response.data:
-                    self._trades = response.data
+                query = self.client.table("trades").select("*")
+                if since:
+                    query = query.gte("created_at", since)
+                response = query.order("created_at", desc=True).limit(limit).execute()
+                self._trades = list(response.data or [])
+                return list(self._trades)
             except Exception as exc:
                 self.logger.error(f"Failed to fetch recent trades: {exc}")
+
+        if since_dt:
+            filtered = [
+                trade
+                for trade in self._trades
+                if (trade_dt := self._parse_datetime(trade.get("created_at"))) and trade_dt >= since_dt
+            ]
+            return filtered[-limit:]
+
         return self._trades[-limit:]
 
     def get_user_summary(self, limit: int = 25) -> Dict[str, Any]:
