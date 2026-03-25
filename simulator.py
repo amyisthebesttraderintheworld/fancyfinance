@@ -6,6 +6,7 @@ import queue
 import time
 from typing import Any, Dict, Optional
 
+import requests
 import websockets
 
 from common import (
@@ -65,6 +66,22 @@ class Simulator:
             "phemex": "wss://ws.phemex.com",
         }
         self.ws_url = ws_urls.get(self.exchange_id, "")
+
+    def _send_command_response(self, chat_id: Optional[int], text: str):
+        telegram_config = self.config.get("telegram", {})
+        token = telegram_config.get("bot_token")
+        if token and chat_id:
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": chat_id, "text": text},
+                    timeout=15,
+                )
+                return
+            except Exception as exc:
+                self.logger.warning(f"Failed to send direct command response to chat {chat_id}: {exc}")
+
+        self.notifier.send_message(text)
 
     def _ensure_symbol_state(self, symbol: str):
         if symbol not in self.long_scanners:
@@ -381,7 +398,7 @@ class Simulator:
         else:
             response = "Unknown command."
 
-        self.notifier.send_message(response)
+        self._send_command_response(chat_id, response)
 
     async def _run(self):
         self._loop = asyncio.get_running_loop()

@@ -48,6 +48,11 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
 
     if "telegram" in config and os.getenv("TELEGRAM_BOT_TOKEN") is not None:
         config["telegram"]["bot_token"] = os.getenv("TELEGRAM_BOT_TOKEN", config["telegram"].get("bot_token", ""))
+    if "telegram" in config and os.getenv("TELEGRAM_ADMIN_CHAT_IDS") is not None:
+        raw_ids = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
+        config["telegram"]["admin_chat_ids"] = [
+            int(item.strip()) for item in raw_ids.split(",") if item.strip()
+        ]
 
     if "supabase" in config:
         if os.getenv("SUPABASE_URL") is not None:

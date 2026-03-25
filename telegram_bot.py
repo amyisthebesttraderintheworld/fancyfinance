@@ -4,9 +4,24 @@ import asyncio
 import inspect
 import queue
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+)
 from telegram.error import Conflict
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from common import SettingsManager, get_logger
 from email_service import EmailService
@@ -63,11 +78,27 @@ def get_main_menu():
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_agreement_keyboard():
+    keyboard = [
+        [KeyboardButton("✅ I Agree"), KeyboardButton("❌ I Disagree")],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+
 def _welcome_menu_text() -> str:
     return (
         f"🤖 *{APP_NAME} v{__version__}*\n\n"
         "Trading Bot Connected. Use /help for commands.\n\n"
         "Use the buttons below to control the engine or type a command directly."
+    )
+
+
+def _record_user_agreement(user_id) -> bool:
+    return settings_mgr.set(
+        f"user_agreed_{user_id}",
+        True,
+        "Boolean",
+        "User agreement to Terms & Conditions",
     )
 
 
@@ -83,6 +114,32 @@ async def _send_welcome_menu_to_chat(context: ContextTypes.DEFAULT_TYPE, chat_id
             parse_mode="Markdown",
             reply_markup=get_main_menu(),
         )
+    )
+
+
+async def agree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user:
+        return
+
+    if not _record_user_agreement(user.id):
+        await _reply(
+            update,
+            "❌ Could not save your agreement. Please try /agree again.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+
+    await _reply(update, "✅ Agreement recorded.", reply_markup=ReplyKeyboardRemove())
+    await _send_welcome_menu(update)
+    logger.info(f"User {user.id} accepted the risk disclosure via message command.")
+
+
+async def disagree_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _reply(
+        update,
+        "No problem. Use /start whenever you want to review the disclosure again.",
+        reply_markup=ReplyKeyboardRemove(),
     )
 
 
@@ -208,13 +265,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "2. Trading carries a *significant risk of loss*.\n"
             "3. You are responsible for your API keys and capital.\n"
             "4. The developers are *not* liable for financial losses.\n\n"
-            "Do you agree to continue?"
+            "Do you agree to continue?\n\n"
+            "Tap the keyboard button below. If Telegram acts weird, you can also send `/agree`."
         )
-        keyboard = [
-            [InlineKeyboardButton("✅ I Agree", callback_data=f"agree_{user.id}")],
-            [InlineKeyboardButton("❌ I Disagree", callback_data="cmd_shutdown")],
-        ]
-        await _reply(update, disclaimer_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        await _reply(update, disclaimer_text, parse_mode="Markdown", reply_markup=get_agreement_keyboard())
         return
 
     await _send_welcome_menu(update)
@@ -259,12 +313,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data.startswith("agree_"):
         user_id = query.data.split("_", 1)[1]
-        saved = settings_mgr.set(
-            f"user_agreed_{user_id}",
-            True,
-            "Boolean",
-            "User agreement to Terms & Conditions",
-        )
+        saved = _record_user_agreement(user_id)
         if not saved:
             await query.answer("Could not save agreement. Please try again.", show_alert=True)
             return
@@ -356,7 +405,8 @@ async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     telegram_cfg = (config or {}).get("telegram", {})
     admin_ids = telegram_cfg.get("admin_chat_ids", [])
-    if chat_id not in admin_ids:
+    admin_only_commands = {"/pause", "/resume", "/reset", "/set_balance", "/shutdown", "/emergency_stop"}
+    if command in admin_only_commands and chat_id not in admin_ids:
         await _reply(update, "Unauthorized.")
         return
 
@@ -370,6 +420,7 @@ async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_commands(application: Application):
     commands = [
         BotCommand("start", "Launch main menu"),
+        BotCommand("agree", "Accept risk disclosure and open menu"),
         BotCommand("signup", "Create your profile"),
         BotCommand("profile", "View verification status"),
         BotCommand("status", "Check bot status"),
@@ -430,6 +481,7 @@ def run_bot(engine, command_queue):
     application = Application.builder().token(token).post_init(post_init).build()
     application.add_error_handler(error_handler)
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("agree", agree_command))
     application.add_handler(CommandHandler("signup", signup_command))
     application.add_handler(CommandHandler("verify_email", verify_email_command))
     application.add_handler(CommandHandler("confirm_email", confirm_email_command))
@@ -440,6 +492,8 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("settings", settings_command))
     application.add_handler(CommandHandler("set", set_value_command))
     application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(MessageHandler(filters.Regex(r"^✅ I Agree$"), agree_command))
+    application.add_handler(MessageHandler(filters.Regex(r"^❌ I Disagree$"), disagree_message))
 
     for command in ["status", "pause", "resume", "reset", "set_balance", "shutdown", "emergency_stop"]:
         application.add_handler(CommandHandler(command, proxy_command))

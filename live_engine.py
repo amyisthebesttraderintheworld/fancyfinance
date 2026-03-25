@@ -36,7 +36,7 @@ class LiveEngine(Simulator):
             await super()._handle_command(cmd)
             return
 
-        self.notifier.send_message(response)
+        self._send_command_response(chat_id, response)
 
     def _execute_trade(self, symbol, direction, price, qty, is_entry, stop_loss=None, take_profit=None, reason=None):
         # Override simulation logic with real API calls
