@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import random
 import string
@@ -10,6 +11,12 @@ from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
 from common import get_logger
+from zero_knowledge_vault import (
+    InvalidPassphraseError,
+    PBKDF2_ITERATIONS,
+    VAULT_VERSION,
+    ZeroKnowledgeVault,
+)
 
 try:
     from supabase import Client, create_client
@@ -60,9 +67,11 @@ class SupabaseManager:
     def __init__(self):
         self.logger = get_logger("Supabase")
         self.cipher = CipherManager()
+        self.vault = ZeroKnowledgeVault()
         self.url = os.getenv("SUPABASE_URL", "")
         self.key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self.client: Optional[Client] = None
+        self.complimentary_pro_ids = self._parse_telegram_id_env("COMPLIMENTARY_PRO_TELEGRAM_IDS")
 
         self._users: Dict[int, Dict[str, Any]] = {}
         self._user_configs: Dict[int, Dict[str, Any]] = {}
@@ -77,6 +86,24 @@ class SupabaseManager:
                 self.logger.warning(f"Supabase unavailable, using local in-memory store: {exc}")
         else:
             self.logger.warning("Supabase credentials missing or package unavailable. Using local in-memory store.")
+
+        if self.complimentary_pro_ids:
+            self.logger.info(
+                f"Configured complimentary Pro access for {len(self.complimentary_pro_ids)} Telegram account(s)."
+            )
+
+    def _parse_telegram_id_env(self, env_key: str) -> set[int]:
+        raw_value = os.getenv(env_key, "")
+        parsed_ids: set[int] = set()
+        for item in raw_value.split(","):
+            stripped = item.strip()
+            if not stripped:
+                continue
+            try:
+                parsed_ids.add(int(stripped))
+            except ValueError:
+                self.logger.warning(f"Ignoring invalid Telegram ID `{stripped}` in {env_key}.")
+        return parsed_ids
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -122,7 +149,36 @@ class SupabaseManager:
         user["stripe_customer_id"] = user.get("stripe_customer_id")
         user["stripe_subscription_id"] = user.get("stripe_subscription_id")
         user["stripe_subscription_status"] = user.get("stripe_subscription_status")
+        user["membership_source"] = "stripe" if user.get("stripe_subscription_id") else "manual"
         return user
+
+    def _is_complimentary_pro(self, telegram_id: int) -> bool:
+        return telegram_id in self.complimentary_pro_ids
+
+    def _apply_complimentary_override(self, user: Optional[Dict[str, Any]], persist: bool = False) -> Optional[Dict[str, Any]]:
+        if not user:
+            return user
+
+        telegram_id = user.get("telegram_id")
+        if not isinstance(telegram_id, int) or not self._is_complimentary_pro(telegram_id):
+            return self._normalize_user_record(user)
+
+        update_payload = {
+            "membership_tier": PRO_MEMBERSHIP,
+            "membership_expires_at": None,
+            "updated_at": self._now(),
+        }
+
+        user.update(update_payload)
+        normalized_user = self._normalize_user_record(user)
+        if normalized_user is not None:
+            normalized_user["membership_status"] = "active"
+            normalized_user["membership_source"] = "complimentary"
+
+        if persist:
+            self._persist_user_update(telegram_id, update_payload)
+
+        return normalized_user
 
     def _base_user_payload(self, telegram_id: int, username: str, first_name: str) -> Dict[str, Any]:
         return {
@@ -177,13 +233,119 @@ class SupabaseManager:
             return False
         return datetime.now(timezone.utc) - created <= timedelta(minutes=ttl_minutes)
 
-    def store_user_api_keys(self, user_id: int, api_key: str, api_secret: str) -> bool:
-        encrypted_key = self.cipher.encrypt(api_key)
-        encrypted_secret = self.cipher.encrypt(api_secret)
+    def _vault_associated_data(self, user_id: int, exchange: str) -> bytes:
+        return f"{VAULT_VERSION}:{user_id}:{exchange}".encode("utf-8")
+
+    def _extract_vault_record(self, config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not config:
+            return None
+
+        if config.get("encrypted_blob") and config.get("salt") and config.get("nonce"):
+            return {
+                "version": config.get("version", VAULT_VERSION),
+                "exchange": config.get("exchange", "phemex"),
+                "encrypted_blob": config["encrypted_blob"],
+                "salt": config["salt"],
+                "nonce": config["nonce"],
+                "kdf": config.get("kdf", "pbkdf2-sha256"),
+                "kdf_iterations": int(config.get("kdf_iterations") or PBKDF2_ITERATIONS),
+            }
+
+        metadata_raw = config.get("api_secret_enc")
+        if not config.get("api_key_enc") or not metadata_raw:
+            return None
+
+        try:
+            metadata = json.loads(metadata_raw)
+        except (TypeError, ValueError):
+            return None
+
+        if not isinstance(metadata, dict) or metadata.get("version") != VAULT_VERSION:
+            return None
+
+        return {
+            "version": metadata.get("version", VAULT_VERSION),
+            "exchange": metadata.get("exchange", "phemex"),
+            "encrypted_blob": config["api_key_enc"],
+            "salt": metadata["salt"],
+            "nonce": metadata["nonce"],
+            "kdf": metadata.get("kdf", "pbkdf2-sha256"),
+            "kdf_iterations": int(metadata.get("kdf_iterations") or PBKDF2_ITERATIONS),
+        }
+
+    def _pack_legacy_vault_columns(self, vault_record: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "api_key_enc": vault_record["encrypted_blob"],
+            "api_secret_enc": json.dumps(
+                {
+                    "version": vault_record["version"],
+                    "exchange": vault_record["exchange"],
+                    "salt": vault_record["salt"],
+                    "nonce": vault_record["nonce"],
+                    "kdf": vault_record["kdf"],
+                    "kdf_iterations": vault_record["kdf_iterations"],
+                },
+                separators=(",", ":"),
+            ),
+        }
+
+    def _fetch_user_config(self, user_id: int) -> Optional[Dict[str, Any]]:
+        if user_id in self._user_configs:
+            return self._user_configs[user_id]
+
+        if not self.client:
+            return None
+
+        try:
+            response = self.client.table("user_configs").select("*").eq("user_id", user_id).limit(1).execute()
+            if not response.data:
+                return None
+            config = response.data[0]
+            self._user_configs[user_id] = config
+            return config
+        except Exception as exc:
+            self.logger.error(f"Failed to retrieve user API config: {exc}")
+            return None
+
+    def get_user_api_key_status(self, user_id: int) -> Dict[str, Any]:
+        config = self._fetch_user_config(user_id)
+        vault_record = self._extract_vault_record(config)
+        if vault_record:
+            return {
+                "configured": True,
+                "zero_knowledge": True,
+                "exchange": vault_record.get("exchange", "phemex"),
+                "requires_passphrase": True,
+                "version": vault_record.get("version", VAULT_VERSION),
+            }
+
+        has_legacy = bool(config and config.get("api_key_enc") and config.get("api_secret_enc"))
+        return {
+            "configured": has_legacy,
+            "zero_knowledge": False,
+            "exchange": (config or {}).get("exchange", "phemex"),
+            "requires_passphrase": False,
+            "version": "legacy" if has_legacy else None,
+        }
+
+    def store_user_api_keys(
+        self,
+        user_id: int,
+        api_key: str,
+        api_secret: str,
+        passphrase: str,
+        exchange: str = "phemex",
+    ) -> bool:
+        vault_record = self.vault.encrypt_credentials(
+            api_key=api_key,
+            api_secret=api_secret,
+            passphrase=passphrase,
+            exchange=exchange,
+            associated_data=self._vault_associated_data(user_id, exchange),
+        )
         payload = {
             "user_id": user_id,
-            "api_key_enc": encrypted_key,
-            "api_secret_enc": encrypted_secret,
+            **vault_record,
             "updated_at": self._now(),
         }
 
@@ -195,26 +357,59 @@ class SupabaseManager:
             self.client.table("user_configs").upsert(payload, on_conflict="user_id").execute()
             return True
         except Exception as exc:
+            message = str(exc)
+            if any(column in message for column in ("encrypted_blob", "salt", "nonce", "kdf_", "exchange", "version")):
+                fallback_payload = {
+                    "user_id": user_id,
+                    **self._pack_legacy_vault_columns(vault_record),
+                    "updated_at": self._now(),
+                }
+                try:
+                    self.client.table("user_configs").upsert(fallback_payload, on_conflict="user_id").execute()
+                    self._user_configs[user_id] = {**payload, **fallback_payload}
+                    self.logger.warning(
+                        "user_configs is missing dedicated vault columns. Stored zero-knowledge vault in legacy columns."
+                    )
+                    return True
+                except Exception as fallback_exc:
+                    self.logger.error(f"Failed to store user API vault in fallback columns: {fallback_exc}")
+                    return False
             self.logger.error(f"Failed to store user API keys: {exc}")
             return False
 
-    def get_user_api_keys(self, user_id: int) -> Optional[Dict[str, str]]:
-        if user_id in self._user_configs:
-            config = self._user_configs[user_id]
-            return {
-                "api_key": self.cipher.decrypt(config["api_key_enc"]),
-                "api_secret": self.cipher.decrypt(config["api_secret_enc"]),
-            }
-
-        if not self.client:
+    def get_user_api_keys(
+        self,
+        user_id: int,
+        *,
+        passphrase: Optional[str] = None,
+        exchange: Optional[str] = None,
+    ) -> Optional[Dict[str, str]]:
+        config = self._fetch_user_config(user_id)
+        if not config:
             return None
 
-        try:
-            response = self.client.table("user_configs").select("*").eq("user_id", user_id).limit(1).execute()
-            if not response.data:
+        vault_record = self._extract_vault_record(config)
+        if vault_record:
+            target_exchange = exchange or vault_record.get("exchange", "phemex")
+            if not passphrase:
+                self.logger.warning(
+                    f"User {user_id} API vault is locked. A passphrase is required to decrypt zero-knowledge credentials."
+                )
                 return None
-            config = response.data[0]
-            self._user_configs[user_id] = config
+            try:
+                return self.vault.decrypt_credentials(
+                    vault_record,
+                    passphrase=passphrase,
+                    associated_data=self._vault_associated_data(user_id, target_exchange),
+                )
+            except InvalidPassphraseError:
+                self.logger.warning(f"Invalid passphrase for user {user_id} API vault.")
+                return None
+            except Exception as exc:
+                self.logger.error(f"Failed to decrypt user {user_id} API vault: {exc}")
+                return None
+
+        try:
             return {
                 "api_key": self.cipher.decrypt(config["api_key_enc"]),
                 "api_secret": self.cipher.decrypt(config["api_secret_enc"]),
@@ -231,13 +426,13 @@ class SupabaseManager:
             if first_name:
                 user["first_name"] = first_name
             user["updated_at"] = self._now()
-            return user
+            return self._apply_complimentary_override(user, persist=True)
 
         payload = self._user_payload(telegram_id, username, first_name)
         self._users[telegram_id] = payload
 
         if not self.client:
-            return payload
+            return self._apply_complimentary_override(payload, persist=False)
 
         try:
             response = self.client.table("users").select("*").eq("telegram_id", telegram_id).limit(1).execute()
@@ -252,7 +447,7 @@ class SupabaseManager:
                     self.client.table("users").update(update_payload).eq("telegram_id", telegram_id).execute()
                     user.update(update_payload)
                 self._users[telegram_id] = user
-                return user
+                return self._apply_complimentary_override(user, persist=True)
 
             try:
                 self.client.table("users").insert(payload).execute()
@@ -265,10 +460,10 @@ class SupabaseManager:
                     self.client.table("users").insert(self._base_user_payload(telegram_id, username, first_name)).execute()
                 else:
                     raise
-            return payload
+            return self._apply_complimentary_override(payload, persist=True)
         except Exception as exc:
             self.logger.error(f"Failed to get or create user: {exc}")
-            return self._normalize_user_record(self._users.get(telegram_id))
+            return self._apply_complimentary_override(self._users.get(telegram_id), persist=False)
 
     def get_membership_summary(
         self,
@@ -282,6 +477,8 @@ class SupabaseManager:
 
         tier = self._normalize_membership_tier(user.get("membership_tier"))
         status = self._membership_status(user)
+        if self._is_complimentary_pro(telegram_id):
+            status = "active"
         return {
             "tier": tier,
             "status": status,
@@ -289,6 +486,7 @@ class SupabaseManager:
             "can_backtest": True,
             "can_simulation": tier == PRO_MEMBERSHIP and status == "active",
             "can_live": tier == PRO_MEMBERSHIP and status == "active",
+            "source": "complimentary" if self._is_complimentary_pro(telegram_id) else user.get("membership_source", "manual"),
         }
 
     def user_can_access_mode(self, telegram_id: int, mode: str) -> bool:
@@ -340,7 +538,7 @@ class SupabaseManager:
 
     def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         if telegram_id in self._users:
-            return self._normalize_user_record(self._users.get(telegram_id))
+            return self._apply_complimentary_override(self._users.get(telegram_id), persist=True)
 
         if not self.client:
             return None
@@ -351,7 +549,7 @@ class SupabaseManager:
                 return None
             user = self._normalize_user_record(response.data[0])
             self._users[telegram_id] = user
-            return user
+            return self._apply_complimentary_override(user, persist=True)
         except Exception as exc:
             self.logger.error(f"Failed to load user {telegram_id}: {exc}")
             return None
@@ -664,7 +862,7 @@ class SupabaseManager:
             except Exception as exc:
                 self.logger.error(f"Failed to build user summary: {exc}")
 
-        recent_users = [self._normalize_user_record(dict(user)) for user in recent_users]
+        recent_users = [self._apply_complimentary_override(dict(user), persist=False) for user in recent_users]
         free_users = sum(1 for user in recent_users if user.get("membership_tier") == FREE_MEMBERSHIP)
         pro_users = sum(1 for user in recent_users if user.get("membership_tier") == PRO_MEMBERSHIP)
         expired_users = sum(1 for user in recent_users if user.get("membership_status") == "expired")

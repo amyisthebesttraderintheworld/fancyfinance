@@ -61,11 +61,26 @@ class Simulator:
         self.is_paused = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._websocket = None
+        self.active_api_user_id: Optional[int] = None
 
         ws_urls = {
             "phemex": "wss://ws.phemex.com",
         }
         self.ws_url = ws_urls.get(self.exchange_id, "")
+
+    def _runtime_api_ready(self) -> bool:
+        api_key = self.config.get(self.exchange_id, {}).get("api_key") or self.config.get("api_key")
+        api_secret = self.config.get(self.exchange_id, {}).get("api_secret") or self.config.get("api_secret")
+        return bool(api_key and api_secret and api_key != "YOUR_API_KEY" and api_secret != "YOUR_API_SECRET")
+
+    def _apply_runtime_api_keys(self, user_id: int, api_key: str, api_secret: str):
+        self.config.setdefault(self.exchange_id, {})
+        self.config[self.exchange_id]["api_key"] = api_key
+        self.config[self.exchange_id]["api_secret"] = api_secret
+        self.config["api_key"] = api_key
+        self.config["api_secret"] = api_secret
+        self.exchange = ExchangeManager(self.exchange_id, api_key, api_secret)
+        self.active_api_user_id = user_id
 
     def _send_command_response(self, chat_id: Optional[int], text: str):
         telegram_config = self.config.get("telegram", {})
@@ -360,7 +375,8 @@ class Simulator:
             response = (
                 f"Balance: {self.balance:.2f}\n"
                 f"Open Positions: {len(self.positions)}\n"
-                f"Paused: {self.is_paused}"
+                f"Paused: {self.is_paused}\n"
+                f"API Vault Unlocked: {self._runtime_api_ready()}"
             )
         elif command == "/pause":
             self.is_paused = True
@@ -395,6 +411,30 @@ class Simulator:
         elif command == "/shutdown":
             self.stop()
             response = "Simulation shutting down..."
+        elif command == "/unlock_api":
+            if len(args) < 2:
+                response = "Usage: /unlock_api <passphrase>"
+            else:
+                try:
+                    user_id = int(args[0])
+                except ValueError:
+                    response = "Invalid user ID for vault unlock."
+                else:
+                    passphrase = " ".join(args[1:])
+                    credentials = self.db.get_user_api_keys(
+                        user_id,
+                        passphrase=passphrase,
+                        exchange=self.exchange_id,
+                    )
+                    if not credentials:
+                        response = "Could not unlock the API vault. Check your passphrase and stored keys."
+                    else:
+                        self._apply_runtime_api_keys(
+                            user_id,
+                            credentials["api_key"],
+                            credentials["api_secret"],
+                        )
+                        response = f"API vault unlocked for {self.exchange_id} in this session."
         else:
             response = "Unknown command."
 

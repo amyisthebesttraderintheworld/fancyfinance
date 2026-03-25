@@ -80,6 +80,7 @@ def main():
     parser.add_argument("--exchange", type=str, default="phemex", help="Exchange to trade on (e.g. binance, phemex, bybit)")
     parser.add_argument("--symbol", type=str, help="Specific symbol to trade (e.g. BTCUSDT).")
     parser.add_argument("--user_id", type=int, help="Optional user ID to fetch API keys from Supabase.")
+    parser.add_argument("--vault-passphrase", type=str, help="Passphrase to unlock the zero-knowledge API vault.")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -110,11 +111,21 @@ def main():
                 logger.error(f"User {args.user_id} must verify their email before live mode can start.")
                 return
 
-        user_keys = db.get_user_api_keys(args.user_id)
+        vault_status = db.get_user_api_key_status(args.user_id)
+        user_keys = db.get_user_api_keys(
+            args.user_id,
+            passphrase=args.vault_passphrase,
+            exchange=exchange_id,
+        )
         if user_keys:
             config[exchange_id]['api_key'] = user_keys['api_key']
             config[exchange_id]['api_secret'] = user_keys['api_secret']
-            logger.info(f"Loaded encrypted API keys for {exchange_id} from Supabase for User ID: {args.user_id}")
+            logger.info(f"Loaded API credentials for {exchange_id} from Supabase for User ID: {args.user_id}")
+        elif vault_status.get("configured") and vault_status.get("requires_passphrase"):
+            logger.warning(
+                f"User {args.user_id} has a locked zero-knowledge API vault. "
+                "Provide --vault-passphrase or unlock via Telegram after startup."
+            )
     
     # Standardize top-level keys for engine
     config['api_key'] = config[exchange_id].get('api_key')

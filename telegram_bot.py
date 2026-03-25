@@ -130,8 +130,11 @@ def _format_membership(summary: dict | None) -> tuple[str, str, str]:
     tier = "Pro" if summary.get("tier") == PRO_MEMBERSHIP else "Free"
     status = summary.get("status", "free")
     expires_at = summary.get("expires_at")
+    source = summary.get("source")
 
-    if summary.get("tier") == PRO_MEMBERSHIP and status == "active":
+    if summary.get("tier") == PRO_MEMBERSHIP and status == "active" and source == "complimentary":
+        status_label = "Complimentary ✅"
+    elif summary.get("tier") == PRO_MEMBERSHIP and status == "active":
         status_label = "Active ✅"
     elif summary.get("tier") == PRO_MEMBERSHIP and status == "expired":
         status_label = f"Expired ❌ ({expires_at or 'renew required'})"
@@ -194,6 +197,13 @@ async def _send_welcome_menu_to_chat(context: ContextTypes.DEFAULT_TYPE, chat_id
     )
 
 
+async def _delete_sensitive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+    except Exception as exc:
+        logger.warning(f"Failed to delete sensitive Telegram message: {exc}")
+
+
 async def agree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not user:
@@ -247,27 +257,72 @@ async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, _paid_upgrade_message(membership), parse_mode="Markdown")
         return
 
-    if not context.args or len(context.args) < 2:
+    if not context.args or len(context.args) < 3:
         await _reply(
             update,
-            "🔒 *Secure API Setup*\n\nUse: `/setup_api <api_key> <api_secret>`\n\n"
+            "🔒 *Zero-Knowledge API Vault*\n\nUse: `/setup_api <api_key> <api_secret> <passphrase>`\n\n"
+            "Your passphrase is *never stored*. Without it, the database record is useless.\n\n"
             "⚠️ Your message will be deleted after processing.",
             parse_mode="Markdown",
         )
         return
 
     api_key, api_secret = context.args[:2]
+    passphrase = " ".join(context.args[2:]).strip()
     user_id = update.effective_user.id
 
-    if db.store_user_api_keys(user_id, api_key, api_secret):
-        await _reply(update, "✅ *API keys secured and stored.*", parse_mode="Markdown")
+    if len(passphrase) < 10:
+        await _reply(
+            update,
+            "❌ Please use a stronger vault passphrase with at least 10 characters.",
+            parse_mode="Markdown",
+        )
+        return
+
+    if db.store_user_api_keys(user_id, api_key, api_secret, passphrase, exchange=config.get("exchange", "phemex")):
+        await _reply(
+            update,
+            "✅ *API keys stored in the zero-knowledge vault.*\n\n"
+            "Use `/unlock_api <passphrase>` when you want to load them into the current bot session.",
+            parse_mode="Markdown",
+        )
     else:
         await _reply(update, "❌ Failed to secure keys. Is Supabase configured?", parse_mode="Markdown")
 
-    try:
-        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
-    except Exception as exc:
-        logger.warning(f"Failed to delete secure message: {exc}")
+    await _delete_sensitive_message(update, context)
+
+
+async def unlock_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    membership = db.get_membership_summary(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if not membership or not membership.get("can_live"):
+        await _reply(update, _paid_upgrade_message(membership), parse_mode="Markdown")
+        return
+
+    if not context.args:
+        await _reply(
+            update,
+            "🔓 Use: `/unlock_api <passphrase>`",
+            parse_mode="Markdown",
+        )
+        return
+
+    passphrase = " ".join(context.args).strip()
+    if not passphrase:
+        await _reply(update, "❌ Passphrase is required.", parse_mode="Markdown")
+        return
+
+    if not cmd_queue:
+        await _reply(update, "Engine not connected.")
+        await _delete_sensitive_message(update, context)
+        return
+
+    cmd_queue.put(("/unlock_api", [str(update.effective_user.id), passphrase], update.effective_chat.id))
+    await _reply(update, "🔓 Unlock request queued. The passphrase will only be used for this session.", parse_mode="Markdown")
+    await _delete_sensitive_message(update, context)
 
 
 async def verify_email_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -343,7 +398,11 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_user.username or "",
         update.effective_user.first_name or "",
     )
+    vault = db.get_user_api_key_status(user_id)
     plan_name, membership_status, access = _format_membership(membership)
+    vault_label = "Zero-knowledge vault configured" if vault.get("zero_knowledge") else (
+        "Legacy encrypted storage configured" if vault.get("configured") else "Not configured"
+    )
     message = (
         f"👤 *{APP_NAME} Profile*\n\n"
         f"• *Telegram ID:* `{user_id}`\n"
@@ -351,7 +410,8 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• *Status:* {status}\n\n"
         f"• *Plan:* {plan_name}\n"
         f"• *Membership:* {membership_status}\n"
-        f"• *Access:* {access}\n\n"
+        f"• *Access:* {access}\n"
+        f"• *Vault:* {vault_label}\n\n"
         "Use `/verify_email` to update your email, `/plans` to compare tiers, or `/setup_api` once paid access is active."
     )
     await _reply(update, message, parse_mode="Markdown")
@@ -692,7 +752,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/subscription - View your current membership\n"
         "/subscribe - Open Stripe checkout for Pro\n"
         "/manage_subscription - Open billing portal\n"
-        "/setup_api - Securely store exchange API keys\n"
+        "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
+        "/unlock_api - Unlock your vault for the current bot session\n"
         "/verify_email - Start email verification\n"
         "/confirm_email - Complete email verification\n"
         "/status - Check bot status\n"
@@ -739,6 +800,7 @@ async def set_commands(application: Application):
         BotCommand("subscription", "View your membership"),
         BotCommand("subscribe", "Upgrade to Pro with Stripe"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
+        BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
         BotCommand("status", "Check bot status"),
         BotCommand("verify_email", "Link your email address"),
         BotCommand("confirm_email", "Verify email with 6-digit code"),
@@ -803,6 +865,7 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("subscription", subscription_command))
     application.add_handler(CommandHandler("subscribe", subscribe_command))
     application.add_handler(CommandHandler("manage_subscription", manage_subscription_command))
+    application.add_handler(CommandHandler("unlock_api", unlock_api_command))
     application.add_handler(CommandHandler("verify_email", verify_email_command))
     application.add_handler(CommandHandler("confirm_email", confirm_email_command))
     application.add_handler(CommandHandler("profile", profile_command))

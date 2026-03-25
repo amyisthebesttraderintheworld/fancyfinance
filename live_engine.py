@@ -7,12 +7,31 @@ class LiveEngine(Simulator):
     def __init__(self, config, notifier, command_queue):
         super().__init__(config, notifier, command_queue)
         self.logger = get_logger("LiveEngine")
-        self.client = PhemexClient(config['phemex']['api_key'], config['phemex']['api_secret'])
-        
-        # Sync balance on start
+        self.client = None
+
+        if self._runtime_api_ready():
+            self._configure_live_client(notify=True)
+        else:
+            self.logger.warning("Live Engine started without unlocked API credentials. Use /unlock_api to continue.")
+            self.notifier.send_message("🔐 Live Engine waiting for `/unlock_api <passphrase>` to load exchange credentials.")
+
+    def _configure_live_client(self, notify: bool = True):
+        api_key = self.config['phemex'].get('api_key')
+        api_secret = self.config['phemex'].get('api_secret')
+        if not api_key or not api_secret or api_key == "YOUR_API_KEY" or api_secret == "YOUR_API_SECRET":
+            self.client = None
+            return False
+
+        self.client = PhemexClient(api_key, api_secret)
         self.balance = self.client.get_account()
         self.logger.info(f"Live Engine initialized. Balance: {self.balance}")
-        self.notifier.send_message(f"🚀 Live Engine Started. Balance: {self.balance:.4f} BTC")
+        if notify:
+            self.notifier.send_message(f"🚀 Live Engine Started. Balance: {self.balance:.4f} BTC")
+        return True
+
+    def _apply_runtime_api_keys(self, user_id: int, api_key: str, api_secret: str):
+        super()._apply_runtime_api_keys(user_id, api_key, api_secret)
+        self._configure_live_client(notify=True)
 
     async def _handle_command(self, cmd):
         c, args, chat_id = cmd
@@ -40,6 +59,10 @@ class LiveEngine(Simulator):
 
     def _execute_trade(self, symbol, direction, price, qty, is_entry, stop_loss=None, take_profit=None, reason=None):
         # Override simulation logic with real API calls
+        if self.client is None:
+            self.logger.warning("Live trade requested before API vault was unlocked.")
+            self.notifier.send_message("🔐 Unlock the API vault with `/unlock_api <passphrase>` before live trading.")
+            return
         
         # Safety Checks
         current_balance = self.client.get_account()

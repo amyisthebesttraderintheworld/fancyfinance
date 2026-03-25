@@ -9,6 +9,8 @@ from telegram_bot import (
     proxy_command,
     button_handler,
     verify_email_command,
+    setup_api_command,
+    unlock_api_command,
     subscribe_command,
     manage_subscription_command,
 )
@@ -247,3 +249,49 @@ async def test_manage_subscription_command_returns_portal_url(mock_update, mock_
 
     mock_update.message.reply_text.assert_called()
     assert "billing.stripe.com" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_setup_api_command_stores_zero_knowledge_vault(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = ["api_key_123", "api_secret_456", "correct", "horse", "battery", "staple"]
+    mock_context.bot.delete_message = AsyncMock()
+
+    with patch.object(
+        telegram_bot.db,
+        "get_membership_summary",
+        return_value={"can_live": True, "tier": "pro", "status": "active"},
+    ):
+        with patch.object(telegram_bot.db, "store_user_api_keys", return_value=True) as store_mock:
+            await setup_api_command(mock_update, mock_context)
+
+    store_mock.assert_called_once_with(
+        12345,
+        "api_key_123",
+        "api_secret_456",
+        "correct horse battery staple",
+        exchange="phemex",
+    )
+    mock_context.bot.delete_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    telegram_bot.cmd_queue = queue.Queue()
+    mock_context.args = ["correct", "horse", "battery", "staple"]
+    mock_context.bot.delete_message = AsyncMock()
+
+    with patch.object(
+        telegram_bot.db,
+        "get_membership_summary",
+        return_value={"can_live": True, "tier": "pro", "status": "active"},
+    ):
+        await unlock_api_command(mock_update, mock_context)
+
+    assert not telegram_bot.cmd_queue.empty()
+    command, args, chat_id = telegram_bot.cmd_queue.get()
+    assert command == "/unlock_api"
+    assert args == ["12345", "correct horse battery staple"]
+    assert chat_id == 12345
+    mock_context.bot.delete_message.assert_called_once()

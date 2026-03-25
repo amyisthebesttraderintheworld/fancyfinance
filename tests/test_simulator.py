@@ -27,9 +27,10 @@ async def test_simulator_command_handler(sim, command_queue, mock_notifier):
     command_queue.put(('/status', [], 12345))
     
     # Manually run handle_command since we can't easily block in tests
-    await sim._handle_command(('/status', [], 12345))
+    with patch("simulator.requests.post", side_effect=RuntimeError("offline")):
+        await sim._handle_command(('/status', [], 12345))
     
-    # Notifier should have sent status
+    # Notifier should have sent status after direct Telegram delivery failed.
     mock_notifier.send_message.assert_called()
     assert "Balance" in mock_notifier.send_message.call_args[0][0]
 
@@ -84,3 +85,16 @@ async def test_simulator_process_candle_exit_sl(sim, mock_notifier):
     mock_notifier.send_message.assert_called()
     assert "SIM EXIT" in mock_notifier.send_message.call_args[0][0]
     assert "Stop Loss" in mock_notifier.send_message.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_simulator_unlock_api_command(sim):
+    sim.db.get_user_api_keys = MagicMock(return_value={"api_key": "vault_key", "api_secret": "vault_secret"})
+
+    with patch("simulator.ExchangeManager") as mock_exchange:
+        with patch("simulator.requests.post", side_effect=RuntimeError("offline")):
+            await sim._handle_command(('/unlock_api', ['12345', 'correct horse battery staple'], 12345))
+
+    assert sim.config["phemex"]["api_key"] == "vault_key"
+    assert sim.config["phemex"]["api_secret"] == "vault_secret"
+    mock_exchange.assert_called_with("phemex", "vault_key", "vault_secret")
