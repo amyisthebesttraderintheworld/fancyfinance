@@ -210,3 +210,28 @@ def test_update_position_retries_without_missing_optional_column(monkeypatch):
     assert "leverage" not in db.client.position_payloads[-1]
     assert db.client.position_payloads[-1]["user_id"] == 12345
     assert "leverage" in db._unsupported_position_columns
+
+
+def test_user_config_envelope_preserves_strategy_and_simulation_state(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    db = SupabaseManager()
+
+    assert db.store_user_strategy_config(12345, {"timeframe": "15m", "leverage": 5}) is True
+    assert db.store_user_simulation_state(
+        12345,
+        {
+            "balance": 98.5,
+            "reference_balance": 100.0,
+            "session_started_at": "2026-03-25T20:00:00+00:00",
+        },
+    ) is True
+
+    assert db.get_user_strategy_config(12345) == {"timeframe": "15m", "leverage": 5}
+    assert db.get_user_simulation_state(12345) == {
+        "balance": 98.5,
+        "reference_balance": 100.0,
+        "session_started_at": "2026-03-25T20:00:00+00:00",
+    }
+    assert db.list_user_ids_with_simulation_state() == [12345]

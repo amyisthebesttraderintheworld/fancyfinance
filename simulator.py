@@ -93,6 +93,7 @@ class Simulator:
             "phemex": "wss://ws.phemex.com",
         }
         self.ws_url = ws_urls.get(self.exchange_id, "")
+        self._restore_persisted_sessions()
 
     @property
     def balance(self) -> float:
@@ -177,7 +178,7 @@ class Simulator:
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
-    def _build_session(self, user_id: Optional[int]) -> SimulationSession:
+    def _build_session(self, user_id: Optional[int], *, start_new: bool = True) -> SimulationSession:
         session = SimulationSession(user_id=user_id, balance=self.initial_balance)
         stored_profile = self.db.get_user_strategy_config(user_id) if user_id is not None else None
         session.strategy_profile = normalize_strategy_profile(
@@ -186,8 +187,225 @@ class Simulator:
             current=self.default_strategy_profile,
         )
         session.market_scan_settings = resolve_scan_settings(self.config, session.strategy_profile)
-        self._start_new_session(session)
+        if start_new:
+            self._start_new_session(session)
         return session
+
+    def _timestamp_ms(self, value: Any) -> int:
+        if value is None:
+            return 0
+        if isinstance(value, (int, float)):
+            numeric = int(value)
+            return numeric * 1000 if numeric and abs(numeric) < 1_000_000_000_000 else numeric
+        try:
+            parsed = datetime.fromisoformat(str(value))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return int(parsed.timestamp() * 1000)
+        except ValueError:
+            return 0
+
+    def _timestamp_seconds(self, value: Any) -> float:
+        milliseconds = self._timestamp_ms(value)
+        return milliseconds / 1000 if milliseconds else 0.0
+
+    def _optional_float(self, value: Any) -> Optional[float]:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _optional_int(self, value: Any) -> Optional[int]:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _session_state_payload(self, session: SimulationSession) -> Dict[str, Any]:
+        return {
+            "balance": float(session.balance),
+            "reference_balance": float(session.reference_balance),
+            "is_paused": bool(session.is_paused),
+            "safety_paused_until": float(session.safety_paused_until or 0.0),
+            "session_started_at": session.session_started_at,
+            "session_started_epoch": float(session.session_started_epoch or 0.0),
+            "symbol_cooldowns": {str(symbol): int(expires_at) for symbol, expires_at in session.symbol_cooldowns.items()},
+        }
+
+    def _persist_session_state(self, session: Optional[SimulationSession] = None):
+        target = session or self._global_session
+        if target.user_id is None:
+            return
+        store_state = getattr(self.db, "store_user_simulation_state", None)
+        if callable(store_state):
+            store_state(int(target.user_id), self._session_state_payload(target))
+
+    def _derive_balance_from_trades(self, trades: list[dict[str, Any]]) -> float:
+        balance = float(self.initial_balance)
+        for trade in trades:
+            trade_type = str(trade.get("type") or "").strip().lower()
+            if trade_type == "entry":
+                try:
+                    balance -= calculate_fee(float(trade.get("qty") or 0.0), float(trade.get("price") or 0.0), self.fee_rate)
+                except (TypeError, ValueError):
+                    continue
+            elif trade_type == "exit":
+                try:
+                    balance += float(trade.get("pnl") or 0.0)
+                except (TypeError, ValueError):
+                    continue
+        return balance
+
+    def _restore_trade_history(self, user_id: int, session_started_at: Optional[str]) -> list[dict[str, Any]]:
+        trades = self.db.get_recent_trades(limit=500, since=session_started_at, user_id=user_id)
+        history = [dict(trade) for trade in trades if str(trade.get("type") or "").strip().lower() in {"entry", "exit"}]
+        history.sort(key=lambda trade: self._timestamp_ms(trade.get("timestamp") or trade.get("created_at")))
+        return history[-500:]
+
+    def _restore_position(self, record: Dict[str, Any], trade_history: list[dict[str, Any]]) -> Optional[Position]:
+        symbol = str(record.get("symbol") or "").strip()
+        if not symbol:
+            return None
+
+        try:
+            entry_price = float(record.get("entry_price") or 0.0)
+            quantity = float(record.get("qty") if record.get("qty") is not None else record.get("quantity") or 0.0)
+            stop_loss = float(record.get("stop_loss") or 0.0)
+            take_profit = float(record.get("take_profit") or 0.0)
+        except (TypeError, ValueError):
+            return None
+
+        matching_entries = [
+            trade for trade in trade_history
+            if trade.get("symbol") == symbol and str(trade.get("type") or "").strip().lower() == "entry"
+        ]
+        open_time = self._timestamp_ms(record.get("open_time") or record.get("entry_time"))
+        if not open_time and matching_entries:
+            open_time = self._timestamp_ms(matching_entries[-1].get("timestamp") or matching_entries[-1].get("created_at"))
+        if not open_time:
+            open_time = int(time.time() * 1000)
+
+        position = Position(
+            symbol=symbol,
+            direction=str(record.get("direction") or "long"),
+            entry_price=entry_price,
+            quantity=quantity,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            open_time=open_time,
+            leverage=self._optional_int(record.get("leverage")),
+            margin_used=self._optional_float(record.get("margin_used")),
+            score=self._optional_int(record.get("score")),
+            signals_count=self._optional_int(record.get("signals_count")),
+            trail_pct=self._optional_float(record.get("trail_pct")),
+            high_water=self._optional_float(record.get("high_water")),
+            low_water=self._optional_float(record.get("low_water")),
+            max_hold_candles=self._optional_int(record.get("max_hold_candles")),
+        )
+        if self._optional_float(record.get("mark_price")) is not None:
+            position.mark_price = float(record.get("mark_price"))
+        else:
+            latest_price = self.get_latest_market_price(symbol)
+            if latest_price is not None:
+                position.mark_price = latest_price
+        if self._optional_float(record.get("current_pnl")) is not None:
+            position.current_pnl = float(record.get("current_pnl"))
+        elif position.mark_price is not None:
+            if position.direction == "short":
+                position.current_pnl = (position.entry_price - position.mark_price) * position.quantity
+            else:
+                position.current_pnl = (position.mark_price - position.entry_price) * position.quantity
+        if position.direction == "long" and position.high_water is None:
+            position.high_water = position.entry_price
+        if position.direction == "short" and position.low_water is None:
+            position.low_water = position.entry_price
+        return position
+
+    def _restore_session(self, user_id: int) -> Optional[SimulationSession]:
+        get_state = getattr(self.db, "get_user_simulation_state", None)
+        state = get_state(user_id) if callable(get_state) else None
+        session_started_at = str(state.get("session_started_at") or "").strip() if isinstance(state, dict) else ""
+        trade_history = self._restore_trade_history(user_id, session_started_at or None)
+        position_records = self.db.list_open_positions(user_id=user_id)
+        if not state and not trade_history and not position_records:
+            return None
+
+        session = self._build_session(user_id, start_new=False)
+        if isinstance(state, dict):
+            try:
+                session.balance = float(state.get("balance", self.initial_balance))
+            except (TypeError, ValueError):
+                session.balance = self._derive_balance_from_trades(trade_history)
+            try:
+                session.reference_balance = float(state.get("reference_balance", session.balance))
+            except (TypeError, ValueError):
+                session.reference_balance = float(session.balance)
+            session.is_paused = bool(state.get("is_paused", False))
+            try:
+                session.safety_paused_until = float(state.get("safety_paused_until", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                session.safety_paused_until = 0.0
+            session.session_started_at = session_started_at or (trade_history[0].get("created_at") if trade_history else self._now_iso())
+            try:
+                session.session_started_epoch = float(
+                    state.get("session_started_epoch") or self._timestamp_seconds(session.session_started_at)
+                )
+            except (TypeError, ValueError):
+                session.session_started_epoch = self._timestamp_seconds(session.session_started_at) or time.time()
+            raw_cooldowns = state.get("symbol_cooldowns") if isinstance(state.get("symbol_cooldowns"), dict) else {}
+            session.symbol_cooldowns = {
+                str(symbol): int(expires_at)
+                for symbol, expires_at in raw_cooldowns.items()
+                if expires_at is not None
+            }
+        else:
+            session.balance = self._derive_balance_from_trades(trade_history)
+            session.reference_balance = float(self.initial_balance)
+            session.is_paused = False
+            session.safety_paused_until = 0.0
+            session.session_started_at = trade_history[0].get("created_at") if trade_history else self._now_iso()
+            session.session_started_epoch = self._timestamp_seconds(session.session_started_at) or time.time()
+            session.symbol_cooldowns = {}
+
+        session.trade_history = trade_history
+        session.positions = {}
+        for record in position_records:
+            position = self._restore_position(record, trade_history)
+            if position is None:
+                continue
+            session.positions[position.symbol] = position
+
+        self._persist_session_state(session)
+        return session
+
+    def _restore_persisted_sessions(self):
+        if not self._user_scoped_simulation:
+            return
+
+        candidate_user_ids = set()
+        list_state_users = getattr(self.db, "list_user_ids_with_simulation_state", None)
+        if callable(list_state_users):
+            candidate_user_ids.update(int(user_id) for user_id in list_state_users())
+
+        for record in self.db.list_open_positions():
+            user_id = self._normalize_user_id(record.get("user_id"))
+            if user_id:
+                candidate_user_ids.add(user_id)
+
+        restored = 0
+        for user_id in sorted(candidate_user_ids):
+            session = self._restore_session(user_id)
+            if session is None:
+                continue
+            self._user_sessions[user_id] = session
+            restored += 1
+
+        if restored:
+            self.logger.info(f"Restored {restored} persisted simulation session(s).")
 
     def _settings_for_session(self, session: Optional[SimulationSession] = None):
         target = session or self._global_session
@@ -239,6 +457,10 @@ class Simulator:
             return self._global_session
 
         session = self._user_sessions.get(normalized_user_id)
+        if session is None:
+            session = self._restore_session(normalized_user_id)
+            if session is not None:
+                self._user_sessions[normalized_user_id] = session
         if session is None and create:
             session = self._build_session(normalized_user_id)
             self._user_sessions[normalized_user_id] = session
@@ -259,6 +481,7 @@ class Simulator:
         target.session_started_at = self._now_iso()
         target.session_started_epoch = time.time()
         target.reference_balance = float(target.balance)
+        self._persist_session_state(target)
 
     def _record_trade_event(
         self,
@@ -753,6 +976,7 @@ class Simulator:
         self.logger.warning(
             f"Safety timeout triggered for user {target.user_id or 'global'}: {consecutive_losses} losses."
         )
+        self._persist_session_state(target)
 
     def _execute_trade(
         self,
@@ -852,13 +1076,21 @@ class Simulator:
                     "qty": qty,
                     "stop_loss": stop_loss,
                     "take_profit": take_profit,
+                    "open_time": position.open_time,
                     "margin_used": resolved_margin,
                     "leverage": resolved_leverage,
                     "score": score,
                     "signals_count": signals_count,
+                    "trail_pct": position.trail_pct,
+                    "high_water": position.high_water,
+                    "low_water": position.low_water,
+                    "max_hold_candles": position.max_hold_candles,
+                    "mark_price": position.mark_price,
+                    "current_pnl": position.current_pnl,
                 },
                 user_id=session.user_id,
             )
+            self._persist_session_state(session)
 
             self.notifier.send_message(
                 f"🔵 SIM ENTRY: {direction.upper()} {symbol} @ {adjusted_price:.2f} Qty: {qty:.4f} "
@@ -895,6 +1127,7 @@ class Simulator:
         del session.positions[symbol]
         if int(settings.cooldown_candles or 0) > 0:
             session.symbol_cooldowns[symbol] = int(time.time() * 1000) + (int(settings.cooldown_candles) * int(settings.candle_seconds) * 1000)
+        self._persist_session_state(session)
         self.notifier.send_message(
             f"🔴 SIM EXIT: {direction.upper()} {symbol} @ {adjusted_price:.2f} PnL: {pnl:.2f} Reason: {reason}",
             user_id=notify_user_id,
@@ -971,6 +1204,7 @@ class Simulator:
         elif command == "/pause":
             target = session or self._global_session
             target.is_paused = True
+            self._persist_session_state(target)
             response = "Simulation paused."
         elif command == "/resume":
             target = session or self._global_session
@@ -981,6 +1215,7 @@ class Simulator:
             else:
                 target.is_paused = False
                 target.safety_paused_until = 0
+                self._persist_session_state(target)
                 response = "Simulation resumed."
         elif command == "/reset":
             self._reset_session(session or self._global_session)
@@ -991,6 +1226,7 @@ class Simulator:
                 try:
                     target.balance = float(args[0])
                     target.reference_balance = float(target.balance)
+                    self._persist_session_state(target)
                     response = f"Balance set to {target.balance}"
                 except ValueError:
                     response = "Invalid amount."

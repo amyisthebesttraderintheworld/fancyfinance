@@ -369,6 +369,62 @@ class SupabaseManager:
             "until the database schema is expanded."
         )
 
+    def _decode_user_settings(self, config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if not config:
+            return {}
+
+        raw = config.get("strategy_config_json")
+        if isinstance(raw, dict):
+            parsed = dict(raw)
+        elif raw:
+            try:
+                decoded = json.loads(raw)
+            except (TypeError, ValueError):
+                return {}
+            parsed = dict(decoded) if isinstance(decoded, dict) else {}
+        else:
+            return {}
+
+        if "strategy_profile" in parsed or "simulation_state" in parsed:
+            return parsed
+        return {"strategy_profile": parsed} if parsed else {}
+
+    def _encode_user_settings(
+        self,
+        *,
+        strategy_profile: Optional[Dict[str, Any]] = None,
+        simulation_state: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        payload: Dict[str, Any] = {}
+        if strategy_profile:
+            payload["strategy_profile"] = dict(strategy_profile)
+        if simulation_state:
+            payload["simulation_state"] = dict(simulation_state)
+        if not payload:
+            return None
+        return json.dumps(payload, separators=(",", ":"))
+
+    def _upsert_user_config_fields(self, user_id: int, fields: Dict[str, Any]) -> bool:
+        cached = dict(self._user_configs.get(user_id) or {})
+        cached["user_id"] = user_id
+        cached.update(fields)
+        cached["updated_at"] = self._now()
+        self._user_configs[user_id] = cached
+
+        if not self.client:
+            return True
+
+        payload = {"user_id": user_id, "updated_at": cached["updated_at"], **fields}
+        try:
+            self.client.table("user_configs").upsert(payload, on_conflict="user_id").execute()
+            return True
+        except Exception as exc:
+            if "strategy_config_json" in str(exc):
+                self._warn_missing_strategy_config_column()
+                return False
+            self.logger.error(f"Failed to update user config for {user_id}: {exc}")
+            return False
+
     def _pack_legacy_vault_columns(self, vault_record: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "api_key_enc": vault_record["encrypted_blob"],
@@ -428,44 +484,72 @@ class SupabaseManager:
         config = self._fetch_user_config(user_id)
         if not config:
             return None
+        settings = self._decode_user_settings(config)
+        profile = settings.get("strategy_profile")
+        return dict(profile) if isinstance(profile, dict) else None
 
-        raw = config.get("strategy_config_json")
-        if isinstance(raw, dict):
-            return dict(raw)
-        if not raw:
+    def get_user_simulation_state(self, user_id: int) -> Optional[Dict[str, Any]]:
+        config = self._fetch_user_config(user_id)
+        if not config:
             return None
-        try:
-            parsed = json.loads(raw)
-        except (TypeError, ValueError):
-            return None
-        return dict(parsed) if isinstance(parsed, dict) else None
+        settings = self._decode_user_settings(config)
+        state = settings.get("simulation_state")
+        return dict(state) if isinstance(state, dict) else None
 
-    def store_user_strategy_config(self, user_id: int, strategy_config: Dict[str, Any]) -> bool:
-        cached = dict(self._user_configs.get(user_id) or {})
-        cached["user_id"] = user_id
-        cached["strategy_config_json"] = json.dumps(strategy_config, separators=(",", ":"))
-        cached["updated_at"] = self._now()
-        self._user_configs[user_id] = cached
+    def list_user_ids_with_simulation_state(self) -> List[int]:
+        results: set[int] = set()
+
+        for user_id, config in self._user_configs.items():
+            settings = self._decode_user_settings(config)
+            if isinstance(settings.get("simulation_state"), dict):
+                results.add(int(user_id))
 
         if not self.client:
-            return True
+            return sorted(results)
 
         try:
-            self.client.table("user_configs").upsert(
-                {
-                    "user_id": user_id,
-                    "strategy_config_json": cached["strategy_config_json"],
-                    "updated_at": cached["updated_at"],
-                },
-                on_conflict="user_id",
-            ).execute()
-            return True
+            response = self.client.table("user_configs").select("user_id, strategy_config_json").execute()
+            for item in response.data or []:
+                user_id = item.get("user_id")
+                if user_id is None:
+                    continue
+                cached = dict(self._user_configs.get(int(user_id)) or {})
+                cached.update(item)
+                self._user_configs[int(user_id)] = cached
+                settings = self._decode_user_settings(item)
+                if isinstance(settings.get("simulation_state"), dict):
+                    results.add(int(user_id))
         except Exception as exc:
             if "strategy_config_json" in str(exc):
                 self._warn_missing_strategy_config_column()
-                return False
-            self.logger.error(f"Failed to store strategy config for user {user_id}: {exc}")
-            return False
+            else:
+                self.logger.error(f"Failed to list simulation state users: {exc}")
+
+        return sorted(results)
+
+    def store_user_strategy_config(self, user_id: int, strategy_config: Dict[str, Any]) -> bool:
+        cached = dict(self._user_configs.get(user_id) or self._fetch_user_config(user_id) or {})
+        settings = self._decode_user_settings(cached)
+        encoded = self._encode_user_settings(
+            strategy_profile=dict(strategy_config),
+            simulation_state=settings.get("simulation_state") if isinstance(settings.get("simulation_state"), dict) else None,
+        )
+        return self._upsert_user_config_fields(
+            user_id,
+            {"strategy_config_json": encoded} if encoded is not None else {},
+        )
+
+    def store_user_simulation_state(self, user_id: int, simulation_state: Dict[str, Any]) -> bool:
+        cached = dict(self._user_configs.get(user_id) or self._fetch_user_config(user_id) or {})
+        settings = self._decode_user_settings(cached)
+        encoded = self._encode_user_settings(
+            strategy_profile=settings.get("strategy_profile") if isinstance(settings.get("strategy_profile"), dict) else None,
+            simulation_state=dict(simulation_state),
+        )
+        return self._upsert_user_config_fields(
+            user_id,
+            {"strategy_config_json": encoded} if encoded is not None else {},
+        )
 
     def store_user_api_keys(
         self,
@@ -488,7 +572,7 @@ class SupabaseManager:
             "updated_at": self._now(),
         }
 
-        self._user_configs[user_id] = payload
+        self._user_configs[user_id] = {**dict(self._user_configs.get(user_id) or {}), **payload}
         if not self.client:
             return True
 
@@ -505,7 +589,11 @@ class SupabaseManager:
                 }
                 try:
                     self.client.table("user_configs").upsert(fallback_payload, on_conflict="user_id").execute()
-                    self._user_configs[user_id] = {**payload, **fallback_payload}
+                    self._user_configs[user_id] = {
+                        **dict(self._user_configs.get(user_id) or {}),
+                        **payload,
+                        **fallback_payload,
+                    }
                     self.logger.warning(
                         "user_configs is missing dedicated vault columns. Stored zero-knowledge vault in legacy columns."
                     )

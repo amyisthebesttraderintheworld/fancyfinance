@@ -216,3 +216,96 @@ def test_simulator_scan_market_candidates_builds_fang_entry_plans(sim):
     assert plans == [expected_plan]
     run_scan_mock.assert_called_once()
     build_plan_mock.assert_called_once()
+
+
+def test_simulator_restores_persisted_session_after_restart(mock_config, mock_notifier):
+    first = Simulator(mock_config, mock_notifier, queue.Queue())
+    session = first.get_user_session(12345, create=True)
+    session.balance = 98.5
+    session.reference_balance = 100.0
+    session.is_paused = True
+    session.safety_paused_until = 1742936400.0
+    session.session_started_at = "2026-03-25T20:00:00+00:00"
+    session.session_started_epoch = 1742932800.0
+    first.db.store_user_simulation_state(12345, first._session_state_payload(session))
+    first.db.log_trade(
+        {
+            "symbol": "BTCUSD",
+            "direction": "long",
+            "price": 40000.0,
+            "qty": 0.1,
+            "type": "entry",
+            "timestamp": 1742932800000,
+            "created_at": "2026-03-25T20:00:00+00:00",
+        },
+        user_id=12345,
+    )
+    first.db.update_position(
+        "BTCUSD",
+        {
+            "direction": "long",
+            "entry_price": 40000.0,
+            "qty": 0.1,
+            "stop_loss": 39000.0,
+            "take_profit": 42000.0,
+            "margin_used": 10.0,
+            "leverage": 5,
+        },
+        user_id=12345,
+    )
+
+    with patch("simulator.SupabaseManager", return_value=first.db):
+        restored = Simulator(mock_config, mock_notifier, queue.Queue())
+
+    restored_session = restored.get_user_session(12345, create=False)
+    assert restored_session is not None
+    assert restored_session.balance == 98.5
+    assert restored_session.reference_balance == 100.0
+    assert restored_session.is_paused is True
+    assert restored_session.safety_paused_until == 1742936400.0
+    assert restored_session.session_started_at == "2026-03-25T20:00:00+00:00"
+    assert restored_session.positions["BTCUSD"].open_time == 1742932800000
+    assert restored_session.positions["BTCUSD"].margin_used == 10.0
+    assert restored_session.trade_history[-1]["type"] == "entry"
+    assert len(restored.list_user_sessions()) == 1
+
+
+def test_simulator_lazy_restores_session_from_trade_history(mock_config, mock_notifier):
+    db = Simulator(mock_config, mock_notifier, queue.Queue()).db
+    db.log_trade(
+        {
+            "symbol": "BTCUSD",
+            "direction": "long",
+            "price": 40000.0,
+            "qty": 0.1,
+            "type": "entry",
+            "timestamp": 1742932800000,
+            "created_at": "2026-03-25T20:00:00+00:00",
+        },
+        user_id=12345,
+    )
+    db.log_trade(
+        {
+            "symbol": "BTCUSD",
+            "direction": "long",
+            "price": 40500.0,
+            "qty": 0.1,
+            "type": "exit",
+            "pnl": 43.5715,
+            "timestamp": 1742933100000,
+            "created_at": "2026-03-25T20:05:00+00:00",
+        },
+        user_id=12345,
+    )
+
+    with patch("simulator.SupabaseManager", return_value=db):
+        restored = Simulator(mock_config, mock_notifier, queue.Queue())
+
+    restored_session = restored.get_user_session(12345, create=False)
+    assert restored_session is not None
+    expected_balance = mock_config["backtest"]["initial_balance"]
+    expected_balance -= 0.1 * 40000.0 * mock_config["backtest"]["fee_rate"]
+    expected_balance += 43.5715
+    assert restored_session.balance == pytest.approx(expected_balance)
+    assert restored_session.reference_balance == mock_config["backtest"]["initial_balance"]
+    assert restored_session.trade_history[-1]["type"] == "exit"
