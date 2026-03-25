@@ -29,7 +29,7 @@ from email_service import EmailService
 from fancyfinance import APP_NAME, __version__
 from backtest_service import BacktestServiceError, format_backtest_summary, run_backtest
 from stripe_service import StripeService
-from supabase_client import FREE_MEMBERSHIP, PRO_MEMBERSHIP, SupabaseManager
+from supabase_client import DEFAULT_TRIAL_DAYS, FREE_MEMBERSHIP, PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
 
 cmd_queue = None
 config = None
@@ -128,13 +128,22 @@ def _format_membership(summary: dict | None) -> tuple[str, str, str]:
     if not summary:
         return "Free", "Free access", "Backtesting only"
 
-    tier = "Pro" if summary.get("tier") == PRO_MEMBERSHIP else "Free"
+    if summary.get("tier") == TRIAL_PRO_MEMBERSHIP:
+        tier = "Trial Pro"
+    elif summary.get("tier") == PRO_MEMBERSHIP:
+        tier = "Pro"
+    else:
+        tier = "Free"
     status = summary.get("status", "free")
     expires_at = summary.get("expires_at")
     source = summary.get("source")
 
     if summary.get("tier") == PRO_MEMBERSHIP and status == "active" and source == "complimentary":
         status_label = "Complimentary ✅"
+    elif summary.get("tier") == TRIAL_PRO_MEMBERSHIP and status == "trial_pro":
+        status_label = f"Trial Pro ⏳ ({expires_at or '7 days'})"
+    elif summary.get("tier") == TRIAL_PRO_MEMBERSHIP and status == "trial_expired":
+        status_label = f"Trial expired ❌ ({expires_at or 'upgrade required'})"
     elif summary.get("tier") == PRO_MEMBERSHIP and status == "active":
         status_label = "Active ✅"
     elif summary.get("tier") == PRO_MEMBERSHIP and status == "expired":
@@ -150,15 +159,29 @@ def _format_membership(summary: dict | None) -> tuple[str, str, str]:
     return tier, status_label, ", ".join(access)
 
 
+def _display_price() -> str:
+    return ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
+
+
+def _trial_days() -> int:
+    raw = ((config or {}).get("stripe") or {}).get("trial_days", DEFAULT_TRIAL_DAYS)
+    try:
+        return max(int(raw), 0)
+    except (TypeError, ValueError):
+        return DEFAULT_TRIAL_DAYS
+
+
 def _paid_upgrade_message(summary: dict | None) -> str:
     tier, status_label, _ = _format_membership(summary)
-    display_price = ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
+    display_price = _display_price()
+    trial_days = _trial_days()
+    trial_note = f"Start with a {trial_days}-day Trial Pro period, then continue at {display_price}." if trial_days > 0 else f"Continue on the paid plan at {display_price}."
     return (
         "🔒 *Paid Membership Required*\n\n"
-        f"Simulation and live trading are only available on the paid plan ({display_price}).\n\n"
+        f"Simulation and live trading are only available on the paid plan.\n{trial_note}\n\n"
         f"*Current plan:* {tier}\n"
         f"*Membership status:* {status_label}\n\n"
-        "Backtesting remains free. Ask an admin to upgrade your account before using paid features."
+        "Backtesting remains free. Use `/subscribe` to start the upgrade flow."
     )
 
 
@@ -444,7 +467,9 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_user.first_name or "",
     )
     plan_name, membership_status, access = _format_membership(membership)
-    display_price = ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
+    display_price = _display_price()
+    trial_days = _trial_days()
+    trial_line = f"• {trial_days}-day Trial Pro before billing starts\n" if trial_days > 0 else ""
     text = (
         f"💳 *{APP_NAME} Plans*\n\n"
         "*Free*\n"
@@ -452,6 +477,7 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Telegram onboarding\n"
         "• Email verification\n\n"
         f"*Pro ({display_price})*\n"
+        f"{trial_line}"
         "• Simulation mode\n"
         "• Live trading mode\n"
         "• Secure API key storage\n"
@@ -471,7 +497,8 @@ async def subscription_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stripe_service = _stripe_service()
-    display_price = ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
+    display_price = _display_price()
+    trial_days = _trial_days()
     if not stripe_service.is_checkout_configured():
         await _reply(
             update,
@@ -487,6 +514,24 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     if not user:
         await _reply(update, "❌ Could not load your user profile.")
+        return
+
+    membership = db.get_membership_summary(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if (
+        membership
+        and membership.get("source") == "stripe"
+        and membership.get("tier") in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP}
+        and membership.get("status") in {"trial_pro", "active"}
+    ):
+        await _reply(
+            update,
+            "🧾 You already have Trial Pro or Pro access through Stripe. Use `/manage_subscription` to manage billing.",
+            parse_mode="Markdown",
+        )
         return
 
     try:
@@ -505,12 +550,23 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, "❌ Stripe did not return a checkout URL.")
         return
 
+    subscribe_parts = [f"💳 *Upgrade to Pro ({display_price})*\n\n"]
+    if trial_days > 0:
+        subscribe_parts.append(
+            f"Your checkout starts with a *{trial_days}-day Trial Pro* period before billing begins.\n\n"
+        )
+    subscribe_parts.extend(
+        [
+            "Use the secure Stripe checkout link below to activate your membership:\n",
+            f"{checkout_url}\n\n",
+            "After checkout succeeds, your Trial Pro or Pro access should activate automatically.",
+        ]
+    )
+    subscribe_message = "".join(subscribe_parts)
+
     await _reply(
         update,
-        f"💳 *Upgrade to Pro ({display_price})*\n\n"
-        "Use the secure Stripe checkout link below to activate your paid membership:\n"
-        f"{checkout_url}\n\n"
-        "After payment succeeds, your Pro access should activate automatically.",
+        subscribe_message,
         parse_mode="Markdown",
     )
 
@@ -805,6 +861,7 @@ async def kb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    trial_days = _trial_days()
     text = (
         "Available Commands:\n"
         "/start - Show legal notice or main menu\n"
@@ -813,7 +870,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/plans - Compare free vs paid access\n"
         "/subscription - View your current membership\n"
         "/backtest - Run a historical backtest\n"
-        "/subscribe - Open Stripe checkout for Pro\n"
+        f"/subscribe - Start the {trial_days}-day Trial Pro / Pro checkout\n"
         "/manage_subscription - Open billing portal\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
         "/unlock_api - Unlock your vault for the current bot session\n"
@@ -862,7 +919,7 @@ async def set_commands(application: Application):
         BotCommand("plans", "See free vs paid access"),
         BotCommand("subscription", "View your membership"),
         BotCommand("backtest", "Run a historical backtest"),
-        BotCommand("subscribe", "Upgrade to Pro with Stripe"),
+        BotCommand("subscribe", "Start Trial Pro / Stripe checkout"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
         BotCommand("status", "Check bot status"),

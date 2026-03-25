@@ -11,7 +11,7 @@ import requests
 
 from common import get_logger
 from fancyfinance import APP_NAME
-from supabase_client import ACTIVE_STRIPE_STATUSES, SupabaseManager
+from supabase_client import ACTIVE_STRIPE_STATUSES, DEFAULT_TRIAL_DAYS, SupabaseManager
 
 
 class StripeService:
@@ -28,6 +28,7 @@ class StripeService:
         self.portal_return_url = str(
             stripe_config.get("portal_return_url") or stripe_config.get("cancel_url") or ""
         ).strip()
+        self.trial_days = max(int(stripe_config.get("trial_days") or DEFAULT_TRIAL_DAYS), 0)
         self.timeout_seconds = int(stripe_config.get("timeout_seconds") or 20)
         self.webhook_tolerance_seconds = int(stripe_config.get("webhook_tolerance_seconds") or 300)
 
@@ -88,6 +89,9 @@ class StripeService:
             payload["customer"] = user["stripe_customer_id"]
         elif user.get("email"):
             payload["customer_email"] = user["email"]
+
+        if self.trial_days > 0 and not user.get("stripe_customer_id") and not user.get("stripe_subscription_id"):
+            payload["subscription_data[trial_period_days]"] = self.trial_days
 
         session = self._post("/checkout/sessions", payload)
         self.logger.info(f"Created Stripe Checkout Session for Telegram user {telegram_id}.")
@@ -171,11 +175,12 @@ class StripeService:
                     subscription_status="checkout_completed",
                 )
                 if obj.get("mode") == "subscription" and obj.get("payment_status") in {"paid", "no_payment_required"}:
+                    initial_status = "trialing" if obj.get("payment_status") == "no_payment_required" and self.trial_days > 0 else "active"
                     target_user = db.activate_paid_membership_from_stripe(
                         int(telegram_id),
                         customer_id=obj.get("customer"),
                         subscription_id=obj.get("subscription"),
-                        subscription_status="active",
+                        subscription_status=initial_status,
                         period_end=None,
                     )
                 handled = True

@@ -166,6 +166,7 @@ def _user_summary(engine):
         "unverified": 0,
         "with_api_keys": 0,
         "free": 0,
+        "trial_pro": 0,
         "pro": 0,
         "expired": 0,
         "recent": [],
@@ -211,9 +212,10 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         return HTMLResponse(
             """
             <html><body style="font-family: sans-serif; padding: 32px; background: #0f172a; color: white;">
-            <h1>Subscription Activated</h1>
+            <h1>Checkout Completed</h1>
             <p>Your Stripe checkout completed successfully.</p>
-            <p>Return to Telegram and use <strong>/profile</strong> or <strong>/plans</strong> to confirm your Pro access.</p>
+            <p>If this was your first upgrade, your 7-day Trial Pro access should activate automatically before full Pro billing begins.</p>
+            <p>Return to Telegram and use <strong>/profile</strong> or <strong>/plans</strong> to confirm your current access.</p>
             </body></html>
             """
         )

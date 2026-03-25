@@ -61,6 +61,7 @@ stripe:
   webhook_secret: "${STRIPE_WEBHOOK_SECRET:-}"
   price_id: "${STRIPE_PRICE_ID:-}"
   display_price: "${STRIPE_DISPLAY_PRICE:-$6.99/month}"
+  trial_days: "${STRIPE_TRIAL_DAYS:-7}"
   success_url: "${STRIPE_SUCCESS_URL:-}"
   cancel_url: "${STRIPE_CANCEL_URL:-}"
   portal_return_url: "${STRIPE_PORTAL_RETURN_URL:-}"

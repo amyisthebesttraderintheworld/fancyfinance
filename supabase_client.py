@@ -27,9 +27,19 @@ except Exception:  # pragma: no cover - optional dependency in local test enviro
 load_dotenv()
 
 FREE_MEMBERSHIP = "free"
+TRIAL_PRO_MEMBERSHIP = "trial_pro"
 PRO_MEMBERSHIP = "pro"
+TRIAL_PRO_MEMBERSHIP_ALIASES = {
+    "trial",
+    "trialing",
+    "trial_pro",
+    "trial-pro",
+    "trialpro",
+    "trial pro",
+}
 PRO_MEMBERSHIP_ALIASES = {"pro", "paid", "premium", "plus", "simulation", "sim", "live"}
 ACTIVE_STRIPE_STATUSES = {"active", "trialing"}
+DEFAULT_TRIAL_DAYS = 7
 
 
 class CipherManager:
@@ -120,7 +130,9 @@ class SupabaseManager:
             return None
 
     def _normalize_membership_tier(self, value: Optional[str]) -> str:
-        normalized = str(value or FREE_MEMBERSHIP).strip().lower()
+        normalized = str(value or FREE_MEMBERSHIP).strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized in {item.replace("-", "_").replace(" ", "_") for item in TRIAL_PRO_MEMBERSHIP_ALIASES}:
+            return TRIAL_PRO_MEMBERSHIP
         return PRO_MEMBERSHIP if normalized in PRO_MEMBERSHIP_ALIASES else FREE_MEMBERSHIP
 
     def _membership_is_active(self, user: Dict[str, Any]) -> bool:
@@ -137,13 +149,19 @@ class SupabaseManager:
         tier = self._normalize_membership_tier(user.get("membership_tier"))
         if tier == FREE_MEMBERSHIP:
             return "free"
+        if tier == TRIAL_PRO_MEMBERSHIP:
+            return "trial_pro" if self._membership_is_active(user) else "trial_expired"
         return "active" if self._membership_is_active(user) else "expired"
 
     def _normalize_user_record(self, user: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         if not user:
             return user
 
-        user["membership_tier"] = self._normalize_membership_tier(user.get("membership_tier"))
+        normalized_tier = self._normalize_membership_tier(user.get("membership_tier"))
+        if str(user.get("stripe_subscription_status") or "").strip().lower() == "trialing" and normalized_tier == PRO_MEMBERSHIP:
+            normalized_tier = TRIAL_PRO_MEMBERSHIP
+
+        user["membership_tier"] = normalized_tier
         user["membership_expires_at"] = user.get("membership_expires_at")
         user["membership_status"] = self._membership_status(user)
         user["stripe_customer_id"] = user.get("stripe_customer_id")
@@ -179,6 +197,10 @@ class SupabaseManager:
             self._persist_user_update(telegram_id, update_payload)
 
         return normalized_user
+
+    def _trial_expiry(self, days: int = DEFAULT_TRIAL_DAYS) -> str:
+        safe_days = max(int(days or DEFAULT_TRIAL_DAYS), 1)
+        return (datetime.now(timezone.utc) + timedelta(days=safe_days)).isoformat()
 
     def _base_user_payload(self, telegram_id: int, username: str, first_name: str) -> Dict[str, Any]:
         return {
@@ -479,13 +501,14 @@ class SupabaseManager:
         status = self._membership_status(user)
         if self._is_complimentary_pro(telegram_id):
             status = "active"
+        paid_access = tier in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP} and status in {"trial_pro", "active"}
         return {
             "tier": tier,
             "status": status,
             "expires_at": user.get("membership_expires_at"),
             "can_backtest": True,
-            "can_simulation": tier == PRO_MEMBERSHIP and status == "active",
-            "can_live": tier == PRO_MEMBERSHIP and status == "active",
+            "can_simulation": paid_access,
+            "can_live": paid_access,
             "source": "complimentary" if self._is_complimentary_pro(telegram_id) else user.get("membership_source", "manual"),
         }
 
@@ -504,6 +527,22 @@ class SupabaseManager:
             return membership["can_live"]
         return False
 
+    def start_trial_membership(
+        self,
+        telegram_id: int,
+        *,
+        days: int = DEFAULT_TRIAL_DAYS,
+        username: str = "",
+        first_name: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        return self.set_membership(
+            telegram_id,
+            TRIAL_PRO_MEMBERSHIP,
+            expires_at=self._trial_expiry(days),
+            username=username,
+            first_name=first_name,
+        )
+
     def set_membership(
         self,
         telegram_id: int,
@@ -519,6 +558,8 @@ class SupabaseManager:
         normalized_tier = self._normalize_membership_tier(tier)
         if normalized_tier == FREE_MEMBERSHIP:
             expires_at = None
+        elif normalized_tier == TRIAL_PRO_MEMBERSHIP and not expires_at:
+            expires_at = self._trial_expiry()
         elif expires_at and self._parse_datetime(expires_at) is None:
             raise ValueError("expires_at must be an ISO datetime string")
 
@@ -643,10 +684,16 @@ class SupabaseManager:
         if period_end and self._parse_datetime(period_end) is None:
             raise ValueError("period_end must be an ISO datetime string")
 
+        normalized_subscription_status = str(subscription_status or "").strip().lower() or "active"
+        membership_tier = TRIAL_PRO_MEMBERSHIP if normalized_subscription_status == "trialing" else PRO_MEMBERSHIP
+        effective_period_end = period_end
+        if membership_tier == TRIAL_PRO_MEMBERSHIP and not effective_period_end:
+            effective_period_end = self._trial_expiry()
+
         update_payload = {
-            "membership_tier": PRO_MEMBERSHIP,
-            "membership_expires_at": period_end,
-            "stripe_subscription_status": subscription_status,
+            "membership_tier": membership_tier,
+            "membership_expires_at": effective_period_end,
+            "stripe_subscription_status": normalized_subscription_status,
             "updated_at": self._now(),
         }
         if customer_id is not None:
@@ -864,8 +911,9 @@ class SupabaseManager:
 
         recent_users = [self._apply_complimentary_override(dict(user), persist=False) for user in recent_users]
         free_users = sum(1 for user in recent_users if user.get("membership_tier") == FREE_MEMBERSHIP)
+        trial_users = sum(1 for user in recent_users if user.get("membership_tier") == TRIAL_PRO_MEMBERSHIP)
         pro_users = sum(1 for user in recent_users if user.get("membership_tier") == PRO_MEMBERSHIP)
-        expired_users = sum(1 for user in recent_users if user.get("membership_status") == "expired")
+        expired_users = sum(1 for user in recent_users if user.get("membership_status") in {"expired", "trial_expired"})
 
         return {
             "total": total_users,
@@ -873,6 +921,7 @@ class SupabaseManager:
             "unverified": max(total_users - verified_users, 0),
             "with_api_keys": api_key_users,
             "free": free_users,
+            "trial_pro": trial_users,
             "pro": pro_users,
             "expired": expired_users,
             "recent": recent_users[:limit],

@@ -1,419 +1,626 @@
 from __future__ import annotations
 
 
+PUBLIC_SITE_URL = "https://fancy-bot-front.lovable.app/"
+
+
 def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> str:
     auth_required_js = "true" if auth_required else "false"
     auth_hint = (
-        "Enter your FancyFinance API token to unlock live stats and controls."
+        "Enter your FancyFinance API token to unlock live stats, billing visibility, and engine controls."
         if auth_required
         else "API auth is disabled. Live stats and controls are available without a token."
     )
 
-    return f"""<!doctype html>
+    template = """<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{app_name} Dashboard</title>
+    <title>__APP_NAME__ Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
     <style>
-      :root {{
-        color-scheme: light;
-        --ink: #12212f;
-        --ink-soft: #43607a;
-        --paper: #f7f3eb;
-        --paper-strong: #fffdfa;
-        --panel: rgba(255, 255, 255, 0.78);
-        --panel-strong: rgba(255, 255, 255, 0.94);
-        --line: rgba(18, 33, 47, 0.12);
-        --accent: #0f7b6c;
-        --accent-strong: #0b5e53;
-        --danger: #b94b5a;
-        --warn: #ba7c12;
-        --shadow: 0 20px 50px rgba(16, 29, 42, 0.12);
-      }}
+      :root {
+        color-scheme: dark;
+        --background: hsl(220 20% 4%);
+        --background-soft: hsl(220 20% 6%);
+        --foreground: hsl(210 20% 92%);
+        --muted-foreground: hsl(215 12% 58%);
+        --card: hsl(220 18% 7%);
+        --card-soft: hsl(220 16% 10%);
+        --border: hsl(220 14% 14%);
+        --border-strong: rgba(49, 196, 110, 0.2);
+        --primary: hsl(145 60% 48%);
+        --primary-strong: hsl(145 65% 43%);
+        --accent: hsl(10 80% 65%);
+        --warning: #f0b44d;
+        --danger: #d45757;
+        --shadow-glow: 0 0 60px -12px hsl(145 60% 48% / 0.15);
+        --shadow-card: 0 18px 48px -20px rgba(0, 0, 0, 0.55);
+        --gradient-primary: linear-gradient(135deg, hsl(10 80% 65%), hsl(145 60% 48%));
+        --gradient-hero: radial-gradient(circle at top center, rgba(47, 208, 111, 0.08), transparent 42%), linear-gradient(180deg, hsl(220 20% 6%) 0%, hsl(220 20% 4%) 100%);
+      }
 
-      * {{
+      * {
         box-sizing: border-box;
-      }}
+      }
 
-      body {{
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
         margin: 0;
         min-height: 100vh;
-        font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-        color: var(--ink);
+        color: var(--foreground);
+        font-family: "Inter", sans-serif;
         background:
-          radial-gradient(circle at top left, rgba(15, 123, 108, 0.18), transparent 28%),
-          radial-gradient(circle at top right, rgba(185, 75, 90, 0.15), transparent 24%),
-          linear-gradient(180deg, #f3efe6 0%, #f9f7f2 100%);
-      }}
+          radial-gradient(circle at 20% 0%, rgba(47, 208, 111, 0.08), transparent 26%),
+          radial-gradient(circle at 80% 10%, rgba(237, 139, 99, 0.08), transparent 22%),
+          var(--gradient-hero);
+      }
 
-      .shell {{
-        width: min(1400px, calc(100% - 32px));
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        width: min(1380px, calc(100% - 32px));
         margin: 0 auto;
-        padding: 24px 0 48px;
-      }}
+        padding: 20px 0 48px;
+      }
 
-      .hero {{
+      .surface {
+        border: 1px solid var(--border);
+        background:
+          linear-gradient(180deg, rgba(16, 22, 20, 0.94), rgba(10, 14, 13, 0.98));
+        box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(18px);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 18px 22px;
+        border-radius: 20px;
+        margin-bottom: 18px;
+      }
+
+      .brand-lockup {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        color: hsl(220 20% 4%);
+        background: var(--gradient-primary);
+        box-shadow: var(--shadow-glow);
+      }
+
+      .brand-copy {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand-title {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        border-radius: 999px;
+        border: 1px solid rgba(49, 196, 110, 0.18);
+        background: rgba(16, 24, 20, 0.9);
+        color: var(--muted-foreground);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 8px 12px;
+      }
+
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--muted-foreground);
+        font-size: 14px;
+      }
+
+      .topnav a:hover {
+        color: var(--foreground);
+      }
+
+      .nav-cta {
+        padding: 12px 18px;
+        border-radius: 14px;
+        background: var(--primary);
+        color: hsl(220 20% 4%);
+        font-weight: 700;
+        box-shadow: 0 12px 32px -14px rgba(47, 208, 111, 0.8);
+      }
+
+      .hero {
         display: grid;
         grid-template-columns: 1.35fr 0.95fr;
         gap: 18px;
         margin-bottom: 18px;
-      }}
+      }
 
       .hero-card,
-      .panel {{
-        backdrop-filter: blur(14px);
-        background: var(--panel);
-        border: 1px solid var(--line);
+      .panel,
+      .auth-card {
         border-radius: 24px;
-        box-shadow: var(--shadow);
-      }}
+      }
 
-      .hero-card {{
+      .hero-card {
         padding: 28px;
-      }}
+      }
 
-      .brand {{
+      .hero-badges {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
         margin-bottom: 18px;
-      }}
+      }
 
-      .badge {{
+      .badge {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 12px;
+        padding: 10px 14px;
         border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--foreground);
         font-size: 13px;
         font-weight: 600;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid var(--line);
-      }}
+      }
 
-      .status-dot {{
+      .badge.subtle {
+        color: var(--muted-foreground);
+      }
+
+      .status-dot {
         width: 10px;
         height: 10px;
-        border-radius: 50%;
-        background: var(--warn);
-        box-shadow: 0 0 0 8px rgba(186, 124, 18, 0.12);
-      }}
+        border-radius: 999px;
+        background: var(--danger);
+        box-shadow: 0 0 0 8px rgba(212, 87, 87, 0.14);
+      }
 
-      .status-dot.live {{
-        background: var(--accent);
-        box-shadow: 0 0 0 8px rgba(15, 123, 108, 0.12);
-      }}
+      .status-dot.live {
+        background: var(--primary);
+        box-shadow: 0 0 0 8px rgba(47, 208, 111, 0.14);
+      }
 
-      h1, h2, h3 {{
+      .status-dot.paused {
+        background: var(--warning);
+        box-shadow: 0 0 0 8px rgba(240, 180, 77, 0.14);
+      }
+
+      h1,
+      h2,
+      h3 {
         margin: 0;
-        letter-spacing: -0.03em;
-      }}
+        font-family: "Space Grotesk", sans-serif;
+        letter-spacing: -0.04em;
+      }
 
-      h1 {{
-        font-size: clamp(32px, 4vw, 48px);
-        line-height: 0.95;
-      }}
+      h1 {
+        font-size: clamp(38px, 5vw, 68px);
+        line-height: 0.98;
+        max-width: 860px;
+      }
 
-      .subtitle {{
-        margin-top: 14px;
-        color: var(--ink-soft);
-        font-size: 16px;
-        line-height: 1.5;
-        max-width: 720px;
-      }}
+      .gradient-text {
+        background: var(--gradient-primary);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
 
-      .hero-grid {{
+      .subtitle {
+        margin-top: 16px;
+        max-width: 760px;
+        color: var(--muted-foreground);
+        font-size: 18px;
+        line-height: 1.6;
+      }
+
+      .hero-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .link-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 46px;
+        padding: 0 18px;
+        border-radius: 14px;
+        font-weight: 700;
+        transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+      }
+
+      .link-btn:hover,
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      .link-btn.primary {
+        background: var(--primary);
+        color: hsl(220 20% 4%);
+        box-shadow: 0 18px 36px -18px rgba(47, 208, 111, 0.7);
+      }
+
+      .link-btn.secondary {
+        border: 1px solid rgba(49, 196, 110, 0.2);
+        color: var(--foreground);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .hero-grid,
+      .list-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 14px;
         margin-top: 24px;
-      }}
+      }
 
-      .metric {{
-        padding: 16px;
+      .metric,
+      .mini-card {
+        position: relative;
+        overflow: hidden;
+        padding: 18px;
         border-radius: 18px;
-        background: var(--panel-strong);
-        border: 1px solid var(--line);
-      }}
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: linear-gradient(180deg, rgba(23, 31, 28, 0.92), rgba(14, 19, 18, 0.98));
+      }
 
-      .metric-label {{
+      .metric::before,
+      .mini-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 100%;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(237, 139, 99, 0.32), rgba(47, 208, 111, 0.28));
+      }
+
+      .metric-label,
+      .mini-card .label {
         display: block;
-        color: var(--ink-soft);
-        font-size: 12px;
+        color: var(--muted-foreground);
+        font-size: 11px;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }}
+        letter-spacing: 0.12em;
+      }
 
-      .metric-value {{
+      .metric-value,
+      .mini-card .value {
         display: block;
-        margin-top: 8px;
-        font-size: 30px;
-        font-weight: 700;
-      }}
+        margin-top: 10px;
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1;
+      }
 
-      .auth-card {{
+      .auth-card,
+      .panel {
         padding: 24px;
+      }
+
+      .auth-card {
         display: flex;
         flex-direction: column;
         gap: 14px;
-      }}
+      }
 
-      .field-label {{
-        color: var(--ink-soft);
-        font-size: 13px;
-        font-weight: 600;
-      }}
-
-      input {{
-        width: 100%;
-        border: 1px solid rgba(18, 33, 47, 0.18);
-        background: rgba(255, 255, 255, 0.92);
-        color: var(--ink);
-        border-radius: 16px;
-        padding: 14px 16px;
-        font-size: 15px;
-        outline: none;
-      }}
-
-      input:focus {{
-        border-color: rgba(15, 123, 108, 0.65);
-        box-shadow: 0 0 0 4px rgba(15, 123, 108, 0.12);
-      }}
-
-      .button-row {{
+      .panel-header {
         display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }}
-
-      button {{
-        appearance: none;
-        border: none;
-        border-radius: 14px;
-        padding: 12px 16px;
-        font: inherit;
-        font-weight: 700;
-        cursor: pointer;
-        transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
-      }}
-
-      button:hover {{
-        transform: translateY(-1px);
-      }}
-
-      button.primary {{
-        background: var(--ink);
-        color: white;
-      }}
-
-      button.secondary {{
-        background: rgba(18, 33, 47, 0.08);
-        color: var(--ink);
-      }}
-
-      button.success {{
-        background: var(--accent);
-        color: white;
-      }}
-
-      button.warning {{
-        background: #d6ab48;
-        color: #2a210f;
-      }}
-
-      button.danger {{
-        background: var(--danger);
-        color: white;
-      }}
-
-      .message {{
-        min-height: 22px;
-        font-size: 14px;
-        color: var(--ink-soft);
-      }}
-
-      .message.error {{
-        color: var(--danger);
-      }}
-
-      .content-grid {{
-        display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
-        gap: 18px;
-      }}
-
-      .stack {{
-        display: grid;
-        gap: 18px;
-      }}
-
-      .panel {{
-        padding: 22px;
-      }}
-
-      .panel-header {{
-        display: flex;
-        align-items: center;
+        align-items: start;
         justify-content: space-between;
         gap: 16px;
         margin-bottom: 18px;
-      }}
+      }
 
-      .panel-title {{
-        font-size: 22px;
-      }}
+      .panel-title {
+        font-size: 24px;
+      }
 
-      .panel-subtitle {{
-        color: var(--ink-soft);
+      .panel-subtitle {
+        color: var(--muted-foreground);
         font-size: 14px;
-      }}
+        line-height: 1.5;
+        margin-top: 6px;
+      }
 
-      .chips {{
+      .field-label {
+        color: var(--muted-foreground);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(12, 17, 15, 0.96);
+        color: var(--foreground);
+        padding: 14px 16px;
+        font-size: 15px;
+        outline: none;
+        transition: border-color 140ms ease, box-shadow 140ms ease;
+      }
+
+      input::placeholder {
+        color: color-mix(in srgb, var(--muted-foreground) 75%, transparent);
+      }
+
+      input:focus {
+        border-color: rgba(47, 208, 111, 0.45);
+        box-shadow: 0 0 0 4px rgba(47, 208, 111, 0.12);
+      }
+
+      .button-row {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
-      }}
+      }
 
-      .chip {{
+      button {
+        appearance: none;
+        border: none;
+        border-radius: 14px;
+        min-height: 46px;
+        padding: 0 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 140ms ease, opacity 140ms ease, background 140ms ease, border-color 140ms ease;
+      }
+
+      button.primary,
+      button.success {
+        background: var(--primary);
+        color: hsl(220 20% 4%);
+        box-shadow: 0 18px 36px -18px rgba(47, 208, 111, 0.7);
+      }
+
+      button.secondary {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--foreground);
+      }
+
+      button.warning {
+        background: rgba(240, 180, 77, 0.12);
+        color: #ffd892;
+        border: 1px solid rgba(240, 180, 77, 0.25);
+      }
+
+      button.danger {
+        background: rgba(212, 87, 87, 0.12);
+        color: #ffb1b1;
+        border: 1px solid rgba(212, 87, 87, 0.25);
+      }
+
+      .message {
+        min-height: 22px;
+        font-size: 14px;
+        color: var(--muted-foreground);
+      }
+
+      .message.error {
+        color: #ff9d9d;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: 1.16fr 0.84fr;
+        gap: 18px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .chip {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         padding: 10px 12px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid var(--line);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
         font-size: 13px;
-      }}
+        color: var(--foreground);
+      }
 
-      .chip strong {{
-        font-size: 12px;
-        letter-spacing: 0.05em;
+      .chip strong {
+        font-size: 11px;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: var(--ink-soft);
-      }}
+        color: var(--muted-foreground);
+      }
 
-      .list-grid {{
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-      }}
+      .chip.good {
+        border-color: rgba(47, 208, 111, 0.2);
+      }
 
-      .mini-card {{
-        padding: 16px;
-        border-radius: 18px;
-        background: var(--panel-strong);
-        border: 1px solid var(--line);
-      }}
+      .chip.warn {
+        border-color: rgba(240, 180, 77, 0.22);
+      }
 
-      .mini-card .label {{
-        color: var(--ink-soft);
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }}
+      .chip.bad {
+        border-color: rgba(212, 87, 87, 0.22);
+      }
 
-      .mini-card .value {{
-        margin-top: 8px;
-        font-size: 22px;
-        font-weight: 700;
-      }}
+      .table-shell {
+        overflow-x: auto;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(12, 17, 15, 0.72);
+      }
 
-      table {{
+      table {
         width: 100%;
         border-collapse: collapse;
-      }}
+      }
 
-      th, td {{
+      th,
+      td {
+        padding: 13px 12px;
         text-align: left;
-        padding: 12px 10px;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         font-size: 14px;
         vertical-align: top;
-      }}
+      }
 
-      th {{
-        color: var(--ink-soft);
-        font-size: 12px;
+      th {
+        color: var(--muted-foreground);
+        font-size: 11px;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }}
+        letter-spacing: 0.12em;
+      }
 
-      tr:last-child td {{
+      tbody tr:hover {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      tr:last-child td {
         border-bottom: none;
-      }}
+      }
 
-      .empty {{
-        padding: 20px;
+      .empty {
+        padding: 22px;
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.68);
-        color: var(--ink-soft);
+        border: 1px dashed var(--border);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--muted-foreground);
         text-align: center;
-        border: 1px dashed rgba(18, 33, 47, 0.15);
-      }}
+      }
 
-      .footer-note {{
-        margin-top: 18px;
-        color: var(--ink-soft);
+      .footer-note {
+        margin-top: 16px;
+        color: var(--muted-foreground);
         font-size: 13px;
-      }}
+      }
 
-      @media (max-width: 1120px) {{
+      @media (max-width: 1120px) {
         .hero,
-        .content-grid {{
+        .content-grid {
           grid-template-columns: 1fr;
-        }}
-      }}
+        }
+      }
 
-      @media (max-width: 780px) {{
-        .shell {{
-          width: min(100% - 20px, 1400px);
-          padding-top: 14px;
-        }}
+      @media (max-width: 860px) {
+        .hero-grid,
+        .list-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .topnav {
+          width: 100%;
+          flex-wrap: wrap;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          width: min(100% - 18px, 1380px);
+          padding-top: 12px;
+        }
 
         .hero-card,
         .auth-card,
-        .panel {{
+        .panel,
+        .topbar {
           padding: 18px;
-          border-radius: 20px;
-        }}
+          border-radius: 18px;
+        }
 
         .hero-grid,
-        .list-grid {{
-          grid-template-columns: 1fr 1fr;
-        }}
-      }}
-
-      @media (max-width: 560px) {{
-        .hero-grid,
-        .list-grid {{
+        .list-grid {
           grid-template-columns: 1fr;
-        }}
+        }
 
-        .brand,
-        .panel-header {{
+        .panel-header {
           flex-direction: column;
           align-items: flex-start;
-        }}
-      }}
+        }
+      }
     </style>
   </head>
   <body>
     <div class="shell">
-      <section class="hero">
-        <div class="hero-card">
-          <div class="brand">
-            <div>
-              <div class="badge"><span class="status-dot" id="hero-status-dot"></span><span id="hero-status-text">Awaiting live data</span></div>
-            </div>
-            <div class="badge">{app_name} v{version}</div>
+      <header class="topbar surface">
+        <div class="brand-lockup">
+          <div class="brand-mark">F</div>
+          <div class="brand-copy">
+            <div class="eyebrow">Telegram-first algorithmic trading</div>
+            <div class="brand-title">__APP_NAME__ Control Center</div>
           </div>
-          <h1>{app_name} Control Center</h1>
+        </div>
+        <nav class="topnav">
+          <a href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">Public Site</a>
+          <a href="#control-panel">Controls</a>
+          <a href="#runtime-panel">Runtime</a>
+          <a href="#users-panel">Members</a>
+          <a class="nav-cta" href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">FancyFinance Hub</a>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <div class="hero-card surface">
+          <div class="hero-badges">
+            <div class="badge"><span class="status-dot" id="hero-status-dot"></span><span id="hero-status-text">Awaiting live data</span></div>
+            <div class="badge subtle">__APP_NAME__ v__VERSION__</div>
+          </div>
+          <div class="eyebrow">Operations dashboard</div>
+          <h1>Algorithmic trading,<br /><span class="gradient-text">tuned for live control</span></h1>
           <p class="subtitle">
-            One place for engine health, live trading state, user growth, email setup, and fast controls.
-            This dashboard rides on the same FastAPI service already running on Railway.
+            The same Railway-hosted control plane behind FancyFinance, now styled to match the new public site and built for fast operator decisions.
           </p>
+          <div class="hero-links">
+            <a class="link-btn primary" href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">Open Public Site</a>
+            <a class="link-btn secondary" href="#control-panel">Jump to Controls</a>
+          </div>
           <div class="hero-grid">
             <div class="metric">
               <span class="metric-label">Balance</span>
@@ -434,10 +641,11 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
           </div>
         </div>
 
-        <div class="hero-card auth-card">
+        <aside class="auth-card surface">
           <div>
-            <h2 class="panel-title">Secure Access</h2>
-            <p class="panel-subtitle">{auth_hint}</p>
+            <div class="eyebrow">Secure Access</div>
+            <h2 class="panel-title" style="margin-top: 14px;">Unlock live controls</h2>
+            <p class="panel-subtitle">__AUTH_HINT__</p>
           </div>
           <label class="field-label" for="api-token">API Token</label>
           <input id="api-token" type="password" placeholder="Paste FANCYFINANCE_API_TOKEN" />
@@ -447,19 +655,19 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             <button class="secondary" id="refresh-btn">Refresh Now</button>
           </div>
           <div class="message" id="auth-message"></div>
-          <div class="footer-note">Auto-refresh runs every 10 seconds while the tab is open.</div>
-        </div>
+          <div class="footer-note">Auto-refresh runs every 10 seconds while this tab is visible.</div>
+        </aside>
       </section>
 
       <section class="content-grid">
         <div class="stack">
-          <div class="panel">
+          <div class="panel surface" id="control-panel">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Live Controls</h2>
                 <div class="panel-subtitle">Direct engine actions protected by the same API token.</div>
               </div>
-              <div class="badge" id="mode-badge">Mode: --</div>
+              <div class="badge subtle" id="mode-badge">Mode: --</div>
             </div>
             <div class="button-row">
               <button class="warning" id="pause-btn">Pause Engine</button>
@@ -469,7 +677,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             <div class="message" id="control-message"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel surface" id="runtime-panel">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Runtime Snapshot</h2>
@@ -497,17 +705,17 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             <div class="footer-note" id="runtime-note">Waiting for runtime data.</div>
           </div>
 
-          <div class="panel">
+          <div class="panel surface">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Open Positions</h2>
-                <div class="panel-subtitle">Current exposure across all active symbols.</div>
+                <div class="panel-subtitle">Current exposure across active symbols.</div>
               </div>
             </div>
             <div id="positions-wrap"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel surface">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Recent Trades</h2>
@@ -519,7 +727,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
         </div>
 
         <div class="stack">
-          <div class="panel">
+          <div class="panel surface">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Setup Status</h2>
@@ -529,7 +737,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             <div class="chips" id="setup-chips"></div>
           </div>
 
-          <div class="panel">
+          <div class="panel surface">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Performance</h2>
@@ -556,11 +764,11 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel surface" id="users-panel">
             <div class="panel-header">
               <div>
-                <h2 class="panel-title">Users</h2>
-                <div class="panel-subtitle">Signup and verification visibility from Supabase.</div>
+                <h2 class="panel-title">Members</h2>
+                <div class="panel-subtitle">Signup, billing, and verification visibility from Supabase.</div>
               </div>
             </div>
             <div class="list-grid">
@@ -585,6 +793,10 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
                 <div class="value" id="users-free">--</div>
               </div>
               <div class="mini-card">
+                <div class="label">Trial Pro</div>
+                <div class="value" id="users-trial-pro">--</div>
+              </div>
+              <div class="mini-card">
                 <div class="label">Pro</div>
                 <div class="value" id="users-pro">--</div>
               </div>
@@ -600,89 +812,114 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
     </div>
 
     <script>
-      const AUTH_REQUIRED = {auth_required_js};
+      const AUTH_REQUIRED = __AUTH_REQUIRED_JS__;
       const TOKEN_KEY = "fancyfinance_api_token";
-      const state = {{
+      const state = {
         token: localStorage.getItem(TOKEN_KEY) || "",
-      }};
+      };
 
-      const els = {{
+      const els = {
         tokenInput: document.getElementById("api-token"),
         authMessage: document.getElementById("auth-message"),
         controlMessage: document.getElementById("control-message"),
         statusDot: document.getElementById("hero-status-dot"),
         statusText: document.getElementById("hero-status-text"),
         modeBadge: document.getElementById("mode-badge"),
-      }};
+      };
 
       els.tokenInput.value = state.token;
 
-      function escapeHtml(value) {{
+      function escapeHtml(value) {
         return String(value ?? "")
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#039;");
-      }}
+      }
 
-      function setText(id, value) {{
+      function setText(id, value) {
         const node = document.getElementById(id);
-        if (node) {{
+        if (node) {
           node.textContent = value;
-        }}
-      }}
+        }
+      }
 
-      function formatMoney(value) {{
-        if (value === null || value === undefined || Number.isNaN(Number(value))) {{
+      function formatMoney(value) {
+        if (value === null || value === undefined || Number.isNaN(Number(value))) {
           return "--";
-        }}
+        }
         const numeric = Number(value);
-        return numeric.toLocaleString(undefined, {{
+        return numeric.toLocaleString(undefined, {
           style: "currency",
           currency: "USD",
           maximumFractionDigits: 2,
-        }});
-      }}
+        });
+      }
 
-      function formatMaybeNumber(value, digits = 2) {{
-        if (value === null || value === undefined || Number.isNaN(Number(value))) {{
+      function formatMaybeNumber(value, digits = 2) {
+        if (value === null || value === undefined || Number.isNaN(Number(value))) {
           return "--";
-        }}
-        return Number(value).toLocaleString(undefined, {{
+        }
+        return Number(value).toLocaleString(undefined, {
           minimumFractionDigits: 0,
           maximumFractionDigits: digits,
-        }});
-      }}
+        });
+      }
 
-      function formatTimestamp(value) {{
-        if (!value) {{
+      function formatTimestamp(value) {
+        if (!value) {
           return "--";
-        }}
+        }
         const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {{
+        if (Number.isNaN(date.getTime())) {
           return String(value);
-        }}
+        }
         return date.toLocaleString();
-      }}
+      }
 
-      function headers() {{
-        const result = {{}};
-        if (AUTH_REQUIRED) {{
-          if (!state.token) {{
+      function humanizeMembership(value) {
+        const normalized = String(value || "").trim();
+        if (!normalized) {
+          return "--";
+        }
+        return normalized
+          .replaceAll("_", " ")
+          .replaceAll("-", " ")
+          .replace(/\\b\\w/g, (char) => char.toUpperCase());
+      }
+
+      function headers() {
+        const result = {};
+        if (AUTH_REQUIRED) {
+          if (!state.token) {
             throw new Error("Missing API token");
-          }}
+          }
           result["x-api-key"] = state.token;
-        }}
+        }
         return result;
-      }}
+      }
 
-      function setMessage(node, text, isError = false) {{
+      function setMessage(node, text, isError = false) {
         node.textContent = text;
         node.className = isError ? "message error" : "message";
-      }}
+      }
 
-      function renderSetup(config) {{
+      function toneForStatus(value) {
+        const normalized = String(value || "").toLowerCase();
+        if (normalized.includes("missing") || normalized.includes("offline") || normalized.includes("invalid")) {
+          return "bad";
+        }
+        if (normalized.includes("configured") || normalized.includes("connected") || normalized.includes("enabled") || normalized === "on") {
+          return "good";
+        }
+        if (normalized.includes("disabled") || normalized.includes("unknown")) {
+          return "warn";
+        }
+        return "";
+      }
+
+      function renderSetup(config) {
         const chips = [
           ["Supabase", config.supabase_connected ? "Connected" : (config.supabase_configured ? "Configured, offline" : "Missing")],
           ["Encryption", config.encryption_status || "unknown"],
@@ -692,236 +929,249 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
           ["Stripe Checkout", config.stripe_checkout_configured ? "Configured" : "Missing"],
           ["Stripe Webhook", config.stripe_webhook_configured ? "Configured" : "Missing"],
           ["Stripe Portal", config.stripe_portal_configured ? "Configured" : "Missing"],
-          ["Scan Scope", config.scan_all_symbols ? `All ${{
-            config.market_type || "markets"
-          }}` : "Configured list"],
+          ["Scan Scope", config.scan_all_symbols ? `All ${config.market_type || "markets"}` : "Configured list"],
           ["Timeframe", config.timeframe || "--"],
           ["Testnet", config.testnet ? "On" : "Off"],
         ];
 
         document.getElementById("setup-chips").innerHTML = chips
-          .map(([label, value]) => `<div class="chip"><strong>${{escapeHtml(label)}}</strong><span>${{escapeHtml(value)}}</span></div>`)
+          .map(([label, value]) => `<div class="chip ${toneForStatus(value)}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`)
           .join("");
-      }}
+      }
 
-      function renderPositions(positions) {{
+      function renderPositions(positions) {
         const wrap = document.getElementById("positions-wrap");
-        if (!positions || !positions.length) {{
+        if (!positions || !positions.length) {
           wrap.innerHTML = '<div class="empty">No open positions right now.</div>';
           return;
-        }}
+        }
 
         wrap.innerHTML = `
-          <table>
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Direction</th>
-                <th>Entry</th>
-                <th>Qty</th>
-                <th>Stop</th>
-                <th>Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${{
-                positions.map((position) => `
-                  <tr>
-                    <td>${{escapeHtml(position.symbol)}}</td>
-                    <td>${{escapeHtml(position.direction)}}</td>
-                    <td>${{formatMaybeNumber(position.entry_price, 4)}}</td>
-                    <td>${{formatMaybeNumber(position.quantity, 4)}}</td>
-                    <td>${{formatMaybeNumber(position.stop_loss, 4)}}</td>
-                    <td>${{formatMaybeNumber(position.take_profit, 4)}}</td>
-                  </tr>
-                `).join("")
-              }}
-            </tbody>
-          </table>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Direction</th>
+                  <th>Entry</th>
+                  <th>Qty</th>
+                  <th>Stop</th>
+                  <th>Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  positions.map((position) => `
+                    <tr>
+                      <td>${escapeHtml(position.symbol)}</td>
+                      <td>${escapeHtml(position.direction)}</td>
+                      <td>${formatMaybeNumber(position.entry_price, 4)}</td>
+                      <td>${formatMaybeNumber(position.quantity, 4)}</td>
+                      <td>${formatMaybeNumber(position.stop_loss, 4)}</td>
+                      <td>${formatMaybeNumber(position.take_profit, 4)}</td>
+                    </tr>
+                  `).join("")
+                }
+              </tbody>
+            </table>
+          </div>
         `;
-      }}
+      }
 
-      function renderTrades(trades) {{
+      function renderTrades(trades) {
         const wrap = document.getElementById("trades-wrap");
-        if (!trades || !trades.length) {{
+        if (!trades || !trades.length) {
           wrap.innerHTML = '<div class="empty">No trades logged yet.</div>';
           return;
-        }}
+        }
 
         wrap.innerHTML = `
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Symbol</th>
-                <th>Type</th>
-                <th>Direction</th>
-                <th>Price</th>
-                <th>Qty</th>
-                <th>PnL</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${{
-                trades.map((trade) => `
-                  <tr>
-                    <td>${{escapeHtml(formatTimestamp(trade.created_at || trade.timestamp))}}</td>
-                    <td>${{escapeHtml(trade.symbol)}}</td>
-                    <td>${{escapeHtml(trade.type || "--")}}</td>
-                    <td>${{escapeHtml(trade.direction || "--")}}</td>
-                    <td>${{formatMaybeNumber(trade.price, 4)}}</td>
-                    <td>${{formatMaybeNumber(trade.qty, 4)}}</td>
-                    <td>${{formatMaybeNumber(trade.pnl, 2)}}</td>
-                  </tr>
-                `).join("")
-              }}
-            </tbody>
-          </table>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Symbol</th>
+                  <th>Type</th>
+                  <th>Direction</th>
+                  <th>Price</th>
+                  <th>Qty</th>
+                  <th>PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  trades.map((trade) => `
+                    <tr>
+                      <td>${escapeHtml(formatTimestamp(trade.created_at || trade.timestamp))}</td>
+                      <td>${escapeHtml(trade.symbol)}</td>
+                      <td>${escapeHtml(trade.type || "--")}</td>
+                      <td>${escapeHtml(trade.direction || "--")}</td>
+                      <td>${formatMaybeNumber(trade.price, 4)}</td>
+                      <td>${formatMaybeNumber(trade.qty, 4)}</td>
+                      <td>${formatMaybeNumber(trade.pnl, 2)}</td>
+                    </tr>
+                  `).join("")
+                }
+              </tbody>
+            </table>
+          </div>
         `;
-      }}
+      }
 
-      function renderUsers(summary) {{
+      function renderUsers(summary) {
         setText("users-total", formatMaybeNumber(summary.total, 0));
         setText("users-verified", formatMaybeNumber(summary.verified, 0));
         setText("users-unverified", formatMaybeNumber(summary.unverified, 0));
         setText("users-api-keys", formatMaybeNumber(summary.with_api_keys, 0));
         setText("users-free", formatMaybeNumber(summary.free, 0));
+        setText("users-trial-pro", formatMaybeNumber(summary.trial_pro, 0));
         setText("users-pro", formatMaybeNumber(summary.pro, 0));
         setText("users-expired", formatMaybeNumber(summary.expired, 0));
 
         const wrap = document.getElementById("users-wrap");
         const users = summary.recent || [];
-        if (!users.length) {{
+        if (!users.length) {
           wrap.innerHTML = '<div class="empty">No users recorded yet.</div>';
           return;
-        }}
+        }
 
         wrap.innerHTML = `
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Email</th>
-                <th>Verification</th>
-                <th>Plan</th>
-                <th>Membership</th>
-                <th>Joined</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${{
-                users.map((user) => `
-                  <tr>
-                    <td>
-                      <strong>${{escapeHtml(user.first_name || user.username || user.telegram_id || "Unknown")}}</strong><br />
-                      <span style="color: var(--ink-soft);">@${{escapeHtml(user.username || "n/a")}}</span>
-                    </td>
-                    <td>${{escapeHtml(user.email || user.pending_email || "Not set")}}</td>
-                    <td>${{user.is_verified ? "Verified" : "Pending"}}</td>
-                    <td>${{escapeHtml((user.membership_tier || "free").toUpperCase())}}</td>
-                    <td>${{escapeHtml(user.membership_status || "free")}}</td>
-                    <td>${{escapeHtml(formatTimestamp(user.created_at))}}</td>
-                  </tr>
-                `).join("")
-              }}
-            </tbody>
-          </table>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Verification</th>
+                  <th>Plan</th>
+                  <th>Membership</th>
+                  <th>Joined</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  users.map((user) => `
+                    <tr>
+                      <td>
+                        <strong>${escapeHtml(user.first_name || user.username || user.telegram_id || "Unknown")}</strong><br />
+                        <span style="color: var(--muted-foreground);">@${escapeHtml(user.username || "n/a")}</span>
+                      </td>
+                      <td>${escapeHtml(user.email || user.pending_email || "Not set")}</td>
+                      <td>${user.is_verified ? "Verified" : "Pending"}</td>
+                      <td>${escapeHtml(humanizeMembership(user.membership_tier || "free"))}</td>
+                      <td>${escapeHtml(humanizeMembership(user.membership_status || "free"))}</td>
+                      <td>${escapeHtml(formatTimestamp(user.created_at))}</td>
+                    </tr>
+                  `).join("")
+                }
+              </tbody>
+            </table>
+          </div>
         `;
-      }}
+      }
 
-      function renderData(payload) {{
-        const snapshot = payload.snapshot || {{}};
-        const performance = payload.performance || {{}};
-        const runtime = payload.runtime || {{}};
-        const config = payload.config || {{}};
+      function renderData(payload) {
+        const snapshot = payload.snapshot || {};
+        const performance = payload.performance || {};
+        const runtime = payload.runtime || {};
+        const config = payload.config || {};
 
         setText("metric-balance", formatMoney(snapshot.balance));
         setText("metric-positions", formatMaybeNumber(snapshot.open_positions, 0));
         setText("metric-pnl", formatMoney(performance.realized_pnl));
-        setText("metric-users", formatMaybeNumber((payload.users || {{}}).total, 0));
+        setText("metric-users", formatMaybeNumber((payload.users || {}).total, 0));
         setText("perf-wins", formatMaybeNumber(performance.wins, 0));
         setText("perf-losses", formatMaybeNumber(performance.losses, 0));
-        setText("perf-rate", performance.win_rate !== undefined ? `${{formatMaybeNumber(performance.win_rate, 1)}}%` : "--");
+        setText("perf-rate", performance.win_rate !== undefined ? `${formatMaybeNumber(performance.win_rate, 1)}%` : "--");
         setText("perf-count", formatMaybeNumber(snapshot.trade_count, 0));
         setText("runtime-engine", runtime.engine_status || "--");
         setText("runtime-websocket", runtime.websocket_connected ? "Connected" : "Offline");
         setText("runtime-queue", formatMaybeNumber(runtime.command_queue_depth, 0));
         setText("runtime-symbols", formatMaybeNumber(snapshot.symbol_count || (snapshot.symbols || []).length, 0));
-        setText("runtime-note", runtime.safety_pause_remaining_seconds > 0
-          ? `Safety pause active for another ${{Math.ceil(runtime.safety_pause_remaining_seconds / 60)}} minute(s).`
-          : `Last refresh: ${{formatTimestamp(snapshot.timestamp)}}`);
+        setText(
+          "runtime-note",
+          runtime.safety_pause_remaining_seconds > 0
+            ? `Safety pause active for another ${Math.ceil(runtime.safety_pause_remaining_seconds / 60)} minute(s).`
+            : `Last refresh: ${formatTimestamp(snapshot.timestamp)}`
+        );
 
-        els.modeBadge.textContent = `Mode: ${{snapshot.mode || "--"}}`;
+        els.modeBadge.textContent = `Mode: ${snapshot.mode || "--"}`;
+        els.statusDot.classList.remove("live", "paused");
+        if (snapshot.running && snapshot.paused) {
+          els.statusDot.classList.add("paused");
+        } else if (snapshot.running) {
+          els.statusDot.classList.add("live");
+        }
         els.statusText.textContent = snapshot.running ? (snapshot.paused ? "Running, but paused" : "Engine live") : "Engine stopped";
-        els.statusDot.classList.toggle("live", Boolean(snapshot.running));
 
         renderSetup(config);
         renderPositions(payload.positions || []);
         renderTrades(payload.recent_trades || []);
-        renderUsers(payload.users || {{}});
-      }}
+        renderUsers(payload.users || {});
+      }
 
-      async function loadDashboard() {{
-        try {{
-          const response = await fetch("/dashboard/data", {{
+      async function loadDashboard() {
+        try {
+          const response = await fetch("/dashboard/data", {
             headers: headers(),
-          }});
+          });
 
-          if (response.status === 401) {{
+          if (response.status === 401) {
             setMessage(els.authMessage, "Dashboard locked. Add a valid API token.", true);
             return;
-          }}
+          }
 
-          if (!response.ok) {{
-            throw new Error(`Dashboard request failed: ${{response.status}}`);
-          }}
+          if (!response.ok) {
+            throw new Error(`Dashboard request failed: ${response.status}`);
+          }
 
           const payload = await response.json();
           setMessage(els.authMessage, AUTH_REQUIRED ? "Dashboard unlocked." : "Dashboard is live.");
           renderData(payload);
-        }} catch (error) {{
+        } catch (error) {
           setMessage(els.authMessage, error.message || "Could not load dashboard.", true);
-        }}
-      }}
+        }
+      }
 
-      async function runControl(action) {{
+      async function runControl(action) {
         const requiresConfirm = action === "shutdown";
-        if (requiresConfirm && !window.confirm("Shut the engine down now?")) {{
+        if (requiresConfirm && !window.confirm("Shut the engine down now?")) {
           return;
-        }}
+        }
 
-        try {{
-          const response = await fetch(`/control/${{action}}`, {{
+        try {
+          const response = await fetch(`/control/${action}`, {
             method: "POST",
             headers: headers(),
-          }});
+          });
           const payload = await response.json();
-          if (!response.ok) {{
-            throw new Error(payload.detail || `Control failed: ${{response.status}}`);
-          }}
-          setMessage(els.controlMessage, `Engine action complete: ${{payload.status}}.`);
+          if (!response.ok) {
+            throw new Error(payload.detail || `Control failed: ${response.status}`);
+          }
+          setMessage(els.controlMessage, `Engine action complete: ${payload.status}.`);
           await loadDashboard();
-        }} catch (error) {{
+        } catch (error) {
           setMessage(els.controlMessage, error.message || "Control action failed.", true);
-        }}
-      }}
+        }
+      }
 
-      document.getElementById("save-token-btn").addEventListener("click", async () => {{
+      document.getElementById("save-token-btn").addEventListener("click", async () => {
         state.token = els.tokenInput.value.trim();
-        if (state.token) {{
+        if (state.token) {
           localStorage.setItem(TOKEN_KEY, state.token);
-        }} else {{
+        } else {
           localStorage.removeItem(TOKEN_KEY);
-        }}
+        }
         await loadDashboard();
-      }});
+      });
 
-      document.getElementById("clear-token-btn").addEventListener("click", () => {{
+      document.getElementById("clear-token-btn").addEventListener("click", () => {
         state.token = "";
         els.tokenInput.value = "";
         localStorage.removeItem(TOKEN_KEY);
         setMessage(els.authMessage, "Stored token cleared.");
-      }});
+      });
 
       document.getElementById("refresh-btn").addEventListener("click", loadDashboard);
       document.getElementById("pause-btn").addEventListener("click", () => runControl("pause"));
@@ -929,12 +1179,21 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
       document.getElementById("shutdown-btn").addEventListener("click", () => runControl("shutdown"));
 
       loadDashboard();
-      window.setInterval(() => {{
-        if (document.visibilityState === "visible") {{
+      window.setInterval(() => {
+        if (document.visibilityState === "visible") {
           loadDashboard();
-        }}
-      }}, 10000);
+        }
+      }, 10000);
     </script>
   </body>
 </html>
 """
+
+    return (
+        template
+        .replace("__APP_NAME__", app_name)
+        .replace("__VERSION__", version)
+        .replace("__AUTH_HINT__", auth_hint)
+        .replace("__AUTH_REQUIRED_JS__", auth_required_js)
+        .replace("__PUBLIC_SITE__", PUBLIC_SITE_URL)
+    )

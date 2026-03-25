@@ -1,4 +1,4 @@
-from supabase_client import PRO_MEMBERSHIP, SupabaseManager
+from supabase_client import PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
 
 
 def test_complimentary_pro_env_grants_paid_access(monkeypatch):
@@ -84,3 +84,20 @@ def test_zero_knowledge_vault_rejects_wrong_passphrase(monkeypatch):
         exchange="phemex",
     )
     assert creds is None
+
+
+def test_start_trial_membership_grants_trial_pro_access(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    db = SupabaseManager()
+    db.start_trial_membership(12345, days=7, username="tester", first_name="Test")
+
+    summary = db.get_membership_summary(12345, "tester", "Test")
+
+    assert summary is not None
+    assert summary["tier"] == TRIAL_PRO_MEMBERSHIP
+    assert summary["status"] == "trial_pro"
+    assert summary["can_simulation"] is True
+    assert summary["can_live"] is True
+    assert summary["expires_at"] is not None

@@ -14,6 +14,7 @@ from telegram_bot import (
     unlock_api_command,
     subscribe_command,
     manage_subscription_command,
+    plans_command,
 )
 import telegram_bot # to get global variables if needed
 
@@ -209,6 +210,7 @@ async def test_subscribe_command_returns_checkout_url(mock_update, mock_context,
         "stripe": {
             "secret_key": "sk_test_123",
             "price_id": "price_123",
+            "trial_days": 7,
             "success_url": "https://example.com/success",
             "cancel_url": "https://example.com/cancel",
         },
@@ -223,6 +225,7 @@ async def test_subscribe_command_returns_checkout_url(mock_update, mock_context,
 
     mock_update.message.reply_text.assert_called()
     assert "checkout.stripe.com" in mock_update.message.reply_text.call_args[0][0]
+    assert "Trial Pro" in mock_update.message.reply_text.call_args[0][0]
 
 
 @pytest.mark.asyncio
@@ -328,3 +331,34 @@ async def test_backtest_command_returns_summary(mock_update, mock_context, mock_
     assert mock_update.message.reply_text.call_count == 2
     assert "Running backtest" in mock_update.message.reply_text.call_args_list[0].args[0]
     assert "Backtest Complete" in mock_update.message.reply_text.call_args_list[1].args[0]
+
+
+@pytest.mark.asyncio
+async def test_plans_command_shows_trial_pro_status(mock_update, mock_context, mock_config):
+    telegram_bot.config = {
+        **mock_config,
+        "stripe": {
+            "display_price": "$6.99/month",
+            "trial_days": 7,
+        },
+    }
+
+    with patch.object(
+        telegram_bot.db,
+        "get_membership_summary",
+        return_value={
+            "tier": "trial_pro",
+            "status": "trial_pro",
+            "expires_at": "2026-04-01T00:00:00+00:00",
+            "can_backtest": True,
+            "can_simulation": True,
+            "can_live": True,
+            "source": "stripe",
+        },
+    ):
+        await plans_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called()
+    message = mock_update.message.reply_text.call_args[0][0]
+    assert "7-day Trial Pro" in message
+    assert "Trial Pro" in message
