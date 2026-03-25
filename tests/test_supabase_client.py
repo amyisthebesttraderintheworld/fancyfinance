@@ -1,4 +1,61 @@
+from types import SimpleNamespace
+
 from supabase_client import PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
+
+
+class _SchemaCacheFallbackClient:
+    def __init__(self, trade_fail_column=None, position_fail_column=None):
+        self.trade_fail_column = trade_fail_column
+        self.position_fail_column = position_fail_column
+        self.trade_failed = False
+        self.position_failed = False
+        self.trade_payloads = []
+        self.position_payloads = []
+
+    def table(self, table_name):
+        client = self
+
+        class _Operation:
+            def insert(self, payload):
+                self.payload = dict(payload)
+                self.table_name = table_name
+                return self
+
+            def upsert(self, payload, on_conflict=None):
+                self.payload = dict(payload)
+                self.table_name = table_name
+                self.on_conflict = on_conflict
+                return self
+
+            def execute(self):
+                if (
+                    self.table_name == "trades"
+                    and client.trade_fail_column
+                    and client.trade_fail_column in self.payload
+                    and not client.trade_failed
+                ):
+                    client.trade_failed = True
+                    raise Exception(
+                        f"{{'message': \"Could not find the '{client.trade_fail_column}' column of 'trades' in the schema cache\", 'code': 'PGRST204'}}"
+                    )
+                if (
+                    self.table_name == "positions"
+                    and client.position_fail_column
+                    and client.position_fail_column in self.payload
+                    and not client.position_failed
+                ):
+                    client.position_failed = True
+                    raise Exception(
+                        f"{{'message': \"Could not find the '{client.position_fail_column}' column of 'positions' in the schema cache\", 'code': 'PGRST204'}}"
+                    )
+
+                if self.table_name == "trades":
+                    client.trade_payloads.append(dict(self.payload))
+                if self.table_name == "positions":
+                    client.position_payloads.append(dict(self.payload))
+                return SimpleNamespace(data=[self.payload])
+
+        return _Operation()
 
 
 def test_complimentary_pro_env_grants_paid_access(monkeypatch):
@@ -101,3 +158,55 @@ def test_start_trial_membership_grants_trial_pro_access(monkeypatch):
     assert summary["can_simulation"] is True
     assert summary["can_live"] is True
     assert summary["expires_at"] is not None
+
+
+def test_log_trade_retries_without_missing_optional_column(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    db = SupabaseManager()
+    db.client = _SchemaCacheFallbackClient(trade_fail_column="leverage")
+
+    stored = db.log_trade(
+        {
+            "symbol": "BTCUSD",
+            "direction": "long",
+            "type": "entry",
+            "price": 40000.0,
+            "qty": 0.1,
+            "leverage": 5,
+        },
+        user_id=12345,
+    )
+
+    assert stored is True
+    assert db.client.trade_payloads
+    assert "leverage" not in db.client.trade_payloads[-1]
+    assert db.client.trade_payloads[-1]["user_id"] == 12345
+    assert "leverage" in db._unsupported_trade_columns
+
+
+def test_update_position_retries_without_missing_optional_column(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    db = SupabaseManager()
+    db.client = _SchemaCacheFallbackClient(position_fail_column="leverage")
+
+    stored = db.update_position(
+        "BTCUSD",
+        {
+            "direction": "long",
+            "entry_price": 40000.0,
+            "qty": 0.1,
+            "leverage": 5,
+            "margin_used": 10.0,
+        },
+        user_id=12345,
+    )
+
+    assert stored is True
+    assert db.client.position_payloads
+    assert "leverage" not in db.client.position_payloads[-1]
+    assert db.client.position_payloads[-1]["user_id"] == 12345
+    assert "leverage" in db._unsupported_position_columns

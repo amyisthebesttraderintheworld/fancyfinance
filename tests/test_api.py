@@ -204,6 +204,8 @@ def test_dashboard_page_renders(sample_config):
     assert response.status_code == 200
     assert "FancyFinance Control Center" in response.text
     assert '/dashboard/assets/logo.png' in response.text
+    assert '/privacy-policy' in response.text
+    assert '/terms-of-use' in response.text
 
 
 def test_dashboard_logo_route_serves_png(sample_config):
@@ -215,6 +217,38 @@ def test_dashboard_logo_route_serves_png(sample_config):
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert len(response.content) > 0
+
+
+def test_privacy_policy_route_is_public(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/privacy-policy")
+
+    assert response.status_code == 200
+    assert "Fancy Finance Privacy Policy" in response.text
+    assert "Last updated: March 25, 2026" in response.text
+
+
+def test_terms_of_use_route_is_public(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/terms-of-use")
+
+    assert response.status_code == 200
+    assert "Fancy Finance Terms of Use" in response.text
+    assert "Last updated: March 25, 2026" in response.text
+
+
+def test_terms_of_service_alias_redirects(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/terms-of-service", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/terms-of-use"
 
 
 def test_dashboard_data_requires_auth(sample_config):

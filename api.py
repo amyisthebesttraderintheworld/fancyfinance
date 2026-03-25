@@ -22,6 +22,9 @@ from strategy_profile import normalize_strategy_profile
 
 DASHBOARD_ASSETS_DIR = Path(__file__).resolve().parent / "dashboard_assets"
 DASHBOARD_LOGO_PATH = DASHBOARD_ASSETS_DIR / "logo.png"
+LEGAL_PAGES_DIR = Path(__file__).resolve().parent / "legal"
+PRIVACY_POLICY_PATH = LEGAL_PAGES_DIR / "privacy_policy.html"
+TERMS_OF_USE_PATH = LEGAL_PAGES_DIR / "terms_of_use.html"
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
@@ -643,6 +646,22 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         if not DASHBOARD_LOGO_PATH.exists():
             raise HTTPException(status_code=404, detail="Dashboard logo not found")
         return FileResponse(DASHBOARD_LOGO_PATH, media_type="image/png")
+
+    @app.get("/privacy-policy", response_class=HTMLResponse)
+    def privacy_policy():
+        if not PRIVACY_POLICY_PATH.exists():
+            raise HTTPException(status_code=404, detail="Privacy policy not found")
+        return FileResponse(PRIVACY_POLICY_PATH, media_type="text/html")
+
+    @app.get("/terms-of-use", response_class=HTMLResponse)
+    def terms_of_use():
+        if not TERMS_OF_USE_PATH.exists():
+            raise HTTPException(status_code=404, detail="Terms of use not found")
+        return FileResponse(TERMS_OF_USE_PATH, media_type="text/html")
+
+    @app.get("/terms-of-service", response_class=RedirectResponse)
+    def terms_of_service_alias():
+        return RedirectResponse(url="/terms-of-use", status_code=307)
 
     @app.get("/dashboard/member", response_class=HTMLResponse)
     def member_dashboard():

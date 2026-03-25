@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import string
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -91,6 +92,10 @@ class SupabaseManager:
         self._trade_user_scope_warning_logged = False
         self._position_user_scope_warning_logged = False
         self._strategy_config_warning_logged = False
+        self._unsupported_trade_columns: set[str] = set()
+        self._unsupported_position_columns: set[str] = set()
+        self._trade_column_warning_logged: set[str] = set()
+        self._position_column_warning_logged: set[str] = set()
 
         if create_client and self.url and self.key:
             try:
@@ -264,6 +269,30 @@ class SupabaseManager:
         self.logger.warning(
             "Positions table is missing the user_id scope. User-scoped open positions are cached locally only until "
             "the database schema is expanded."
+        )
+
+    def _extract_missing_schema_column(self, exc: Exception, table_name: str) -> Optional[str]:
+        match = re.search(rf"Could not find the '([^']+)' column of '{re.escape(table_name)}'", str(exc))
+        if not match:
+            return None
+        return match.group(1)
+
+    def _warn_missing_trade_column(self, column: str):
+        if column in self._trade_column_warning_logged:
+            return
+        self._trade_column_warning_logged.add(column)
+        self.logger.warning(
+            f"Trades table is missing optional column `{column}`. Persisted remaining trade fields only; `{column}` "
+            "will stay cached locally until the database schema is expanded."
+        )
+
+    def _warn_missing_position_column(self, column: str):
+        if column in self._position_column_warning_logged:
+            return
+        self._position_column_warning_logged.add(column)
+        self.logger.warning(
+            f"Positions table is missing optional column `{column}`. Persisted remaining position fields only; "
+            f"`{column}` will stay cached locally until the database schema is expanded."
         )
 
     def _persist_user_update(self, telegram_id: int, update_payload: Dict[str, Any]) -> bool:
@@ -911,12 +940,25 @@ class SupabaseManager:
         try:
             db_payload = dict(payload)
             db_payload.pop("timestamp", None)
-            self.client.table("trades").insert(db_payload).execute()
-            return True
+            while True:
+                retry_payload = {
+                    key: value for key, value in db_payload.items() if key not in self._unsupported_trade_columns
+                }
+                try:
+                    self.client.table("trades").insert(retry_payload).execute()
+                    return True
+                except Exception as exc:
+                    if self._has_optional_trade_scope_error(exc):
+                        self._warn_missing_trade_scope()
+                        return False
+                    missing_column = self._extract_missing_schema_column(exc, "trades")
+                    if missing_column and missing_column in retry_payload:
+                        self._unsupported_trade_columns.add(missing_column)
+                        self._warn_missing_trade_column(missing_column)
+                        continue
+                    self.logger.error(f"Failed to log trade: {exc}")
+                    return False
         except Exception as exc:
-            if self._has_optional_trade_scope_error(exc):
-                self._warn_missing_trade_scope()
-                return False
             self.logger.error(f"Failed to log trade: {exc}")
             return False
 
@@ -930,12 +972,25 @@ class SupabaseManager:
             return True
 
         try:
-            self.client.table("positions").upsert(payload, on_conflict="user_id,symbol").execute()
-            return True
+            while True:
+                retry_payload = {
+                    key: value for key, value in payload.items() if key not in self._unsupported_position_columns
+                }
+                try:
+                    self.client.table("positions").upsert(retry_payload, on_conflict="user_id,symbol").execute()
+                    return True
+                except Exception as exc:
+                    if self._has_optional_trade_scope_error(exc):
+                        self._warn_missing_position_scope()
+                        return False
+                    missing_column = self._extract_missing_schema_column(exc, "positions")
+                    if missing_column and missing_column in retry_payload:
+                        self._unsupported_position_columns.add(missing_column)
+                        self._warn_missing_position_column(missing_column)
+                        continue
+                    self.logger.error(f"Failed to update position for {symbol}: {exc}")
+                    return False
         except Exception as exc:
-            if self._has_optional_trade_scope_error(exc):
-                self._warn_missing_position_scope()
-                return False
             self.logger.error(f"Failed to update position for {symbol}: {exc}")
             return False
 

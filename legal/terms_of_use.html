@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fancy Finance Terms of Use</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #08130f;
+      --panel: rgba(8, 22, 17, 0.94);
+      --panel-strong: rgba(12, 30, 22, 0.98);
+      --line: rgba(124, 255, 183, 0.18);
+      --text: #f4fff8;
+      --muted: #b8d7c9;
+      --accent: #7cffb7;
+      --warn: #ffd86c;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.38);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(124, 255, 183, 0.15), transparent 30%),
+        radial-gradient(circle at top right, rgba(255, 216, 108, 0.12), transparent 22%),
+        linear-gradient(180deg, #06120d 0%, #081611 100%);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    a { color: var(--accent); }
+
+    .shell {
+      width: min(1080px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 64px;
+    }
+
+    .hero,
+    .toc,
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero, .toc, .section {
+      padding: 28px;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .brand img {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 14px;
+      line-height: 1.15;
+    }
+
+    h1 {
+      font-size: clamp(34px, 6vw, 58px);
+      margin-top: 16px;
+    }
+
+    h2 {
+      font-size: clamp(24px, 3.5vw, 34px);
+    }
+
+    h3 {
+      color: var(--warn);
+      font-size: 18px;
+    }
+
+    p, li {
+      color: var(--muted);
+      margin: 0 0 14px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(124, 255, 183, 0.08);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .notice {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 216, 108, 0.28);
+      background: rgba(255, 216, 108, 0.08);
+      color: var(--text);
+      margin-top: 18px;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px 22px;
+      margin-top: 14px;
+    }
+
+    .toc a {
+      text-decoration: none;
+      color: var(--muted);
+    }
+
+    .toc a:hover {
+      color: var(--accent);
+    }
+
+    ul {
+      margin: 0 0 12px 20px;
+      padding: 0;
+    }
+
+    .footer {
+      text-align: center;
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="brand">
+        <img src="/dashboard/assets/logo.png" alt="Fancy Finance logo" />
+        <div>
+          <div class="eyebrow">Fancy Finance Legal</div>
+          <h1>Terms of Use</h1>
+          <p>These Terms of Use govern your access to and use of Fancy Finance, including the Telegram bot, Railway-hosted dashboard, APIs, automation, monitoring tools, and related services.</p>
+        </div>
+      </div>
+      <div class="meta">
+        <span class="pill">Last updated: March 25, 2026</span>
+        <span class="pill">Public URL: /terms-of-use</span>
+        <span class="pill">Contact: financingcanfunk@gmail.com</span>
+      </div>
+      <div class="notice">
+        By accessing or using the Services, you agree to be bound by these Terms of Use. If you do not agree, you must stop using the Services immediately.
+      </div>
+    </section>
+
+    <section class="toc">
+      <h2>Table of Contents</h2>
+      <div class="toc-grid">
+        <a href="#services">1. Our Services</a>
+        <a href="#ip">2. Intellectual Property Rights</a>
+        <a href="#representations">3. User Representations</a>
+        <a href="#prohibited">4. Prohibited Activities</a>
+        <a href="#ugc">5. User Generated Contributions</a>
+        <a href="#license">6. Contribution License</a>
+        <a href="#management">7. Services Management</a>
+        <a href="#termination">8. Term and Termination</a>
+        <a href="#interruptions">9. Modifications and Interruptions</a>
+        <a href="#law">10. Governing Law</a>
+        <a href="#disputes">11. Dispute Resolution</a>
+        <a href="#corrections">12. Corrections</a>
+        <a href="#disclaimer">13. Disclaimer</a>
+        <a href="#liability">14. Limitations of Liability</a>
+        <a href="#indemnification">15. Indemnification</a>
+        <a href="#userdata">16. User Data</a>
+        <a href="#electronic">17. Electronic Communications</a>
+        <a href="#misc">18. Miscellaneous</a>
+        <a href="#contact">19. Contact Us</a>
+      </div>
+    </section>
+
+    <section class="section" id="services">
+      <h2>1. Our Services</h2>
+      <p>Fancy Finance operates algorithmic trading, monitoring, analytics, dashboard, bot, subscription, and related software services, including the Telegram bot at <a href="https://t.me/FancyFinanceBot" target="_blank" rel="noreferrer">https://t.me/FancyFinanceBot</a> and the Railway-hosted web experience at <a href="https://fancyfinance-production.up.railway.app" target="_blank" rel="noreferrer">https://fancyfinance-production.up.railway.app</a>.</p>
+      <p>The Services are not intended for use in any jurisdiction where such use would violate law or create additional registration obligations for Fancy Finance. You are responsible for complying with local laws applicable to your use.</p>
+    </section>
+
+    <section class="section" id="ip">
+      <h2>2. Intellectual Property Rights</h2>
+      <p>Fancy Finance and its licensors own the intellectual property rights in the Services, including the software, source code, databases, visual design, functionality, branding, and related content. Subject to your compliance with these terms, we grant you a limited, non-exclusive, non-transferable, revocable license to access and use the Services for your personal, non-commercial use or internal business purpose.</p>
+      <p>You may not reproduce, distribute, publicly display, sell, license, reverse engineer, or otherwise exploit the Services or their content except as expressly permitted in writing by Fancy Finance.</p>
+    </section>
+
+    <section class="section" id="representations">
+      <h2>3. User Representations</h2>
+      <p>By using the Services, you represent and warrant that:</p>
+      <ul>
+        <li>You have the legal capacity to enter into these terms.</li>
+        <li>You are at least 18 years old or otherwise legally able to use the Services.</li>
+        <li>You will not use the Services for any illegal or unauthorized purpose.</li>
+        <li>Your use of the Services will comply with applicable law and regulation.</li>
+        <li>Information you provide to Fancy Finance will be accurate and current.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="prohibited">
+      <h2>4. Prohibited Activities</h2>
+      <p>You may not use the Services in ways that harm Fancy Finance, other users, or third parties. Prohibited conduct includes:</p>
+      <ul>
+        <li>Trying to gain unauthorized access to accounts, systems, APIs, or credentials</li>
+        <li>Using bots, scrapers, scripts, or automation in ways we do not authorize</li>
+        <li>Uploading malicious code, interfering with operations, or disrupting the platform</li>
+        <li>Copying, adapting, reverse engineering, or republishing the software or content without permission</li>
+        <li>Using the Services to defraud, harass, threaten, abuse, or mislead others</li>
+        <li>Using the Services in violation of financial, consumer protection, sanctions, or export laws</li>
+      </ul>
+    </section>
+
+    <section class="section" id="ugc">
+      <h2>5. User Generated Contributions</h2>
+      <p>The Services are not primarily designed as a public posting platform, but if you submit feedback, ideas, support requests, strategies, settings, or other materials to us, you remain responsible for what you send and for ensuring that you have the right to provide it.</p>
+    </section>
+
+    <section class="section" id="license">
+      <h2>6. Contribution License</h2>
+      <p>When you send us feedback, suggestions, feature requests, or other submissions, you grant Fancy Finance the right to use, store, process, reproduce, and incorporate that material to operate, improve, and support the Services without compensation to you, unless otherwise required by law.</p>
+    </section>
+
+    <section class="section" id="management">
+      <h2>7. Services Management</h2>
+      <p>We reserve the right, but not the obligation, to monitor the Services for violations of these Terms, investigate misuse, restrict access, remove content, report unlawful behavior, and otherwise manage the Services in a way that protects users, our systems, and our rights.</p>
+    </section>
+
+    <section class="section" id="termination">
+      <h2>8. Term and Termination</h2>
+      <p>These Terms remain in effect while you use the Services. We may suspend, limit, or terminate access to the Services at any time if we believe you have violated these Terms, created risk, or used the Services inappropriately or unlawfully.</p>
+    </section>
+
+    <section class="section" id="interruptions">
+      <h2>9. Modifications and Interruptions</h2>
+      <p>We may modify, suspend, or discontinue any part of the Services at any time. We do not guarantee uninterrupted availability and are not liable for downtime, service interruptions, delays, or feature changes.</p>
+    </section>
+
+    <section class="section" id="law">
+      <h2>10. Governing Law</h2>
+      <p>These Terms of Use are governed by the laws of the State of Ohio, without regard to conflict-of-law principles.</p>
+    </section>
+
+    <section class="section" id="disputes">
+      <h2>11. Dispute Resolution</h2>
+      <p>Before filing a formal claim, you agree to contact Fancy Finance and attempt to resolve the issue informally in good faith for at least 30 days. If a dispute cannot be resolved informally, it must be brought in a court of competent jurisdiction located in Ohio, unless applicable law requires otherwise.</p>
+      <p>To the fullest extent permitted by law, disputes must be brought on an individual basis and not as part of a class, consolidated, or representative action.</p>
+    </section>
+
+    <section class="section" id="corrections">
+      <h2>12. Corrections</h2>
+      <p>The Services may contain typographical errors, inaccuracies, or omissions. We reserve the right to correct, update, or change information at any time without prior notice.</p>
+    </section>
+
+    <section class="section" id="disclaimer">
+      <h2>13. Disclaimer</h2>
+      <p>THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE." TO THE FULLEST EXTENT PERMITTED BY LAW, FANCY FINANCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, AND ACCURACY.</p>
+      <p>Nothing in the Services constitutes investment, trading, tax, accounting, or legal advice. You remain solely responsible for your trading decisions, account activity, and use of any signals, automation, or backtesting information provided by the Services.</p>
+    </section>
+
+    <section class="section" id="liability">
+      <h2>14. Limitations of Liability</h2>
+      <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, FANCY FINANCE AND ITS OWNERS, EMPLOYEES, CONTRACTORS, AND AGENTS WILL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, TRADING OPPORTUNITY, OR ACCOUNT ACCESS ARISING FROM OR RELATED TO THE SERVICES.</p>
+      <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY FOR ANY CLAIM ARISING OUT OF OR RELATING TO THE SERVICES WILL NOT EXCEED THE GREATER OF THE AMOUNT YOU PAID US IN THE 12 MONTHS BEFORE THE CLAIM OR $100.</p>
+    </section>
+
+    <section class="section" id="indemnification">
+      <h2>15. Indemnification</h2>
+      <p>You agree to defend, indemnify, and hold harmless Fancy Finance and its affiliates, officers, employees, contractors, and agents from claims, liabilities, losses, damages, and expenses arising out of your use of the Services, your violation of these Terms, your violation of law, or your infringement of any third-party right.</p>
+    </section>
+
+    <section class="section" id="userdata">
+      <h2>16. User Data</h2>
+      <p>We maintain certain data you provide to operate the Services. Although we perform routine backups and use reasonable safeguards, you are responsible for your own records and for the accuracy of information you submit. We are not liable for data loss or corruption except as required by law.</p>
+    </section>
+
+    <section class="section" id="electronic">
+      <h2>17. Electronic Communications, Transactions, and Signatures</h2>
+      <p>By using the Services, sending messages, or completing online flows, you consent to receive communications electronically and agree that electronic records, notices, disclosures, and signatures satisfy legal requirements for written communications to the extent permitted by law.</p>
+    </section>
+
+    <section class="section" id="misc">
+      <h2>18. Miscellaneous</h2>
+      <p>These Terms, together with any policies posted on the Services, form the entire agreement between you and Fancy Finance regarding the Services. If any provision is found unenforceable, the remaining provisions will remain in effect. Our failure to enforce a provision is not a waiver of that provision.</p>
+    </section>
+
+    <section class="section" id="contact">
+      <h2>19. Contact Us</h2>
+      <p>If you have questions about these Terms of Use or need to contact us regarding the Services, please reach out to:</p>
+      <p>
+        Fancy Finance<br />
+        461 Hines Blvd, Unit 101<br />
+        Chillicothe, OH 45601<br />
+        United States<br />
+        Email: <a href="mailto:financingcanfunk@gmail.com">financingcanfunk@gmail.com</a>
+      </p>
+    </section>
+
+    <div class="footer">
+      Fancy Finance public legal page served by Railway.
+    </div>
+  </main>
+</body>
+</html>

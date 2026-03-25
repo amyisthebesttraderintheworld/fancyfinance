@@ -1037,6 +1037,8 @@ def build_dashboard_html(
         </div>
         <nav class="topnav">
           <a href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">Public Site</a>
+          <a href="/privacy-policy" target="_blank" rel="noreferrer">Privacy</a>
+          <a href="/terms-of-use" target="_blank" rel="noreferrer">Terms</a>
           <a href="#control-panel">Controls</a>
           <a href="#runtime-panel">Runtime</a>
           __MEMBERS_NAV__
