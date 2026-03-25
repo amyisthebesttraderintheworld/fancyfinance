@@ -337,6 +337,39 @@ def test_member_dashboard_page_renders(sample_config):
     assert "Telegram-issued dashboard token" in response.text
 
 
+def test_member_dashboard_page_uses_api_token_fallback_and_shows_positions(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/member")
+
+    assert response.status_code == 200
+    assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token", "fancyfinance_api_token"];' in response.text
+    assert 'id="positions-panel" style=""' in response.text
+    assert 'id="setup-panel" style="display:none;"' in response.text
+
+
+def test_dashboard_redirects_member_access_links_to_member_route(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard", params={"access": token}, follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == f"/dashboard/member?access={token}"
+
+
+def test_dashboard_page_uses_member_token_fallback(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert 'const TOKEN_KEYS = ["fancyfinance_api_token", "fancyfinance_member_dashboard_token"];' in response.text
+
+
 def test_member_dashboard_data_requires_valid_token(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)

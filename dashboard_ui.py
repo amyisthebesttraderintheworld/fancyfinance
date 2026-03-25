@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 
 PUBLIC_SITE_URL = "https://fancy-bot-front.lovable.app/"
 
@@ -13,9 +15,11 @@ def build_dashboard_html(
     data_endpoint: str = "/dashboard/data",
     token_storage_key: str = "fancyfinance_api_token",
     query_token_param: str = "",
+    fallback_token_storage_keys: tuple[str, ...] = (),
 ) -> str:
     auth_required_js = "true" if auth_required else "false"
     public_mode_js = "true" if public_mode else "false"
+    token_storage_keys_js = json.dumps([token_storage_key, *fallback_token_storage_keys])
     auth_hint = (
         "Use the Telegram-issued dashboard token to open this read-only member dashboard. Admin controls stay on /dashboard."
         if public_mode
@@ -35,6 +39,7 @@ def build_dashboard_html(
     )
     auth_form_style = "" if auth_required else "display:none;"
     controls_style = "display:none;" if public_mode else ""
+    positions_style = ""
     setup_style = "display:none;" if public_mode else ""
     users_style = "display:none;" if public_mode else ""
     user_metric_style = "display:none;" if public_mode else ""
@@ -1168,7 +1173,7 @@ def build_dashboard_html(
             <div class="footer-note" id="runtime-note">Waiting for runtime data.</div>
           </div>
 
-          <div class="panel surface" style="__SETUP_PANEL_STYLE__">
+          <div class="panel surface" id="positions-panel" style="__POSITIONS_PANEL_STYLE__">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Open Positions</h2>
@@ -1200,7 +1205,7 @@ def build_dashboard_html(
             <div class="keyval-grid" id="wallet-wrap"></div>
           </div>
 
-          <div class="panel surface">
+          <div class="panel surface" id="setup-panel" style="__SETUP_PANEL_STYLE__">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Setup Status</h2>
@@ -1412,12 +1417,23 @@ def build_dashboard_html(
       const PUBLIC_MODE = __PUBLIC_MODE_JS__;
       const DATA_ENDPOINT = "__DATA_ENDPOINT__";
       const TOKEN_KEY = "__TOKEN_STORAGE_KEY__";
+      const TOKEN_KEYS = __TOKEN_STORAGE_KEYS__;
       const QUERY_TOKEN_PARAM = "__QUERY_TOKEN_PARAM__";
       const queryToken = QUERY_TOKEN_PARAM
         ? (new URLSearchParams(window.location.search).get(QUERY_TOKEN_PARAM) || "")
         : "";
+      const tokenCandidates = Array.from(
+        new Set(
+          [
+            queryToken,
+            ...TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : ""),
+          ].filter(Boolean)
+        )
+      );
       const state = {
-        token: queryToken || localStorage.getItem(TOKEN_KEY) || "",
+        token: tokenCandidates[0] || "",
+        tokenCandidates,
+        tokenIndex: 0,
         sessionBaseline: null,
         sessionBaselineKey: "",
       };
@@ -1436,6 +1452,9 @@ def build_dashboard_html(
         statusDot: document.getElementById("hero-status-dot"),
         statusText: document.getElementById("hero-status-text"),
         modeBadge: document.getElementById("mode-badge"),
+        positionsPanel: document.getElementById("positions-panel"),
+        setupPanel: document.getElementById("setup-panel"),
+        usersPanel: document.getElementById("users-panel"),
       };
 
       els.tokenInput.value = state.token;
@@ -1598,6 +1617,37 @@ def build_dashboard_html(
       function setMessage(node, text, isError = false) {
         node.textContent = text;
         node.className = isError ? "message error" : "message";
+      }
+
+      function setVisible(node, visible) {
+        if (!node) {
+          return;
+        }
+        node.style.display = visible ? "" : "none";
+      }
+
+      function applyAccessMode(memberAccess) {
+        const readOnlyMode = PUBLIC_MODE || !!memberAccess;
+        setVisible(els.positionsPanel, true);
+        setVisible(els.setupPanel, !readOnlyMode);
+        setVisible(els.usersPanel, !readOnlyMode);
+        setVisible(document.getElementById("control-panel"), !readOnlyMode);
+        const userMetric = document.getElementById("metric-users")?.closest(".metric");
+        if (userMetric) {
+          userMetric.style.display = readOnlyMode ? "none" : "";
+        }
+      }
+
+      function advanceTokenCandidate() {
+        while (state.tokenIndex + 1 < state.tokenCandidates.length) {
+          state.tokenIndex += 1;
+          const candidate = state.tokenCandidates[state.tokenIndex] || "";
+          if (candidate && candidate !== state.token) {
+            state.token = candidate;
+            return true;
+          }
+        }
+        return false;
       }
 
       function toneForStatus(value) {
@@ -2276,6 +2326,7 @@ def build_dashboard_html(
           setMessage(els.controlMessage, "Engine controls stay in Telegram. Strategy and backtesting tools are available here.", false);
         }
 
+        applyAccessMode(memberAccess);
         renderWallet(portfolio);
         renderSetup(config);
         renderStrategy(payload.strategy || {});
@@ -2305,6 +2356,11 @@ def build_dashboard_html(
           });
 
           if (response.status === 401) {
+            if (advanceTokenCandidate()) {
+              els.tokenInput.value = state.token;
+              await loadDashboard();
+              return;
+            }
             setMessage(els.authMessage, "Dashboard locked. Add a valid dashboard token or API key.", true);
             return;
           }
@@ -2364,8 +2420,14 @@ def build_dashboard_html(
           state.token = els.tokenInput.value.trim();
           if (state.token) {
             localStorage.setItem(TOKEN_KEY, state.token);
+            state.tokenCandidates = Array.from(new Set([state.token, ...state.tokenCandidates].filter(Boolean)));
+            state.tokenIndex = 0;
           } else {
             localStorage.removeItem(TOKEN_KEY);
+            state.tokenCandidates = Array.from(
+              new Set(TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "").filter(Boolean))
+            );
+            state.tokenIndex = 0;
           }
           await loadDashboard();
         });
@@ -2373,9 +2435,13 @@ def build_dashboard_html(
 
       if (clearTokenBtn) {
         clearTokenBtn.addEventListener("click", () => {
-          state.token = "";
-          els.tokenInput.value = "";
           localStorage.removeItem(TOKEN_KEY);
+          state.tokenCandidates = Array.from(
+            new Set(TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "").filter(Boolean))
+          );
+          state.tokenIndex = 0;
+          state.token = state.tokenCandidates[0] || "";
+          els.tokenInput.value = state.token;
           setMessage(els.authMessage, "Stored token cleared.");
         });
       }
@@ -2421,6 +2487,7 @@ def build_dashboard_html(
         .replace("__AUTH_HINT__", auth_hint)
         .replace("__AUTH_FORM_STYLE__", auth_form_style)
         .replace("__CONTROL_PANEL_STYLE__", controls_style)
+        .replace("__POSITIONS_PANEL_STYLE__", positions_style)
         .replace("__SETUP_PANEL_STYLE__", setup_style)
         .replace("__USERS_PANEL_STYLE__", users_style)
         .replace("__USER_METRIC_STYLE__", user_metric_style)
@@ -2430,6 +2497,7 @@ def build_dashboard_html(
         .replace("__PUBLIC_MODE_JS__", public_mode_js)
         .replace("__DATA_ENDPOINT__", data_endpoint)
         .replace("__TOKEN_STORAGE_KEY__", token_storage_key)
+        .replace("__TOKEN_STORAGE_KEYS__", token_storage_keys_js)
         .replace("__QUERY_TOKEN_PARAM__", query_token_param)
         .replace("__PUBLIC_SITE__", PUBLIC_SITE_URL)
     )

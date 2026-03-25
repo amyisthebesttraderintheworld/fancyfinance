@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -638,8 +639,17 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         return RedirectResponse(url="/dashboard", status_code=307)
 
     @app.get("/dashboard", response_class=HTMLResponse)
-    def dashboard():
-        return HTMLResponse(build_dashboard_html(APP_NAME, __version__, auth_required=bool(auth_token)))
+    def dashboard(access: Optional[str] = None):
+        if access:
+            return RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307)
+        return HTMLResponse(
+            build_dashboard_html(
+                APP_NAME,
+                __version__,
+                auth_required=bool(auth_token),
+                fallback_token_storage_keys=("fancyfinance_member_dashboard_token",),
+            )
+        )
 
     @app.get("/dashboard/assets/logo.png")
     def dashboard_logo():
@@ -680,6 +690,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 data_endpoint="/dashboard/member-data",
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
+                fallback_token_storage_keys=("fancyfinance_api_token",),
             )
         )
 
