@@ -157,7 +157,7 @@ class Backtester:
                 self.logger.warning("Daily loss limit reached during backtest. Stopping run early.")
                 break
 
-    def generate_report(self):
+    def generate_report(self, plot_filename: str | None = "backtest_equity.png"):
         if not self.trades:
             print("No trades executed.")
             self.last_report = {
@@ -217,15 +217,15 @@ class Backtester:
             print("Profit Factor: inf")
         
         # Optional Plotting
-        if plt is not None:
+        if plt is not None and plot_filename:
             try:
                 plt.figure(figsize=(10, 6))
                 plt.plot(pd.to_datetime(equity_df['timestamp'], unit='ms'), equity_df['balance'])
                 plt.title("Equity Curve")
                 plt.xlabel("Date")
                 plt.ylabel("Balance")
-                plt.savefig("backtest_equity.png")
-                print("Equity curve saved to backtest_equity.png")
+                plt.savefig(plot_filename)
+                print(f"Equity curve saved to {plot_filename}")
             except Exception as e:
                 self.logger.error(f"Failed to plot: {e}")
 

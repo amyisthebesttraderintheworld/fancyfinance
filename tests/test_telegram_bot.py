@@ -3,6 +3,7 @@ import queue
 from unittest.mock import MagicMock, AsyncMock, patch
 from telegram_bot import (
     agree_command,
+    backtest_command,
     start,
     help_command,
     menu_button_handler,
@@ -295,3 +296,35 @@ async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_con
     assert args == ["12345", "correct horse battery staple"]
     assert chat_id == 12345
     mock_context.bot.delete_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_backtest_command_returns_summary(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = ["BTCUSD", "2024-01-01", "2024-01-31", "1m"]
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
+        with patch(
+            "telegram_bot.run_backtest",
+            return_value={
+                "symbol": "BTCUSD",
+                "timeframe": "1m",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+                "candles": 500,
+                "report": {
+                    "final_balance": 10500.0,
+                    "total_return": 5.0,
+                    "total_trades": 12,
+                    "win_rate": 58.33,
+                    "max_drawdown": -3.2,
+                    "sharpe_ratio": 1.42,
+                    "profit_factor": 1.8,
+                },
+            },
+        ):
+            await backtest_command(mock_update, mock_context)
+
+    assert mock_update.message.reply_text.call_count == 2
+    assert "Running backtest" in mock_update.message.reply_text.call_args_list[0].args[0]
+    assert "Backtest Complete" in mock_update.message.reply_text.call_args_list[1].args[0]

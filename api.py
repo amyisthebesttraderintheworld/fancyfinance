@@ -10,6 +10,7 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from backtest_service import BacktestServiceError, run_backtest
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
 from stripe_service import StripeService
@@ -251,6 +252,26 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         payload = _snapshot(engine)
         payload["positions"] = {position["symbol"]: position for position in _positions_payload(engine)}
         return payload
+
+    @app.post("/backtest/run")
+    def backtest_run(
+        symbol: str,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        timeframe: Optional[str] = None,
+        x_api_key: Optional[str] = Header(default=None),
+    ):
+        _authorize(auth_token, x_api_key)
+        try:
+            return run_backtest(
+                engine.config,
+                symbol=symbol,
+                start_date=start,
+                end_date=end,
+                timeframe=timeframe,
+            )
+        except BacktestServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/control/pause")
     def pause(x_api_key: Optional[str] = Header(default=None)):

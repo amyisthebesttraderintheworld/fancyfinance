@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
+import api
 from api import create_app
 from common import Position
 
@@ -107,3 +108,32 @@ def test_dashboard_data_returns_live_payload(sample_config):
     assert payload["performance"]["realized_pnl"] == 125.5
     assert payload["users"]["total"] == 2
     assert payload["positions"][0]["symbol"] == "BTCUSD"
+
+
+def test_backtest_run_endpoint_returns_report(sample_config, monkeypatch):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        api,
+        "run_backtest",
+        lambda config, symbol, start_date=None, end_date=None, timeframe=None: {
+            "symbol": symbol,
+            "timeframe": timeframe or "1m",
+            "start_date": start_date or "2024-01-01",
+            "end_date": end_date or "2024-01-31",
+            "candles": 500,
+            "report": {"final_balance": 10500.0, "total_return": 5.0},
+        },
+    )
+
+    response = client.post(
+        "/backtest/run",
+        params={"symbol": "BTCUSD", "start": "2024-01-01", "end": "2024-01-31", "timeframe": "1m"},
+        headers={"x-api-key": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["symbol"] == "BTCUSD"
+    assert payload["report"]["final_balance"] == 10500.0

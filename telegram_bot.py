@@ -27,6 +27,7 @@ from telegram.ext import (
 from common import SettingsManager, get_logger
 from email_service import EmailService
 from fancyfinance import APP_NAME, __version__
+from backtest_service import BacktestServiceError, format_backtest_summary, run_backtest
 from stripe_service import StripeService
 from supabase_client import FREE_MEMBERSHIP, PRO_MEMBERSHIP, SupabaseManager
 
@@ -458,7 +459,8 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Your current plan:* {plan_name}\n"
         f"*Membership status:* {membership_status}\n"
         f"*Current access:* {access}\n\n"
-        "Use `/subscribe` to upgrade or `/manage_subscription` if you already have a paid plan."
+        "Use `/backtest BTCUSD 2024-01-01 2024-01-31` to run a free backtest, "
+        "`/subscribe` to upgrade, or `/manage_subscription` if you already have a paid plan."
     )
     await _reply(update, text, parse_mode="Markdown")
 
@@ -561,6 +563,62 @@ async def manage_subscription_command(update: Update, context: ContextTypes.DEFA
         f"🧾 *Manage Subscription*\n\nOpen your Stripe billing portal here:\n{portal_url}",
         parse_mode="Markdown",
     )
+
+
+async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    db.get_or_create_user(user.id, user.username or "", user.first_name or "")
+
+    args = context.args or []
+    exchange_key = (config or {}).get("exchange", "phemex")
+    exchange_config = (config or {}).get(exchange_key, {})
+    default_symbol = (exchange_config.get("symbols") or ["BTCUSD"])[0]
+    default_start = ((config or {}).get("backtest") or {}).get("start_date")
+    default_end = ((config or {}).get("backtest") or {}).get("end_date")
+    default_timeframe = ((config or {}).get("strategy") or {}).get("timeframe", "1m")
+
+    if len(args) > 4:
+        await _reply(
+            update,
+            "📈 Use: `/backtest [symbol] [start_date] [end_date] [timeframe]`\n\n"
+            "Example: `/backtest BTCUSD 2024-01-01 2024-01-31 1m`",
+            parse_mode="Markdown",
+        )
+        return
+
+    symbol = args[0] if len(args) >= 1 else default_symbol
+    start_date = args[1] if len(args) >= 2 else default_start
+    end_date = args[2] if len(args) >= 3 else default_end
+    timeframe = args[3] if len(args) >= 4 else default_timeframe
+
+    await _reply(
+        update,
+        f"⏳ Running backtest for `{symbol}` on `{timeframe}` from `{start_date}` to `{end_date}`...",
+        parse_mode="Markdown",
+    )
+
+    try:
+        result = await asyncio.to_thread(
+            run_backtest,
+            config or {},
+            symbol,
+            start_date,
+            end_date,
+            timeframe,
+        )
+    except BacktestServiceError as exc:
+        await _reply(update, f"❌ {exc}", parse_mode="Markdown")
+        return
+    except Exception as exc:
+        logger.error(f"Unexpected backtest failure for {symbol}: {exc}")
+        await _reply(
+            update,
+            "❌ Backtest failed unexpectedly. Please try again shortly.",
+            parse_mode="Markdown",
+        )
+        return
+
+    await _reply(update, format_backtest_summary(result), parse_mode="Markdown")
 
 
 async def grant_pro_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -739,7 +797,8 @@ async def kb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Strategy stack:* MA crossover, RSI, MACD, ATR, and Bollinger squeeze.\n\n"
         "*Scoring:* Trend (30), RSI (25), Volume (25), Momentum (20).\n\n"
         "*Risk controls:* Position sizing, ATR stops, max daily loss, and safety timeout.\n\n"
-        "*Modes:* Backtest, simulation, and live execution.\n\n"
+        "*Modes:* Backtest, simulation, and live execution.\n"
+        "Use `/backtest <symbol> <start_date> <end_date> [timeframe]` for historical runs.\n\n"
         "⚖️ Trading is risky. This project is educational software, not financial advice."
     )
     await _reply(update, kb_text, parse_mode="Markdown")
@@ -753,6 +812,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/profile - View verification status\n"
         "/plans - Compare free vs paid access\n"
         "/subscription - View your current membership\n"
+        "/backtest - Run a historical backtest\n"
         "/subscribe - Open Stripe checkout for Pro\n"
         "/manage_subscription - Open billing portal\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
@@ -801,6 +861,7 @@ async def set_commands(application: Application):
         BotCommand("profile", "View verification status"),
         BotCommand("plans", "See free vs paid access"),
         BotCommand("subscription", "View your membership"),
+        BotCommand("backtest", "Run a historical backtest"),
         BotCommand("subscribe", "Upgrade to Pro with Stripe"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
@@ -866,6 +927,7 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("signup", signup_command))
     application.add_handler(CommandHandler("plans", plans_command))
     application.add_handler(CommandHandler("subscription", subscription_command))
+    application.add_handler(CommandHandler("backtest", backtest_command))
     application.add_handler(CommandHandler("subscribe", subscribe_command))
     application.add_handler(CommandHandler("manage_subscription", manage_subscription_command))
     application.add_handler(CommandHandler("unlock_api", unlock_api_command))
