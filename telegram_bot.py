@@ -151,9 +151,10 @@ def _format_membership(summary: dict | None) -> tuple[str, str, str]:
 
 def _paid_upgrade_message(summary: dict | None) -> str:
     tier, status_label, _ = _format_membership(summary)
+    display_price = ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
     return (
         "🔒 *Paid Membership Required*\n\n"
-        "Simulation and live trading are only available on the paid plan.\n\n"
+        f"Simulation and live trading are only available on the paid plan ({display_price}).\n\n"
         f"*Current plan:* {tier}\n"
         f"*Membership status:* {status_label}\n\n"
         "Backtesting remains free. Ask an admin to upgrade your account before using paid features."
@@ -442,13 +443,14 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_user.first_name or "",
     )
     plan_name, membership_status, access = _format_membership(membership)
+    display_price = ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
     text = (
         f"💳 *{APP_NAME} Plans*\n\n"
         "*Free*\n"
         "• Backtesting access\n"
         "• Telegram onboarding\n"
         "• Email verification\n\n"
-        "*Pro*\n"
+        f"*Pro ({display_price})*\n"
         "• Simulation mode\n"
         "• Live trading mode\n"
         "• Secure API key storage\n"
@@ -467,6 +469,7 @@ async def subscription_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stripe_service = _stripe_service()
+    display_price = ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
     if not stripe_service.is_checkout_configured():
         await _reply(
             update,
@@ -502,7 +505,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await _reply(
         update,
-        "💳 *Upgrade to Pro*\n\n"
+        f"💳 *Upgrade to Pro ({display_price})*\n\n"
         "Use the secure Stripe checkout link below to activate your paid membership:\n"
         f"{checkout_url}\n\n"
         "After payment succeeds, your Pro access should activate automatically.",
