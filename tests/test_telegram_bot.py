@@ -66,7 +66,7 @@ async def test_post_init_clears_webhook_and_starts_watchdog():
         coro.close()
         return MagicMock()
 
-    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=True)) as clear_mock:
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=telegram_bot.TELEGRAM_WEBHOOK_CLEARED)) as clear_mock:
         with patch("telegram_bot.set_commands", new=AsyncMock()) as set_commands_mock:
             with patch("telegram_bot.asyncio.create_task", side_effect=_capture_task) as create_task_mock:
                 await post_init(application)
@@ -92,8 +92,30 @@ async def test_error_handler_recovers_from_conflict_when_webhook_cleared():
     context.error = Conflict("webhook active")
     context.application = application
 
-    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=True)) as clear_mock:
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=telegram_bot.TELEGRAM_WEBHOOK_CLEARED)) as clear_mock:
         await error_handler(None, context)
+
+    clear_mock.assert_awaited_once()
+    application.stop_running.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_error_handler_treats_startup_polling_handoff_as_recoverable():
+    telegram_bot._conflict_logged = False
+    telegram_bot._ownership_recovery_logged = False
+
+    application = MagicMock()
+    application.bot = MagicMock()
+    application.running = True
+    application.stop_running = MagicMock()
+
+    context = MagicMock()
+    context.error = Conflict("another poller")
+    context.application = application
+
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=telegram_bot.TELEGRAM_WEBHOOK_ABSENT)) as clear_mock:
+        with patch("telegram_bot._polling_conflict_is_startup_handoff", return_value=True):
+            await error_handler(None, context)
 
     clear_mock.assert_awaited_once()
     application.stop_running.assert_not_called()
@@ -113,11 +135,27 @@ async def test_error_handler_stops_when_conflict_not_recovered():
     context.error = Conflict("another poller")
     context.application = application
 
-    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=False)) as clear_mock:
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=telegram_bot.TELEGRAM_WEBHOOK_FAILED)) as clear_mock:
         await error_handler(None, context)
 
     clear_mock.assert_awaited_once()
     application.stop_running.assert_called_once()
+
+
+def test_polling_startup_delay_defaults_on_railway(monkeypatch):
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj_123")
+    monkeypatch.delenv("TELEGRAM_POLLING_STARTUP_DELAY_SECONDS", raising=False)
+    telegram_bot.config = {"telegram": {"polling_enabled": True}}
+
+    assert telegram_bot._polling_startup_delay_seconds() == 20
+
+
+def test_polling_startup_delay_env_override_wins(monkeypatch):
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj_123")
+    monkeypatch.setenv("TELEGRAM_POLLING_STARTUP_DELAY_SECONDS", "7")
+    telegram_bot.config = {"telegram": {"polling_enabled": True}}
+
+    assert telegram_bot._polling_startup_delay_seconds() == 7
 
 @pytest.mark.asyncio
 async def test_proxy_command_authorized(mock_update, mock_context, mock_config):

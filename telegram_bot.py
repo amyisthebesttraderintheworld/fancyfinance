@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 import queue
 import re
+import time as clock
 from datetime import datetime, time, timezone
 from urllib.parse import quote
 
@@ -49,6 +51,11 @@ settings_mgr = SettingsManager()
 logger = get_logger("TelegramBot")
 _conflict_logged = False
 _ownership_recovery_logged = False
+_polling_started_at_monotonic = 0.0
+
+TELEGRAM_WEBHOOK_ABSENT = "absent"
+TELEGRAM_WEBHOOK_CLEARED = "cleared"
+TELEGRAM_WEBHOOK_FAILED = "failed"
 
 
 async def _maybe_await(result):
@@ -73,6 +80,44 @@ def _is_truthy(value) -> bool:
     if value is None:
         return False
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _running_on_railway() -> bool:
+    return any(
+        str(os.getenv(key) or "").strip()
+        for key in ("RAILWAY_PROJECT_ID", "RAILWAY_ENVIRONMENT_ID", "RAILWAY_SERVICE_ID", "RAILWAY_DEPLOYMENT_ID")
+    )
+
+
+def _polling_startup_delay_seconds() -> int:
+    telegram_cfg = (config or {}).get("telegram", {})
+    explicit = telegram_cfg.get("startup_delay_seconds", os.getenv("TELEGRAM_POLLING_STARTUP_DELAY_SECONDS"))
+    if explicit not in (None, ""):
+        try:
+            return max(int(explicit), 0)
+        except (TypeError, ValueError):
+            return 0
+    return 20 if _running_on_railway() else 0
+
+
+def _polling_conflict_grace_seconds() -> int:
+    explicit = os.getenv("TELEGRAM_POLLING_CONFLICT_GRACE_SECONDS")
+    if explicit not in (None, ""):
+        try:
+            return max(int(explicit), 0)
+        except (TypeError, ValueError):
+            return 0
+    startup_delay = _polling_startup_delay_seconds()
+    if startup_delay > 0:
+        return startup_delay + 15
+    return 0
+
+
+def _polling_conflict_is_startup_handoff() -> bool:
+    grace_seconds = _polling_conflict_grace_seconds()
+    if grace_seconds <= 0 or _polling_started_at_monotonic <= 0:
+        return False
+    return (clock.monotonic() - _polling_started_at_monotonic) <= grace_seconds
 
 
 def get_main_menu():
@@ -1343,17 +1388,17 @@ async def set_commands(application: Application):
     await application.bot.set_my_commands(commands)
 
 
-async def _clear_telegram_webhook(bot, *, drop_pending_updates: bool, reason: str) -> bool:
+async def _clear_telegram_webhook(bot, *, drop_pending_updates: bool, reason: str) -> str:
     try:
         webhook_info = await bot.get_webhook_info()
     except Exception as exc:
         logger.warning(f"Unable to inspect Telegram webhook during {reason}: {exc}")
-        return False
+        return TELEGRAM_WEBHOOK_FAILED
 
     current_url = str(getattr(webhook_info, "url", "") or "").strip()
     pending_update_count = int(getattr(webhook_info, "pending_update_count", 0) or 0)
     if not current_url:
-        return True
+        return TELEGRAM_WEBHOOK_ABSENT
 
     logger.warning(
         f"Telegram webhook detected during {reason}: {current_url} "
@@ -1363,21 +1408,21 @@ async def _clear_telegram_webhook(bot, *, drop_pending_updates: bool, reason: st
         await bot.delete_webhook(drop_pending_updates=drop_pending_updates)
     except Exception as exc:
         logger.warning(f"Unable to clear Telegram webhook during {reason}: {exc}")
-        return False
+        return TELEGRAM_WEBHOOK_FAILED
 
     try:
         refreshed_info = await bot.get_webhook_info()
     except Exception as exc:
         logger.warning(f"Unable to confirm Telegram webhook removal during {reason}: {exc}")
-        return False
+        return TELEGRAM_WEBHOOK_FAILED
 
     refreshed_url = str(getattr(refreshed_info, "url", "") or "").strip()
     if refreshed_url:
         logger.warning(f"Telegram webhook still active after delete attempt during {reason}: {refreshed_url}")
-        return False
+        return TELEGRAM_WEBHOOK_FAILED
 
     logger.info(f"Telegram webhook cleared during {reason}. Polling retains ownership.")
-    return True
+    return TELEGRAM_WEBHOOK_CLEARED
 
 
 async def _polling_ownership_watchdog(application: Application):
@@ -1409,16 +1454,26 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     global _conflict_logged, _ownership_recovery_logged
 
     if isinstance(context.error, Conflict):
-        recovered = await _clear_telegram_webhook(
+        webhook_status = await _clear_telegram_webhook(
             context.application.bot,
             drop_pending_updates=False,
             reason="polling conflict recovery",
         )
-        if recovered:
+        if webhook_status == TELEGRAM_WEBHOOK_CLEARED:
             if not _ownership_recovery_logged:
                 logger.warning(
                     "Telegram polling hit a conflict, but FancyFinance cleared the active webhook and will keep trying. "
                     "If this keeps happening, another service is still reclaiming the same bot token."
+                )
+                _ownership_recovery_logged = True
+            _conflict_logged = False
+            return
+
+        if webhook_status == TELEGRAM_WEBHOOK_ABSENT and _polling_conflict_is_startup_handoff():
+            if not _ownership_recovery_logged:
+                logger.info(
+                    "Telegram polling conflict happened during startup handoff. Another FancyFinance deploy is likely "
+                    "still winding down, so this instance will keep retrying until it owns the bot token."
                 )
                 _ownership_recovery_logged = True
             _conflict_logged = False
@@ -1442,10 +1497,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 def run_bot(engine, command_queue):
-    global active_engine, cmd_queue, config
+    global active_engine, cmd_queue, config, _conflict_logged, _ownership_recovery_logged, _polling_started_at_monotonic
     active_engine = engine
     cmd_queue = command_queue
     config = engine.config
+    _conflict_logged = False
+    _ownership_recovery_logged = False
+    _polling_started_at_monotonic = 0.0
 
     telegram_config = config.get("telegram", {})
     token = telegram_config.get("bot_token")
@@ -1456,6 +1514,13 @@ def run_bot(engine, command_queue):
     if not _is_truthy(telegram_config.get("polling_enabled", True)):
         logger.info("Telegram polling disabled. Outbound notifications remain enabled.")
         return
+
+    startup_delay_seconds = _polling_startup_delay_seconds()
+    if startup_delay_seconds > 0:
+        logger.info(
+            f"Delaying Telegram polling for {startup_delay_seconds}s so the previous deploy can release the bot token."
+        )
+        clock.sleep(startup_delay_seconds)
 
     application = Application.builder().token(token).post_init(post_init).build()
     application.add_error_handler(error_handler)
@@ -1495,5 +1560,6 @@ def run_bot(engine, command_queue):
     for command in ["status", "positions", "pause", "resume", "reset", "set_balance", "shutdown", "emergency_stop"]:
         application.add_handler(CommandHandler(command, proxy_command))
 
+    _polling_started_at_monotonic = clock.monotonic()
     logger.info("Telegram Bot Polling...")
     application.run_polling(stop_signals=None, drop_pending_updates=False)
