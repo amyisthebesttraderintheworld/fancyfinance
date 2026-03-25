@@ -10,7 +10,8 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from backtest_service import BacktestServiceError, run_backtest
+from backtest_service import BacktestServiceError, run_backtest, run_backtest_recent
+from dashboard_access import DashboardAccessError, verify_member_dashboard_token
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
 from stripe_service import StripeService
@@ -19,6 +20,16 @@ from stripe_service import StripeService
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
     if expected_token and provided_token != expected_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _authorize_member_dashboard(expected_token: Optional[str], provided_token: Optional[str]) -> int:
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="Dashboard access is not configured")
+    try:
+        payload = verify_member_dashboard_token(expected_token, provided_token or "")
+    except DashboardAccessError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return int(payload["sub"])
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -186,6 +197,24 @@ def _dashboard_payload(engine, auth_token: Optional[str]):
     }
 
 
+def _member_dashboard_payload(engine, user_id: int):
+    trades = _recent_trades(engine)
+    snapshot = _snapshot(engine)
+    snapshot["balance"] = None
+    snapshot["initial_balance"] = None
+    return {
+        "member_access": True,
+        "user_id": user_id,
+        "snapshot": snapshot,
+        "runtime": _runtime_summary(engine),
+        "positions": _positions_payload(engine),
+        "recent_trades": trades,
+        "performance": _performance_summary(engine, trades),
+        "config": {},
+        "users": {},
+    }
+
+
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
     stripe_service = StripeService(engine.config)
@@ -198,10 +227,29 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     def dashboard():
         return HTMLResponse(build_dashboard_html(APP_NAME, __version__, auth_required=bool(auth_token)))
 
+    @app.get("/dashboard/member", response_class=HTMLResponse)
+    def member_dashboard():
+        return HTMLResponse(
+            build_dashboard_html(
+                APP_NAME,
+                __version__,
+                auth_required=True,
+                public_mode=True,
+                data_endpoint="/dashboard/member-data",
+                token_storage_key="fancyfinance_member_dashboard_token",
+                query_token_param="access",
+            )
+        )
+
     @app.get("/dashboard/data")
     def dashboard_data(x_api_key: Optional[str] = Header(default=None)):
         _authorize(auth_token, x_api_key)
         return _dashboard_payload(engine, auth_token)
+
+    @app.get("/dashboard/member-data")
+    def dashboard_member_data(x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
+        user_id = _authorize_member_dashboard(auth_token, x_api_key or access)
+        return _member_dashboard_payload(engine, user_id)
 
     @app.get("/health")
     def health():
@@ -261,10 +309,18 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         start: Optional[str] = None,
         end: Optional[str] = None,
         timeframe: Optional[str] = None,
+        candles: Optional[int] = None,
         x_api_key: Optional[str] = Header(default=None),
     ):
         _authorize(auth_token, x_api_key)
         try:
+            if candles is not None:
+                return run_backtest_recent(
+                    engine.config,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    candles=int(candles),
+                )
             return run_backtest(
                 engine.config,
                 symbol=symbol,

@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 import queue
+import re
 from datetime import datetime, time, timezone
+from urllib.parse import quote
 
 from telegram import (
     BotCommand,
@@ -25,9 +27,15 @@ from telegram.ext import (
 )
 
 from common import SettingsManager, get_logger
+from dashboard_access import DEFAULT_TOKEN_TTL_SECONDS, generate_member_dashboard_token
 from email_service import EmailService
 from fancyfinance import APP_NAME, __version__
-from backtest_service import BacktestServiceError, format_backtest_summary, run_backtest
+from backtest_service import (
+    ALLOWED_REMOTE_CANDLE_COUNTS,
+    BacktestServiceError,
+    format_backtest_summary,
+    run_backtest_recent,
+)
 from stripe_service import StripeService
 from supabase_client import DEFAULT_TRIAL_DAYS, FREE_MEMBERSHIP, PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
 
@@ -169,6 +177,41 @@ def _trial_days() -> int:
         return max(int(raw), 0)
     except (TypeError, ValueError):
         return DEFAULT_TRIAL_DAYS
+
+
+def _dashboard_base_url() -> str:
+    api_cfg = (config or {}).get("api") or {}
+    base_url = str(api_cfg.get("base_url") or "").strip().rstrip("/")
+    if base_url:
+        return base_url
+
+    stripe_cfg = (config or {}).get("stripe") or {}
+    portal_return_url = str(stripe_cfg.get("portal_return_url") or "").strip()
+    if "/dashboard" in portal_return_url:
+        return portal_return_url.split("/dashboard", 1)[0].rstrip("/")
+    return ""
+
+
+def _default_backtest_candles() -> int:
+    return min(ALLOWED_REMOTE_CANDLE_COUNTS)
+
+
+def _looks_like_timeframe(raw: str) -> bool:
+    return bool(re.fullmatch(r"\d+[mhd]", str(raw or "").strip().lower()))
+
+
+def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
+    allowed = " or ".join(str(value) for value in sorted(ALLOWED_REMOTE_CANDLE_COUNTS))
+    return (
+        "📈 *Free Backtesting*\n\n"
+        "Use: `/backtest <symbol> [timeframe] [500|1000]`\n\n"
+        f"Examples:\n"
+        f"• `/backtest {default_symbol}`\n"
+        f"• `/backtest {default_symbol} {default_timeframe}`\n"
+        f"• `/backtest {default_symbol} {default_timeframe} {_default_backtest_candles()}`\n\n"
+        f"Phemex can only return the latest *{allowed} candles* per backtest run. "
+        "Run `/start_trial` or `/subscribe` if you want simulation or live access."
+    )
 
 
 def _paid_upgrade_message(summary: dict | None) -> str:
@@ -452,7 +495,7 @@ async def signup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Next steps:\n"
             "1. Accept the risk disclosure with `/start`\n"
             "2. Verify your email with `/verify_email`\n"
-            "3. Check `/plans` if you want simulation or live access",
+            "3. Use `/start_trial` or `/plans` if you want simulation or live access",
             parse_mode="Markdown",
         )
         return
@@ -485,14 +528,124 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Your current plan:* {plan_name}\n"
         f"*Membership status:* {membership_status}\n"
         f"*Current access:* {access}\n\n"
-        "Use `/backtest BTCUSD 2024-01-01 2024-01-31` to run a free backtest, "
-        "`/subscribe` to upgrade, or `/manage_subscription` if you already have a paid plan."
+        "Use `/backtest BTCUSD 1m 500` to run a free backtest, "
+        "`/start_trial` to unlock Trial Pro instantly, or `/manage_subscription` if you already have a paid plan."
     )
     await _reply(update, text, parse_mode="Markdown")
 
 
 async def subscription_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await plans_command(update, context)
+
+
+async def start_trial_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    membership = db.get_membership_summary(
+        user_id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if membership and membership.get("source") == "complimentary":
+        await _reply(update, "✅ Your account already has complimentary Pro access.", parse_mode="Markdown")
+        return
+    if membership and membership.get("tier") in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP} and membership.get("status") in {"trial_pro", "active"}:
+        plan_name, membership_status, access = _format_membership(membership)
+        await _reply(
+            update,
+            f"✅ You already have *{plan_name}* access.\n\n*Membership:* {membership_status}\n*Access:* {access}",
+            parse_mode="Markdown",
+        )
+        return
+
+    user = db.get_or_create_user(
+        user_id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if user and user.get("trial_started_at"):
+        await _reply(
+            update,
+            "⏳ Your 7-day Trial Pro has already been used.\n\nUse `/subscribe` to continue with full Pro access.",
+            parse_mode="Markdown",
+        )
+        return
+
+    trial_user = db.start_trial_membership(
+        user_id,
+        days=_trial_days(),
+        username=update.effective_user.username or "",
+        first_name=update.effective_user.first_name or "",
+    )
+    if not trial_user:
+        await _reply(update, "❌ Could not start your trial right now.", parse_mode="Markdown")
+        return
+
+    membership = db.get_membership_summary(
+        user_id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    plan_name, membership_status, access = _format_membership(membership)
+    await _reply(
+        update,
+        f"🚀 *{plan_name} unlocked*\n\n"
+        f"*Membership:* {membership_status}\n"
+        f"*Access:* {access}\n\n"
+        "Next steps:\n"
+        "1. Use `/dashboard_api` to open your member dashboard\n"
+        "2. Verify your email with `/verify_email`\n"
+        "3. Store your exchange keys with `/setup_api <api_key> <api_secret> <passphrase>`",
+        parse_mode="Markdown",
+    )
+
+
+async def dashboard_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    membership = db.get_membership_summary(
+        update.effective_user.id,
+        update.effective_user.username or "",
+        update.effective_user.first_name or "",
+    )
+    if not membership or not membership.get("can_simulation"):
+        await _reply(update, _paid_upgrade_message(membership), parse_mode="Markdown")
+        return
+
+    auth_token = str(((config or {}).get("api") or {}).get("auth_token") or "").strip()
+    if not auth_token:
+        await _reply(
+            update,
+            "❌ Dashboard access is not configured yet. Ask the admin to set `FANCYFINANCE_API_TOKEN` in Railway.",
+            parse_mode="Markdown",
+        )
+        return
+
+    token = generate_member_dashboard_token(
+        auth_token,
+        update.effective_user.id,
+        ttl_seconds=DEFAULT_TOKEN_TTL_SECONDS,
+    )
+    base_url = _dashboard_base_url()
+
+    if base_url:
+        dashboard_url = f"{base_url}/dashboard/member?access={quote(token)}"
+        message = (
+            "🧭 *Member Dashboard Access*\n\n"
+            "This command mints a fresh read-only dashboard token each time you run it.\n\n"
+            f"{dashboard_url}\n\n"
+            "If the link expires, run `/dashboard_api` again to rotate it."
+        )
+    else:
+        message = (
+            "🧭 *Member Dashboard API Token*\n\n"
+            "Use this read-only dashboard token in the website dashboard client:\n\n"
+            f"`{token}`\n\n"
+            "Run `/dashboard_api` again any time you need a fresh token."
+        )
+
+    await _reply(update, message, parse_mode="Markdown")
+
+
+async def rotate_dashboard_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await dashboard_api_command(update, context)
 
 
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -629,38 +782,62 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     exchange_key = (config or {}).get("exchange", "phemex")
     exchange_config = (config or {}).get(exchange_key, {})
     default_symbol = (exchange_config.get("symbols") or ["BTCUSD"])[0]
-    default_start = ((config or {}).get("backtest") or {}).get("start_date")
-    default_end = ((config or {}).get("backtest") or {}).get("end_date")
     default_timeframe = ((config or {}).get("strategy") or {}).get("timeframe", "1m")
+    default_candles = _default_backtest_candles()
 
-    if len(args) > 4:
+    if not args or len(args) > 3:
+        await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
+        return
+
+    symbol = str(args[0]).strip().upper()
+    timeframe = default_timeframe
+    candles = default_candles
+    seen_timeframe = False
+    seen_candles = False
+
+    for raw_arg in args[1:]:
+        value = str(raw_arg).strip()
+        if _looks_like_timeframe(value):
+            if seen_timeframe:
+                await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
+                return
+            timeframe = value.lower()
+            seen_timeframe = True
+            continue
+
+        if value.isdigit():
+            if seen_candles:
+                await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
+                return
+            candles = int(value)
+            seen_candles = True
+            continue
+
+        await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
+        return
+
+    if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
         await _reply(
             update,
-            "📈 Use: `/backtest [symbol] [start_date] [end_date] [timeframe]`\n\n"
-            "Example: `/backtest BTCUSD 2024-01-01 2024-01-31 1m`",
+            f"❌ Phemex backtests only support `{sorted(ALLOWED_REMOTE_CANDLE_COUNTS)}` candles per run.\n\n"
+            + _backtest_usage_text(default_symbol, default_timeframe),
             parse_mode="Markdown",
         )
         return
 
-    symbol = args[0] if len(args) >= 1 else default_symbol
-    start_date = args[1] if len(args) >= 2 else default_start
-    end_date = args[2] if len(args) >= 3 else default_end
-    timeframe = args[3] if len(args) >= 4 else default_timeframe
-
     await _reply(
         update,
-        f"⏳ Running backtest for `{symbol}` on `{timeframe}` from `{start_date}` to `{end_date}`...",
+        f"⏳ Running your free backtest for `{symbol}` on `{timeframe}` using the latest `{candles}` candles...",
         parse_mode="Markdown",
     )
 
     try:
         result = await asyncio.to_thread(
-            run_backtest,
+            run_backtest_recent,
             config or {},
             symbol,
-            start_date,
-            end_date,
             timeframe,
+            candles,
         )
     except BacktestServiceError as exc:
         await _reply(update, f"❌ {exc}", parse_mode="Markdown")
@@ -854,7 +1031,7 @@ async def kb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Scoring:* Trend (30), RSI (25), Volume (25), Momentum (20).\n\n"
         "*Risk controls:* Position sizing, ATR stops, max daily loss, and safety timeout.\n\n"
         "*Modes:* Backtest, simulation, and live execution.\n"
-        "Use `/backtest <symbol> <start_date> <end_date> [timeframe]` for historical runs.\n\n"
+        "Use `/backtest <symbol> [timeframe] [500|1000]` for free Telegram backtests.\n\n"
         "⚖️ Trading is risky. This project is educational software, not financial advice."
     )
     await _reply(update, kb_text, parse_mode="Markdown")
@@ -869,7 +1046,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/profile - View verification status\n"
         "/plans - Compare free vs paid access\n"
         "/subscription - View your current membership\n"
-        "/backtest - Run a historical backtest\n"
+        f"/start_trial - Start your {trial_days}-day Trial Pro\n"
+        "/dashboard_api - Get your gated member dashboard link\n"
+        "/rotate_dashboard_key - Mint a fresh member dashboard link\n"
+        "/backtest - Run a free Phemex backtest (500 or 1000 candles)\n"
         f"/subscribe - Start the {trial_days}-day Trial Pro / Pro checkout\n"
         "/manage_subscription - Open billing portal\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
@@ -918,7 +1098,10 @@ async def set_commands(application: Application):
         BotCommand("profile", "View verification status"),
         BotCommand("plans", "See free vs paid access"),
         BotCommand("subscription", "View your membership"),
-        BotCommand("backtest", "Run a historical backtest"),
+        BotCommand("start_trial", "Start your Trial Pro"),
+        BotCommand("dashboard_api", "Get your member dashboard link"),
+        BotCommand("rotate_dashboard_key", "Refresh your member dashboard link"),
+        BotCommand("backtest", "Run a free 500/1000 candle backtest"),
         BotCommand("subscribe", "Start Trial Pro / Stripe checkout"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
@@ -984,6 +1167,9 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("signup", signup_command))
     application.add_handler(CommandHandler("plans", plans_command))
     application.add_handler(CommandHandler("subscription", subscription_command))
+    application.add_handler(CommandHandler("start_trial", start_trial_command))
+    application.add_handler(CommandHandler("dashboard_api", dashboard_api_command))
+    application.add_handler(CommandHandler("rotate_dashboard_key", rotate_dashboard_key_command))
     application.add_handler(CommandHandler("backtest", backtest_command))
     application.add_handler(CommandHandler("subscribe", subscribe_command))
     application.add_handler(CommandHandler("manage_subscription", manage_subscription_command))

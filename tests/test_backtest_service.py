@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 import backtest_service
 
@@ -32,6 +33,47 @@ def test_run_backtest_returns_report(sample_config, monkeypatch):
     assert result["timeframe"] == "1m"
     assert result["candles"] == 60
     assert "final_balance" in result["report"]
+
+
+def test_run_backtest_recent_returns_report(sample_config, monkeypatch):
+    dates = pd.date_range("2026-03-24", periods=500, freq="1min")
+    prices = [1000 + i for i in range(500)]
+    frame = pd.DataFrame(
+        {
+            "timestamp": [int(ts.timestamp() * 1000) for ts in dates],
+            "open": prices,
+            "high": [price + 5 for price in prices],
+            "low": [price - 5 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(prices),
+        },
+        index=dates,
+    )
+
+    monkeypatch.setattr(backtest_service, "_fetch_remote_recent_dataset", lambda *args, **kwargs: frame)
+
+    result = backtest_service.run_backtest_recent(
+        sample_config,
+        symbol="BTCUSD",
+        timeframe="1m",
+        candles=500,
+    )
+
+    assert result["symbol"] == "BTCUSD"
+    assert result["timeframe"] == "1m"
+    assert result["candles"] == 500
+    assert result["window"] == "latest_500_candles"
+    assert "final_balance" in result["report"]
+
+
+def test_run_backtest_recent_rejects_invalid_candle_count(sample_config):
+    with pytest.raises(backtest_service.BacktestServiceError):
+        backtest_service.run_backtest_recent(
+            sample_config,
+            symbol="BTCUSD",
+            timeframe="1m",
+            candles=750,
+        )
 
 
 def test_format_backtest_summary_contains_key_metrics():

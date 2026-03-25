@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 import api
 from api import create_app
 from common import Position
+from dashboard_access import generate_member_dashboard_token
 
 
 def _build_engine(sample_config):
@@ -110,6 +111,42 @@ def test_dashboard_data_returns_live_payload(sample_config):
     assert payload["positions"][0]["symbol"] == "BTCUSD"
 
 
+def test_member_dashboard_page_renders(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/member")
+
+    assert response.status_code == 200
+    assert "FancyFinance Member Dashboard" in response.text
+    assert "Telegram-issued dashboard token" in response.text
+
+
+def test_member_dashboard_data_requires_valid_token(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/member-data")
+
+    assert response.status_code == 401
+
+
+def test_member_dashboard_data_returns_read_only_payload(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard/member-data", params={"access": token})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["member_access"] is True
+    assert payload["user_id"] == 12345
+    assert payload["snapshot"]["balance"] is None
+    assert payload["users"] == {}
+    assert payload["positions"][0]["symbol"] == "BTCUSD"
+
+
 def test_backtest_run_endpoint_returns_report(sample_config, monkeypatch):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
@@ -137,3 +174,34 @@ def test_backtest_run_endpoint_returns_report(sample_config, monkeypatch):
     payload = response.json()
     assert payload["symbol"] == "BTCUSD"
     assert payload["report"]["final_balance"] == 10500.0
+
+
+def test_backtest_run_endpoint_supports_recent_candle_mode(sample_config, monkeypatch):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        api,
+        "run_backtest_recent",
+        lambda config, symbol, timeframe=None, candles=500: {
+            "symbol": symbol,
+            "timeframe": timeframe or "1m",
+            "start_date": "2026-03-24 00:00:00",
+            "end_date": "2026-03-24 08:19:00",
+            "candles": candles,
+            "window": f"latest_{candles}_candles",
+            "report": {"final_balance": 10250.0, "total_return": 2.5},
+        },
+    )
+
+    response = client.post(
+        "/backtest/run",
+        params={"symbol": "BTCUSD", "timeframe": "5m", "candles": 1000},
+        headers={"x-api-key": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["symbol"] == "BTCUSD"
+    assert payload["candles"] == 1000
+    assert payload["window"] == "latest_1000_candles"

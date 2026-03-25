@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from telegram_bot import (
     agree_command,
     backtest_command,
+    dashboard_api_command,
+    start_trial_command,
     start,
     help_command,
     menu_button_handler,
@@ -304,17 +306,18 @@ async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_con
 @pytest.mark.asyncio
 async def test_backtest_command_returns_summary(mock_update, mock_context, mock_config):
     telegram_bot.config = mock_config
-    mock_context.args = ["BTCUSD", "2024-01-01", "2024-01-31", "1m"]
+    mock_context.args = ["BTCUSD", "1m", "500"]
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
         with patch(
-            "telegram_bot.run_backtest",
+            "telegram_bot.run_backtest_recent",
             return_value={
                 "symbol": "BTCUSD",
                 "timeframe": "1m",
-                "start_date": "2024-01-01",
-                "end_date": "2024-01-31",
+                "start_date": "2026-03-24 00:00:00",
+                "end_date": "2026-03-24 08:19:00",
                 "candles": 500,
+                "window": "latest_500_candles",
                 "report": {
                     "final_balance": 10500.0,
                     "total_return": 5.0,
@@ -325,12 +328,92 @@ async def test_backtest_command_returns_summary(mock_update, mock_context, mock_
                     "profit_factor": 1.8,
                 },
             },
-        ):
+    ):
             await backtest_command(mock_update, mock_context)
 
     assert mock_update.message.reply_text.call_count == 2
-    assert "Running backtest" in mock_update.message.reply_text.call_args_list[0].args[0]
+    assert "Running your free backtest" in mock_update.message.reply_text.call_args_list[0].args[0]
     assert "Backtest Complete" in mock_update.message.reply_text.call_args_list[1].args[0]
+
+
+@pytest.mark.asyncio
+async def test_backtest_command_shows_usage_without_args(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = []
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
+        await backtest_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called_once()
+    assert "Free Backtesting" in mock_update.message.reply_text.call_args[0][0]
+    assert "500|1000" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_backtest_command_rejects_invalid_candle_count(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = ["BTCUSD", "1m", "750"]
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
+        await backtest_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called_once()
+    assert "only support" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_start_trial_command_unlocks_trial_pro(mock_update, mock_context, mock_config):
+    telegram_bot.config = {
+        **mock_config,
+        "api": {
+            **mock_config["api"],
+            "auth_token": "secret-token",
+            "base_url": "https://fancyfinance-production.up.railway.app",
+        },
+        "stripe": {"trial_days": 7},
+    }
+
+    with patch.object(
+        telegram_bot.db,
+        "get_membership_summary",
+        side_effect=[
+            {"tier": "free", "status": "free", "can_backtest": True, "can_simulation": False, "can_live": False},
+            {"tier": "trial_pro", "status": "trial_pro", "can_backtest": True, "can_simulation": True, "can_live": True},
+        ],
+    ):
+        with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345, "trial_started_at": None}):
+            with patch.object(telegram_bot.db, "start_trial_membership", return_value={"telegram_id": 12345, "membership_tier": "trial_pro"}):
+                await start_trial_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called_once()
+    message = mock_update.message.reply_text.call_args[0][0]
+    assert "Trial Pro unlocked" in message
+    assert "/dashboard_api" in message
+
+
+@pytest.mark.asyncio
+async def test_dashboard_api_command_returns_member_link(mock_update, mock_context, mock_config):
+    telegram_bot.config = {
+        **mock_config,
+        "api": {
+            **mock_config["api"],
+            "auth_token": "secret-token",
+            "base_url": "https://fancyfinance-production.up.railway.app",
+        },
+    }
+
+    with patch.object(
+        telegram_bot.db,
+        "get_membership_summary",
+        return_value={"tier": "trial_pro", "status": "trial_pro", "can_backtest": True, "can_simulation": True, "can_live": True},
+    ):
+        with patch("telegram_bot.generate_member_dashboard_token", return_value="signed-token"):
+            await dashboard_api_command(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called_once()
+    message = mock_update.message.reply_text.call_args[0][0]
+    assert "/dashboard/member?access=signed-token" in message
+    assert "run `/dashboard_api` again to rotate it" in message
 
 
 @pytest.mark.asyncio

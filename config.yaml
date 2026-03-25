@@ -89,6 +89,7 @@ api:
   host: "0.0.0.0"
   port: "${PORT:-8000}"
   auth_token: "${FANCYFINANCE_API_TOKEN:-}"
+  base_url: "${FANCYFINANCE_BASE_URL:-}"
 
 mode: "simulation"  # Options: backtest, simulation, live
 customer_mode: false # If true, enables multi-user database features

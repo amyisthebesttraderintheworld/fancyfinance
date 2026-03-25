@@ -10,6 +10,7 @@ from backtester import Backtester
 from common import get_logger, load_historical_data
 
 logger = get_logger("BacktestService")
+ALLOWED_REMOTE_CANDLE_COUNTS = {500, 1000}
 
 
 class BacktestServiceError(Exception):
@@ -182,6 +183,49 @@ def _fetch_remote_dataset(
     return frame
 
 
+def _fetch_remote_recent_dataset(
+    config: dict,
+    symbol: str,
+    timeframe: str,
+    candles: int,
+) -> pd.DataFrame:
+    if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
+        raise BacktestServiceError(
+            f"Phemex backtests are limited to {sorted(ALLOWED_REMOTE_CANDLE_COUNTS)} candles per run."
+        )
+
+    try:
+        from exchange_manager import ExchangeManager
+    except Exception as exc:
+        raise BacktestServiceError(
+            "Remote historical backtesting is unavailable because exchange support is not installed."
+        ) from exc
+
+    exchange_id = config.get("exchange", "phemex")
+    exchange_config = config.get(exchange_id, {})
+    market_type = exchange_config.get("market_type") or exchange_config.get("symbol_type") or "swap"
+
+    manager = ExchangeManager(
+        exchange_id,
+        api_key=exchange_config.get("api_key"),
+        api_secret=exchange_config.get("api_secret"),
+        options={"defaultType": market_type},
+    )
+    client = manager.client
+    client.load_markets()
+    exchange_symbol = _resolve_ccxt_symbol(client, symbol)
+
+    rows = client.fetch_ohlcv(exchange_symbol, timeframe=timeframe, limit=candles)
+    if not rows:
+        return pd.DataFrame()
+
+    frame = pd.DataFrame(rows, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    frame["datetime"] = pd.to_datetime(frame["timestamp"], unit="ms")
+    frame.set_index("datetime", inplace=True)
+    frame.sort_index(inplace=True)
+    return frame
+
+
 def load_backtest_dataframe(
     config: dict,
     symbol: str,
@@ -241,12 +285,54 @@ def run_backtest(
     }
 
 
+def run_backtest_recent(
+    base_config: dict,
+    symbol: str,
+    timeframe: Optional[str] = None,
+    candles: int = 500,
+) -> dict[str, Any]:
+    if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
+        raise BacktestServiceError(
+            f"Phemex backtests are limited to {sorted(ALLOWED_REMOTE_CANDLE_COUNTS)} candles per run."
+        )
+
+    config = deepcopy(base_config or {})
+    resolved_timeframe = timeframe or config.get("strategy", {}).get("timeframe") or "1m"
+    config.setdefault("strategy", {})
+    config["strategy"]["timeframe"] = resolved_timeframe
+
+    frame = _fetch_remote_recent_dataset(config, symbol, resolved_timeframe, candles)
+    if frame.empty:
+        raise BacktestServiceError(
+            f"No historical data is available for `{symbol}` on `{resolved_timeframe}` using the latest `{candles}` candles."
+        )
+
+    backtester = Backtester(config)
+    backtester.run(symbol, frame)
+    report = backtester.generate_report(plot_filename=None)
+
+    return {
+        "symbol": symbol,
+        "timeframe": resolved_timeframe,
+        "start_date": frame.index.min().strftime("%Y-%m-%d %H:%M:%S"),
+        "end_date": frame.index.max().strftime("%Y-%m-%d %H:%M:%S"),
+        "candles": int(len(frame)),
+        "report": report,
+        "window": f"latest_{candles}_candles",
+    }
+
+
 def format_backtest_summary(result: dict[str, Any]) -> str:
     report = result.get("report") or {}
+    window = str(result.get("window") or "").strip()
+    window_line = ""
+    if window:
+        window_line = f"*Window:* `{window.replace('_', ' ')}`\n"
     return (
         f"📈 *Backtest Complete*\n\n"
         f"*Symbol:* `{result.get('symbol')}`\n"
         f"*Timeframe:* `{result.get('timeframe')}`\n"
+        f"{window_line}"
         f"*Range:* `{result.get('start_date')}` → `{result.get('end_date')}`\n"
         f"*Candles:* `{result.get('candles')}`\n\n"
         f"*Final Balance:* `${report.get('final_balance', 0):,.2f}`\n"

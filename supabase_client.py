@@ -164,6 +164,7 @@ class SupabaseManager:
         user["membership_tier"] = normalized_tier
         user["membership_expires_at"] = user.get("membership_expires_at")
         user["membership_status"] = self._membership_status(user)
+        user["trial_started_at"] = user.get("trial_started_at")
         user["stripe_customer_id"] = user.get("stripe_customer_id")
         user["stripe_subscription_id"] = user.get("stripe_subscription_id")
         user["stripe_subscription_status"] = user.get("stripe_subscription_status")
@@ -212,6 +213,7 @@ class SupabaseManager:
             "email_otp": None,
             "otp_created_at": None,
             "is_verified": False,
+            "trial_started_at": None,
             "created_at": self._now(),
             "updated_at": self._now(),
         }
@@ -228,7 +230,7 @@ class SupabaseManager:
 
     def _has_optional_user_columns_error(self, exc: Exception) -> bool:
         message = str(exc)
-        return "membership_" in message or "stripe_" in message
+        return "membership_" in message or "stripe_" in message or "trial_" in message
 
     def _persist_user_update(self, telegram_id: int, update_payload: Dict[str, Any]) -> bool:
         if not self.client:
@@ -535,13 +537,28 @@ class SupabaseManager:
         username: str = "",
         first_name: str = "",
     ) -> Optional[Dict[str, Any]]:
-        return self.set_membership(
-            telegram_id,
-            TRIAL_PRO_MEMBERSHIP,
-            expires_at=self._trial_expiry(days),
-            username=username,
-            first_name=first_name,
-        )
+        user = self.get_or_create_user(telegram_id, username, first_name)
+        if not user:
+            return None
+
+        if user.get("trial_started_at"):
+            return self._normalize_user_record(user)
+
+        expires_at = self._trial_expiry(days)
+        update_payload = {
+            "membership_tier": TRIAL_PRO_MEMBERSHIP,
+            "membership_expires_at": expires_at,
+            "trial_started_at": self._now(),
+            "updated_at": self._now(),
+        }
+        user.update(update_payload)
+        self._normalize_user_record(user)
+
+        if not self.client:
+            return user
+
+        self._persist_user_update(telegram_id, update_payload)
+        return user
 
     def set_membership(
         self,
@@ -696,6 +713,8 @@ class SupabaseManager:
             "stripe_subscription_status": normalized_subscription_status,
             "updated_at": self._now(),
         }
+        if membership_tier == TRIAL_PRO_MEMBERSHIP and not user.get("trial_started_at"):
+            update_payload["trial_started_at"] = self._now()
         if customer_id is not None:
             update_payload["stripe_customer_id"] = customer_id
         if subscription_id is not None:
@@ -873,7 +892,7 @@ class SupabaseManager:
                     self.client.table("users")
                     .select(
                         "telegram_id, username, first_name, email, pending_email, is_verified, "
-                        "membership_tier, membership_expires_at, created_at, updated_at"
+                        "membership_tier, membership_expires_at, trial_started_at, created_at, updated_at"
                     )
                     .order("created_at", desc=True)
                     .limit(limit)

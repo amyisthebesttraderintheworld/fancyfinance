@@ -4,12 +4,46 @@ from __future__ import annotations
 PUBLIC_SITE_URL = "https://fancy-bot-front.lovable.app/"
 
 
-def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> str:
+def build_dashboard_html(
+    app_name: str,
+    version: str,
+    auth_required: bool,
+    *,
+    public_mode: bool = False,
+    data_endpoint: str = "/dashboard/data",
+    token_storage_key: str = "fancyfinance_api_token",
+    query_token_param: str = "",
+) -> str:
     auth_required_js = "true" if auth_required else "false"
+    public_mode_js = "true" if public_mode else "false"
     auth_hint = (
-        "Enter your FancyFinance API token to unlock live stats, billing visibility, and engine controls."
-        if auth_required
-        else "API auth is disabled. Live stats and controls are available without a token."
+        "Use the Telegram-issued dashboard token to open this read-only member dashboard. Admin controls stay on /dashboard."
+        if public_mode
+        else (
+            "Enter your FancyFinance API token to unlock live stats, billing visibility, and engine controls."
+            if auth_required
+            else "API auth is disabled. Live stats and controls are available without a token."
+        )
+    )
+    auth_title = "Member Access" if public_mode else "Unlock live controls"
+    brand_title = f"{app_name} Member Dashboard" if public_mode else f"{app_name} Control Center"
+    hero_subtitle = (
+        "A read-only live view of FancyFinance performance, runtime health, and recent activity. "
+        "Use the main site as the front door, then keep protected operator controls on /dashboard."
+        if public_mode
+        else "The same Railway-hosted control plane behind FancyFinance, now styled to match the new public site and built for fast operator decisions."
+    )
+    auth_form_style = "" if auth_required else "display:none;"
+    controls_style = "display:none;" if public_mode else ""
+    setup_style = "display:none;" if public_mode else ""
+    users_style = "display:none;" if public_mode else ""
+    user_metric_style = "display:none;" if public_mode else ""
+    members_nav = "" if public_mode else '<a href="#users-panel">Members</a>'
+    page_title = f"{app_name} Member Dashboard" if public_mode else f"{app_name} Dashboard"
+    footer_note = (
+        "Use /dashboard_api in Telegram any time you need a fresh access token."
+        if public_mode
+        else "Auto-refresh runs every 10 seconds while this tab is visible."
     )
 
     template = """<!doctype html>
@@ -17,7 +51,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>__APP_NAME__ Dashboard</title>
+    <title>__PAGE_TITLE__</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
@@ -594,14 +628,14 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
           <div class="brand-mark">F</div>
           <div class="brand-copy">
             <div class="eyebrow">Telegram-first algorithmic trading</div>
-            <div class="brand-title">__APP_NAME__ Control Center</div>
+            <div class="brand-title">__BRAND_TITLE__</div>
           </div>
         </div>
         <nav class="topnav">
           <a href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">Public Site</a>
           <a href="#control-panel">Controls</a>
           <a href="#runtime-panel">Runtime</a>
-          <a href="#users-panel">Members</a>
+          __MEMBERS_NAV__
           <a class="nav-cta" href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">FancyFinance Hub</a>
         </nav>
       </header>
@@ -615,7 +649,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
           <div class="eyebrow">Operations dashboard</div>
           <h1>Algorithmic trading,<br /><span class="gradient-text">tuned for live control</span></h1>
           <p class="subtitle">
-            The same Railway-hosted control plane behind FancyFinance, now styled to match the new public site and built for fast operator decisions.
+            __HERO_SUBTITLE__
           </p>
           <div class="hero-links">
             <a class="link-btn primary" href="__PUBLIC_SITE__" target="_blank" rel="noreferrer">Open Public Site</a>
@@ -634,7 +668,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
               <span class="metric-label">Realized PnL</span>
               <span class="metric-value" id="metric-pnl">--</span>
             </div>
-            <div class="metric">
+            <div class="metric" style="__USER_METRIC_STYLE__">
               <span class="metric-label">Users</span>
               <span class="metric-value" id="metric-users">--</span>
             </div>
@@ -644,9 +678,10 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
         <aside class="auth-card surface">
           <div>
             <div class="eyebrow">Secure Access</div>
-            <h2 class="panel-title" style="margin-top: 14px;">Unlock live controls</h2>
+            <h2 class="panel-title" style="margin-top: 14px;">__AUTH_TITLE__</h2>
             <p class="panel-subtitle">__AUTH_HINT__</p>
           </div>
+          <div style="__AUTH_FORM_STYLE__">
           <label class="field-label" for="api-token">API Token</label>
           <input id="api-token" type="password" placeholder="Paste FANCYFINANCE_API_TOKEN" />
           <div class="button-row">
@@ -654,14 +689,15 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             <button class="secondary" id="clear-token-btn">Clear Token</button>
             <button class="secondary" id="refresh-btn">Refresh Now</button>
           </div>
+          </div>
           <div class="message" id="auth-message"></div>
-          <div class="footer-note">Auto-refresh runs every 10 seconds while this tab is visible.</div>
+          <div class="footer-note">__FOOTER_NOTE__</div>
         </aside>
       </section>
 
       <section class="content-grid">
         <div class="stack">
-          <div class="panel surface" id="control-panel">
+          <div class="panel surface" id="control-panel" style="__CONTROL_PANEL_STYLE__">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Live Controls</h2>
@@ -705,7 +741,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             <div class="footer-note" id="runtime-note">Waiting for runtime data.</div>
           </div>
 
-          <div class="panel surface">
+          <div class="panel surface" style="__SETUP_PANEL_STYLE__">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Open Positions</h2>
@@ -764,7 +800,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
             </div>
           </div>
 
-          <div class="panel surface" id="users-panel">
+          <div class="panel surface" id="users-panel" style="__USERS_PANEL_STYLE__">
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Members</h2>
@@ -813,10 +849,20 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
 
     <script>
       const AUTH_REQUIRED = __AUTH_REQUIRED_JS__;
-      const TOKEN_KEY = "fancyfinance_api_token";
+      const PUBLIC_MODE = __PUBLIC_MODE_JS__;
+      const DATA_ENDPOINT = "__DATA_ENDPOINT__";
+      const TOKEN_KEY = "__TOKEN_STORAGE_KEY__";
+      const QUERY_TOKEN_PARAM = "__QUERY_TOKEN_PARAM__";
+      const queryToken = QUERY_TOKEN_PARAM
+        ? (new URLSearchParams(window.location.search).get(QUERY_TOKEN_PARAM) || "")
+        : "";
       const state = {
-        token: localStorage.getItem(TOKEN_KEY) || "",
+        token: queryToken || localStorage.getItem(TOKEN_KEY) || "",
       };
+
+      if (queryToken) {
+        localStorage.setItem(TOKEN_KEY, queryToken);
+      }
 
       const els = {
         tokenInput: document.getElementById("api-token"),
@@ -1113,7 +1159,7 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
 
       async function loadDashboard() {
         try {
-          const response = await fetch("/dashboard/data", {
+          const response = await fetch(DATA_ENDPOINT, {
             headers: headers(),
           });
 
@@ -1135,6 +1181,10 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
       }
 
       async function runControl(action) {
+        if (PUBLIC_MODE) {
+          setMessage(els.controlMessage, "Public overview is read-only. Use /dashboard/admin for controls.", true);
+          return;
+        }
         const requiresConfirm = action === "shutdown";
         if (requiresConfirm && !window.confirm("Shut the engine down now?")) {
           return;
@@ -1156,27 +1206,46 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
         }
       }
 
-      document.getElementById("save-token-btn").addEventListener("click", async () => {
-        state.token = els.tokenInput.value.trim();
-        if (state.token) {
-          localStorage.setItem(TOKEN_KEY, state.token);
-        } else {
+      const saveTokenBtn = document.getElementById("save-token-btn");
+      const clearTokenBtn = document.getElementById("clear-token-btn");
+      const refreshBtn = document.getElementById("refresh-btn");
+      const pauseBtn = document.getElementById("pause-btn");
+      const resumeBtn = document.getElementById("resume-btn");
+      const shutdownBtn = document.getElementById("shutdown-btn");
+
+      if (saveTokenBtn) {
+        saveTokenBtn.addEventListener("click", async () => {
+          state.token = els.tokenInput.value.trim();
+          if (state.token) {
+            localStorage.setItem(TOKEN_KEY, state.token);
+          } else {
+            localStorage.removeItem(TOKEN_KEY);
+          }
+          await loadDashboard();
+        });
+      }
+
+      if (clearTokenBtn) {
+        clearTokenBtn.addEventListener("click", () => {
+          state.token = "";
+          els.tokenInput.value = "";
           localStorage.removeItem(TOKEN_KEY);
-        }
-        await loadDashboard();
-      });
+          setMessage(els.authMessage, "Stored token cleared.");
+        });
+      }
 
-      document.getElementById("clear-token-btn").addEventListener("click", () => {
-        state.token = "";
-        els.tokenInput.value = "";
-        localStorage.removeItem(TOKEN_KEY);
-        setMessage(els.authMessage, "Stored token cleared.");
-      });
-
-      document.getElementById("refresh-btn").addEventListener("click", loadDashboard);
-      document.getElementById("pause-btn").addEventListener("click", () => runControl("pause"));
-      document.getElementById("resume-btn").addEventListener("click", () => runControl("resume"));
-      document.getElementById("shutdown-btn").addEventListener("click", () => runControl("shutdown"));
+      if (refreshBtn) {
+        refreshBtn.addEventListener("click", loadDashboard);
+      }
+      if (pauseBtn) {
+        pauseBtn.addEventListener("click", () => runControl("pause"));
+      }
+      if (resumeBtn) {
+        resumeBtn.addEventListener("click", () => runControl("resume"));
+      }
+      if (shutdownBtn) {
+        shutdownBtn.addEventListener("click", () => runControl("shutdown"));
+      }
 
       loadDashboard();
       window.setInterval(() => {
@@ -1192,8 +1261,23 @@ def build_dashboard_html(app_name: str, version: str, auth_required: bool) -> st
     return (
         template
         .replace("__APP_NAME__", app_name)
+        .replace("__PAGE_TITLE__", page_title)
         .replace("__VERSION__", version)
+        .replace("__BRAND_TITLE__", brand_title)
+        .replace("__HERO_SUBTITLE__", hero_subtitle)
+        .replace("__AUTH_TITLE__", auth_title)
         .replace("__AUTH_HINT__", auth_hint)
+        .replace("__AUTH_FORM_STYLE__", auth_form_style)
+        .replace("__CONTROL_PANEL_STYLE__", controls_style)
+        .replace("__SETUP_PANEL_STYLE__", setup_style)
+        .replace("__USERS_PANEL_STYLE__", users_style)
+        .replace("__USER_METRIC_STYLE__", user_metric_style)
+        .replace("__MEMBERS_NAV__", members_nav)
+        .replace("__FOOTER_NOTE__", footer_note)
         .replace("__AUTH_REQUIRED_JS__", auth_required_js)
+        .replace("__PUBLIC_MODE_JS__", public_mode_js)
+        .replace("__DATA_ENDPOINT__", data_endpoint)
+        .replace("__TOKEN_STORAGE_KEY__", token_storage_key)
+        .replace("__QUERY_TOKEN_PARAM__", query_token_param)
         .replace("__PUBLIC_SITE__", PUBLIC_SITE_URL)
     )
