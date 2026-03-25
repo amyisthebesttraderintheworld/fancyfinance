@@ -111,13 +111,24 @@ def _resolve_ccxt_symbol(client: Any, requested_symbol: str) -> str:
     )
 
 
-def _fetch_remote_dataset(
-    config: dict,
-    symbol: str,
-    timeframe: str,
-    start_date: str,
-    end_date: str,
-) -> pd.DataFrame:
+def _configured_symbols(config: dict) -> list[str]:
+    exchange_id = config.get("exchange", "phemex")
+    exchange_symbols = ((config.get(exchange_id) or {}).get("symbols") or [])
+    configured = config.get("symbols") or exchange_symbols
+    seen: set[str] = set()
+    symbols: list[str] = []
+
+    for raw_symbol in configured:
+        symbol = str(raw_symbol or "").strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        symbols.append(symbol)
+
+    return symbols
+
+
+def _create_exchange_client(config: dict):
     try:
         from exchange_manager import ExchangeManager
     except Exception as exc:
@@ -128,9 +139,6 @@ def _fetch_remote_dataset(
     exchange_id = config.get("exchange", "phemex")
     exchange_config = config.get(exchange_id, {})
     market_type = exchange_config.get("market_type") or exchange_config.get("symbol_type") or "swap"
-    start_dt = _parse_date(start_date)
-    end_dt = _parse_date(end_date, end_of_day=True)
-    timeframe_step = _timeframe_to_timedelta(timeframe)
 
     manager = ExchangeManager(
         exchange_id,
@@ -140,6 +148,21 @@ def _fetch_remote_dataset(
     )
     client = manager.client
     client.load_markets()
+    return client
+
+
+def _fetch_remote_dataset(
+    config: dict,
+    symbol: str,
+    timeframe: str,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date, end_of_day=True)
+    timeframe_step = _timeframe_to_timedelta(timeframe)
+
+    client = _create_exchange_client(config)
     exchange_symbol = _resolve_ccxt_symbol(client, symbol)
 
     since_ms = int(start_dt.timestamp() * 1000)
@@ -183,8 +206,8 @@ def _fetch_remote_dataset(
     return frame
 
 
-def _fetch_remote_recent_dataset(
-    config: dict,
+def _fetch_remote_recent_dataset_with_client(
+    client: Any,
     symbol: str,
     timeframe: str,
     candles: int,
@@ -193,26 +216,6 @@ def _fetch_remote_recent_dataset(
         raise BacktestServiceError(
             f"Phemex backtests are limited to {sorted(ALLOWED_REMOTE_CANDLE_COUNTS)} candles per run."
         )
-
-    try:
-        from exchange_manager import ExchangeManager
-    except Exception as exc:
-        raise BacktestServiceError(
-            "Remote historical backtesting is unavailable because exchange support is not installed."
-        ) from exc
-
-    exchange_id = config.get("exchange", "phemex")
-    exchange_config = config.get(exchange_id, {})
-    market_type = exchange_config.get("market_type") or exchange_config.get("symbol_type") or "swap"
-
-    manager = ExchangeManager(
-        exchange_id,
-        api_key=exchange_config.get("api_key"),
-        api_secret=exchange_config.get("api_secret"),
-        options={"defaultType": market_type},
-    )
-    client = manager.client
-    client.load_markets()
     exchange_symbol = _resolve_ccxt_symbol(client, symbol)
 
     rows = client.fetch_ohlcv(exchange_symbol, timeframe=timeframe, limit=candles)
@@ -224,6 +227,40 @@ def _fetch_remote_recent_dataset(
     frame.set_index("datetime", inplace=True)
     frame.sort_index(inplace=True)
     return frame
+
+
+def _fetch_remote_recent_dataset(
+    config: dict,
+    symbol: str,
+    timeframe: str,
+    candles: int,
+) -> pd.DataFrame:
+    client = _create_exchange_client(config)
+    return _fetch_remote_recent_dataset_with_client(client, symbol, timeframe, candles)
+
+
+def _run_backtester(config: dict, symbol: str, timeframe: str, frame: pd.DataFrame) -> dict[str, Any]:
+    if frame.empty:
+        raise BacktestServiceError(f"No historical data is available for `{symbol}` on `{timeframe}`.")
+
+    backtester = Backtester(config)
+    backtester.run(symbol, frame)
+    report = backtester.generate_report(plot_filename=None)
+    trade_pnls = [float(trade.pnl) for trade in backtester.trades if getattr(trade, "pnl", None) is not None]
+    wins = sum(1 for pnl in trade_pnls if pnl > 0)
+    losses = sum(1 for pnl in trade_pnls if pnl <= 0)
+
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "start_date": frame.index.min().strftime("%Y-%m-%d %H:%M:%S"),
+        "end_date": frame.index.max().strftime("%Y-%m-%d %H:%M:%S"),
+        "candles": int(len(frame)),
+        "report": report,
+        "wins": wins,
+        "losses": losses,
+        "trade_pnls": trade_pnls,
+    }
 
 
 def load_backtest_dataframe(
@@ -271,9 +308,7 @@ def run_backtest(
             f"No historical data is available for `{symbol}` on `{resolved_timeframe}` between `{resolved_start}` and `{resolved_end}`."
         )
 
-    backtester = Backtester(config)
-    backtester.run(symbol, frame)
-    report = backtester.generate_report(plot_filename=None)
+    result = _run_backtester(config, symbol, resolved_timeframe, frame)
 
     return {
         "symbol": symbol,
@@ -281,7 +316,7 @@ def run_backtest(
         "start_date": resolved_start,
         "end_date": resolved_end,
         "candles": int(len(frame)),
-        "report": report,
+        "report": result["report"],
     }
 
 
@@ -307,18 +342,118 @@ def run_backtest_recent(
             f"No historical data is available for `{symbol}` on `{resolved_timeframe}` using the latest `{candles}` candles."
         )
 
-    backtester = Backtester(config)
-    backtester.run(symbol, frame)
-    report = backtester.generate_report(plot_filename=None)
+    result = _run_backtester(config, symbol, resolved_timeframe, frame)
 
     return {
         "symbol": symbol,
         "timeframe": resolved_timeframe,
-        "start_date": frame.index.min().strftime("%Y-%m-%d %H:%M:%S"),
-        "end_date": frame.index.max().strftime("%Y-%m-%d %H:%M:%S"),
-        "candles": int(len(frame)),
-        "report": report,
+        "start_date": result["start_date"],
+        "end_date": result["end_date"],
+        "candles": result["candles"],
+        "report": result["report"],
         "window": f"latest_{candles}_candles",
+    }
+
+
+def run_backtest_recent_universe(
+    base_config: dict,
+    timeframe: Optional[str] = None,
+    candles: int = 500,
+) -> dict[str, Any]:
+    if candles not in ALLOWED_REMOTE_CANDLE_COUNTS:
+        raise BacktestServiceError(
+            f"Phemex backtests are limited to {sorted(ALLOWED_REMOTE_CANDLE_COUNTS)} candles per run."
+        )
+
+    config = deepcopy(base_config or {})
+    symbols = _configured_symbols(config)
+    if not symbols:
+        raise BacktestServiceError("No scanner symbols are configured for universe backtesting.")
+
+    resolved_timeframe = timeframe or config.get("strategy", {}).get("timeframe") or "1m"
+    config.setdefault("strategy", {})
+    config["strategy"]["timeframe"] = resolved_timeframe
+
+    client = _create_exchange_client(config)
+    per_symbol: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
+
+    for symbol in symbols:
+        try:
+            frame = _fetch_remote_recent_dataset_with_client(client, symbol, resolved_timeframe, candles)
+            if frame.empty:
+                raise BacktestServiceError(
+                    f"No historical data is available for `{symbol}` on `{resolved_timeframe}` using the latest `{candles}` candles."
+                )
+            per_symbol.append(_run_backtester(config, symbol, resolved_timeframe, frame))
+        except Exception as exc:
+            logger.warning("Skipping recent universe backtest for %s: %s", symbol, exc)
+            failures.append({"symbol": symbol, "reason": str(exc)})
+
+    if not per_symbol:
+        raise BacktestServiceError("No scanner symbols returned enough Phemex data for a backtest run.")
+
+    initial_balance = float(config.get("backtest", {}).get("initial_balance") or 0.0)
+    aggregate_initial_balance = initial_balance * len(per_symbol)
+    aggregate_final_balance = sum(float(item["report"].get("final_balance", initial_balance)) for item in per_symbol)
+    aggregate_total_return = (
+        ((aggregate_final_balance - aggregate_initial_balance) / aggregate_initial_balance) * 100.0
+        if aggregate_initial_balance
+        else 0.0
+    )
+
+    total_trade_count = sum(int(item["report"].get("total_trades", 0) or 0) for item in per_symbol)
+    total_wins = sum(int(item.get("wins", 0) or 0) for item in per_symbol)
+    total_losses = sum(int(item.get("losses", 0) or 0) for item in per_symbol)
+    trade_pnls = [pnl for item in per_symbol for pnl in item.get("trade_pnls", [])]
+    gross_profit = sum(pnl for pnl in trade_pnls if pnl > 0)
+    gross_loss = abs(sum(pnl for pnl in trade_pnls if pnl < 0))
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else (float("inf") if gross_profit > 0 else 0.0)
+    max_drawdown = min(float(item["report"].get("max_drawdown", 0) or 0) for item in per_symbol)
+    average_sharpe = sum(float(item["report"].get("sharpe_ratio", 0) or 0) for item in per_symbol) / len(per_symbol)
+    start_date = min(item["start_date"] for item in per_symbol)
+    end_date = max(item["end_date"] for item in per_symbol)
+
+    top_symbols = sorted(
+        [
+            {
+                "symbol": item["symbol"],
+                "final_balance": float(item["report"].get("final_balance", initial_balance)),
+                "total_return": float(item["report"].get("total_return", 0) or 0),
+                "total_trades": int(item["report"].get("total_trades", 0) or 0),
+                "win_rate": float(item["report"].get("win_rate", 0) or 0),
+            }
+            for item in per_symbol
+        ],
+        key=lambda entry: entry["total_return"],
+        reverse=True,
+    )
+
+    return {
+        "symbol": "SCANNER_UNIVERSE",
+        "scope": "universe",
+        "scope_label": "scanner universe",
+        "timeframe": resolved_timeframe,
+        "start_date": start_date,
+        "end_date": end_date,
+        "candles": candles,
+        "window": f"latest_{candles}_candles",
+        "report": {
+            "final_balance": round(aggregate_final_balance, 2),
+            "total_return": round(aggregate_total_return, 2),
+            "total_trades": int(total_trade_count),
+            "win_rate": round((total_wins / total_trade_count) * 100, 2) if total_trade_count else 0.0,
+            "max_drawdown": round(max_drawdown, 2),
+            "sharpe_ratio": round(average_sharpe, 2),
+            "profit_factor": round(profit_factor, 2) if profit_factor != float("inf") else float("inf"),
+        },
+        "symbols": symbols,
+        "successful_symbols": len(per_symbol),
+        "failed_symbols": failures,
+        "top_symbols": top_symbols[:5],
+        "capital_model": "Each asset ran independently with the same starting balance.",
+        "wins": total_wins,
+        "losses": total_losses,
     }
 
 
@@ -328,6 +463,36 @@ def format_backtest_summary(result: dict[str, Any]) -> str:
     window_line = ""
     if window:
         window_line = f"*Window:* `{window.replace('_', ' ')}`\n"
+    if result.get("scope") == "universe":
+        top_symbols = result.get("top_symbols") or []
+        top_line = ""
+        if top_symbols:
+            top_line = "*Top Symbols:* " + ", ".join(
+                f"`{item['symbol']}` ({item['total_return']:.2f}%)" for item in top_symbols[:3]
+            ) + "\n"
+        failed_symbols = result.get("failed_symbols") or []
+        failed_line = ""
+        if failed_symbols:
+            failed_line = f"*Skipped:* `{len(failed_symbols)}` symbol(s)\n"
+        return (
+            f"📈 *Backtest Complete*\n\n"
+            f"*Scope:* `{result.get('scope_label', 'scanner universe')}`\n"
+            f"*Assets Tested:* `{result.get('successful_symbols', 0)}` / `{len(result.get('symbols') or [])}`\n"
+            f"*Timeframe:* `{result.get('timeframe')}`\n"
+            f"{window_line}"
+            f"*Range:* `{result.get('start_date')}` → `{result.get('end_date')}`\n"
+            f"*Candles per Asset:* `{result.get('candles')}`\n"
+            f"*Capital Model:* {result.get('capital_model')}\n\n"
+            f"*Aggregate Final Balance:* `${report.get('final_balance', 0):,.2f}`\n"
+            f"*Aggregate Return:* `{report.get('total_return', 0):.2f}%`\n"
+            f"*Trades:* `{report.get('total_trades', 0)}`\n"
+            f"*Win Rate:* `{report.get('win_rate', 0):.2f}%`\n"
+            f"*Worst Max Drawdown:* `{report.get('max_drawdown', 0):.2f}%`\n"
+            f"*Average Sharpe Ratio:* `{report.get('sharpe_ratio', 0):.2f}`\n"
+            f"*Profit Factor:* `{report.get('profit_factor', 0)}`\n"
+            f"{top_line}"
+            f"{failed_line}"
+        )
     return (
         f"📈 *Backtest Complete*\n\n"
         f"*Symbol:* `{result.get('symbol')}`\n"

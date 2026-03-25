@@ -122,6 +122,16 @@ class Simulator:
                 )
 
             if isinstance(payload, (list, tuple)) and len(payload) >= 6:
+                if len(payload) >= 8:
+                    return Candle(
+                        timestamp=int(payload[0]),
+                        open=self._normalize_price(payload[3]),
+                        high=self._normalize_price(payload[4]),
+                        low=self._normalize_price(payload[5]),
+                        close=self._normalize_price(payload[6]),
+                        volume=float(payload[7]),
+                        symbol=symbol,
+                    )
                 return Candle(
                     timestamp=int(payload[0]),
                     open=self._normalize_price(payload[1]),
@@ -357,6 +367,18 @@ class Simulator:
         self.logger.info(f"Exit {symbol} {direction} @ {adjusted_price} PnL: {pnl}")
         self._check_safety_timeout()
 
+    def _positions_summary_text(self) -> str:
+        if not self.positions:
+            return "No open positions right now."
+
+        lines = ["Open Positions:"]
+        for symbol, position in self.positions.items():
+            lines.append(
+                f"{symbol}: {position.direction.upper()} | Entry {position.entry_price:.4f} | "
+                f"Qty {position.quantity:.4f} | SL {position.stop_loss:.4f} | TP {position.take_profit:.4f}"
+            )
+        return "\n".join(lines)
+
     async def _command_listener(self):
         while self.is_running:
             try:
@@ -378,6 +400,8 @@ class Simulator:
                 f"Paused: {self.is_paused}\n"
                 f"API Vault Unlocked: {self._runtime_api_ready()}"
             )
+        elif command == "/positions":
+            response = self._positions_summary_text()
         elif command == "/pause":
             self.is_paused = True
             response = "Simulation paused."

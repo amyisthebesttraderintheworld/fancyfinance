@@ -10,7 +10,7 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from backtest_service import BacktestServiceError, run_backtest, run_backtest_recent
+from backtest_service import BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
 from dashboard_access import DashboardAccessError, verify_member_dashboard_token
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
@@ -27,6 +27,21 @@ def _authorize_member_dashboard(expected_token: Optional[str], provided_token: O
         raise HTTPException(status_code=503, detail="Dashboard access is not configured")
     try:
         payload = verify_member_dashboard_token(expected_token, provided_token or "")
+    except DashboardAccessError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return int(payload["sub"])
+
+
+def _authorize_dashboard_request(expected_token: Optional[str], provided_token: Optional[str]) -> Optional[int]:
+    if not expected_token:
+        return None
+    if not provided_token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if provided_token == expected_token:
+        return None
+
+    try:
+        payload = verify_member_dashboard_token(expected_token, provided_token)
     except DashboardAccessError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     return int(payload["sub"])
@@ -243,7 +258,9 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard/data")
     def dashboard_data(x_api_key: Optional[str] = Header(default=None)):
-        _authorize(auth_token, x_api_key)
+        member_user_id = _authorize_dashboard_request(auth_token, x_api_key)
+        if member_user_id is not None:
+            return _member_dashboard_payload(engine, member_user_id)
         return _dashboard_payload(engine, auth_token)
 
     @app.get("/dashboard/member-data")
@@ -305,7 +322,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.post("/backtest/run")
     def backtest_run(
-        symbol: str,
+        symbol: Optional[str] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
         timeframe: Optional[str] = None,
@@ -315,12 +332,20 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         _authorize(auth_token, x_api_key)
         try:
             if candles is not None:
+                if not symbol:
+                    return run_backtest_recent_universe(
+                        engine.config,
+                        timeframe=timeframe,
+                        candles=int(candles),
+                    )
                 return run_backtest_recent(
                     engine.config,
                     symbol=symbol,
                     timeframe=timeframe,
                     candles=int(candles),
                 )
+            if not symbol:
+                raise BacktestServiceError("A symbol is required for date-range backtests. Use `candles=500` or `candles=1000` for scanner-universe runs.")
             return run_backtest(
                 engine.config,
                 symbol=symbol,

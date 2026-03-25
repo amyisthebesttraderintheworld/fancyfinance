@@ -57,22 +57,24 @@ async def test_help_command(mock_update, mock_context):
 async def test_post_init_clears_webhook_and_starts_watchdog():
     application = MagicMock()
     application.bot = MagicMock()
+    application.bot_data = {}
     scheduled_tasks = []
 
     def _capture_task(coro):
         scheduled_tasks.append(coro)
         coro.close()
-
-    application.create_task = MagicMock(side_effect=_capture_task)
+        return MagicMock()
 
     with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=True)) as clear_mock:
         with patch("telegram_bot.set_commands", new=AsyncMock()) as set_commands_mock:
-            await post_init(application)
+            with patch("telegram_bot.asyncio.create_task", side_effect=_capture_task) as create_task_mock:
+                await post_init(application)
 
     clear_mock.assert_awaited_once()
     set_commands_mock.assert_awaited_once_with(application)
-    application.create_task.assert_called_once()
+    create_task_mock.assert_called_once()
     assert len(scheduled_tasks) == 1
+    assert "_ownership_watchdog_task" in application.bot_data
 
 
 @pytest.mark.asyncio
@@ -404,16 +406,59 @@ async def test_backtest_command_returns_summary(mock_update, mock_context, mock_
 
 
 @pytest.mark.asyncio
-async def test_backtest_command_shows_usage_without_args(mock_update, mock_context, mock_config):
+async def test_backtest_command_runs_scanner_universe_without_args(mock_update, mock_context, mock_config):
     telegram_bot.config = mock_config
     mock_context.args = []
+
+    with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
+        with patch(
+            "telegram_bot.run_backtest_recent_universe",
+            return_value={
+                "symbol": "SCANNER_UNIVERSE",
+                "scope": "universe",
+                "scope_label": "scanner universe",
+                "timeframe": "1m",
+                "start_date": "2026-03-24 00:00:00",
+                "end_date": "2026-03-24 08:19:00",
+                "candles": 500,
+                "window": "latest_500_candles",
+                "symbols": ["BTCUSD", "ETHUSD"],
+                "successful_symbols": 2,
+                "failed_symbols": [],
+                "top_symbols": [
+                    {"symbol": "BTCUSD", "total_return": 5.0},
+                    {"symbol": "ETHUSD", "total_return": 2.0},
+                ],
+                "capital_model": "Each asset ran independently with the same starting balance.",
+                "report": {
+                    "final_balance": 20500.0,
+                    "total_return": 2.5,
+                    "total_trades": 24,
+                    "win_rate": 54.17,
+                    "max_drawdown": -4.8,
+                    "sharpe_ratio": 1.11,
+                    "profit_factor": 1.5,
+                },
+            },
+        ):
+            await backtest_command(mock_update, mock_context)
+
+    assert mock_update.message.reply_text.call_count == 2
+    assert "all scanner-picked assets" in mock_update.message.reply_text.call_args_list[0].args[0]
+    assert "Assets Tested" in mock_update.message.reply_text.call_args_list[1].args[0]
+
+
+@pytest.mark.asyncio
+async def test_backtest_command_shows_usage_for_invalid_args(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    mock_context.args = ["BTCUSD", "ETHUSD"]
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
         await backtest_command(mock_update, mock_context)
 
     mock_update.message.reply_text.assert_called_once()
     assert "Free Backtesting" in mock_update.message.reply_text.call_args[0][0]
-    assert "500|1000" in mock_update.message.reply_text.call_args[0][0]
+    assert "scanner universe" in mock_update.message.reply_text.call_args[0][0]
 
 
 @pytest.mark.asyncio
@@ -479,8 +524,9 @@ async def test_dashboard_api_command_returns_member_link(mock_update, mock_conte
 
     mock_update.message.reply_text.assert_called_once()
     message = mock_update.message.reply_text.call_args[0][0]
+    assert "`signed-token`" in message
     assert "/dashboard/member?access=signed-token" in message
-    assert "run `/dashboard_api` again to rotate it" in message
+    assert "/rotate_dashboard_key" in message
 
 
 @pytest.mark.asyncio

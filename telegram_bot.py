@@ -35,6 +35,7 @@ from backtest_service import (
     BacktestServiceError,
     format_backtest_summary,
     run_backtest_recent,
+    run_backtest_recent_universe,
 )
 from stripe_service import StripeService
 from supabase_client import DEFAULT_TRIAL_DAYS, FREE_MEMBERSHIP, PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
@@ -205,14 +206,58 @@ def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
     allowed = " or ".join(str(value) for value in sorted(ALLOWED_REMOTE_CANDLE_COUNTS))
     return (
         "📈 *Free Backtesting*\n\n"
-        "Use: `/backtest <symbol> [timeframe] [500|1000]`\n\n"
+        "Use: `/backtest [symbol] [timeframe] [500|1000]`\n\n"
+        "If you omit the symbol, FancyFinance backtests the full scanner universe from the latest Phemex candles.\n\n"
         f"Examples:\n"
+        f"• `/backtest`\n"
+        f"• `/backtest {default_timeframe} {_default_backtest_candles()}`\n"
         f"• `/backtest {default_symbol}`\n"
         f"• `/backtest {default_symbol} {default_timeframe}`\n"
         f"• `/backtest {default_symbol} {default_timeframe} {_default_backtest_candles()}`\n\n"
         f"Phemex can only return the latest *{allowed} candles* per backtest run. "
         "Run `/start_trial` or `/subscribe` if you want simulation or live access."
     )
+
+
+def _parse_backtest_request(args: list[str], default_timeframe: str, default_candles: int) -> tuple[str | None, str, int]:
+    symbol: str | None = None
+    timeframe = default_timeframe
+    candles = default_candles
+    seen_timeframe = False
+    seen_candles = False
+    explicit_universe = False
+
+    for raw_arg in args:
+        value = str(raw_arg or "").strip()
+        if not value:
+            continue
+
+        if _looks_like_timeframe(value):
+            if seen_timeframe:
+                raise ValueError("duplicate timeframe")
+            timeframe = value.lower()
+            seen_timeframe = True
+            continue
+
+        if value.isdigit():
+            if seen_candles:
+                raise ValueError("duplicate candles")
+            candles = int(value)
+            seen_candles = True
+            continue
+
+        upper_value = value.upper()
+        if upper_value in {"ALL", "SCAN", "SCANNER", "UNIVERSE"}:
+            if symbol is not None or explicit_universe:
+                raise ValueError("duplicate universe scope")
+            explicit_universe = True
+            continue
+
+        if symbol is not None or explicit_universe:
+            raise ValueError("duplicate symbol")
+        symbol = upper_value
+
+    return symbol, timeframe, candles
 
 
 def _paid_upgrade_message(summary: dict | None) -> str:
@@ -529,7 +574,7 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Your current plan:* {plan_name}\n"
         f"*Membership status:* {membership_status}\n"
         f"*Current access:* {access}\n\n"
-        "Use `/backtest BTCUSD 1m 500` to run a free backtest, "
+        "Use `/backtest` to run a scanner-wide backtest, `/backtest BTCUSD 1m 500` for one market, "
         "`/start_trial` to unlock Trial Pro instantly, or `/manage_subscription` if you already have a paid plan."
     )
     await _reply(update, text, parse_mode="Markdown")
@@ -625,22 +670,23 @@ async def dashboard_api_command(update: Update, context: ContextTypes.DEFAULT_TY
         ttl_seconds=DEFAULT_TOKEN_TTL_SECONDS,
     )
     base_url = _dashboard_base_url()
-
-    if base_url:
-        dashboard_url = f"{base_url}/dashboard/member?access={quote(token)}"
-        message = (
-            "🧭 *Member Dashboard Access*\n\n"
-            "This command mints a fresh read-only dashboard token each time you run it.\n\n"
-            f"{dashboard_url}\n\n"
-            "If the link expires, run `/dashboard_api` again to rotate it."
+    dashboard_link = f"{base_url}/dashboard/member?access={quote(token)}" if base_url else ""
+    message_parts = [
+        "🧭 *Member Dashboard Access*\n\n",
+        "Paste this read-only dashboard token into the website dashboard client:\n\n",
+        f"`{token}`\n\n",
+    ]
+    if dashboard_link:
+        message_parts.extend(
+            [
+                "Hosted member dashboard link:\n",
+                f"{dashboard_link}\n\n",
+            ]
         )
-    else:
-        message = (
-            "🧭 *Member Dashboard API Token*\n\n"
-            "Use this read-only dashboard token in the website dashboard client:\n\n"
-            f"`{token}`\n\n"
-            "Run `/dashboard_api` again any time you need a fresh token."
-        )
+    message_parts.append(
+        "Run `/dashboard_api` or `/rotate_dashboard_key` any time you need a fresh token."
+    )
+    message = "".join(message_parts)
 
     await _reply(update, message, parse_mode="Markdown")
 
@@ -786,34 +832,13 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     default_timeframe = ((config or {}).get("strategy") or {}).get("timeframe", "1m")
     default_candles = _default_backtest_candles()
 
-    if not args or len(args) > 3:
+    if len(args) > 3:
         await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
         return
 
-    symbol = str(args[0]).strip().upper()
-    timeframe = default_timeframe
-    candles = default_candles
-    seen_timeframe = False
-    seen_candles = False
-
-    for raw_arg in args[1:]:
-        value = str(raw_arg).strip()
-        if _looks_like_timeframe(value):
-            if seen_timeframe:
-                await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
-                return
-            timeframe = value.lower()
-            seen_timeframe = True
-            continue
-
-        if value.isdigit():
-            if seen_candles:
-                await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
-                return
-            candles = int(value)
-            seen_candles = True
-            continue
-
+    try:
+        symbol, timeframe, candles = _parse_backtest_request(args, default_timeframe, default_candles)
+    except ValueError:
         await _reply(update, _backtest_usage_text(default_symbol, default_timeframe), parse_mode="Markdown")
         return
 
@@ -826,25 +851,34 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    scope_label = f"`{symbol}`" if symbol else "*all scanner-picked assets*"
     await _reply(
         update,
-        f"⏳ Running your free backtest for `{symbol}` on `{timeframe}` using the latest `{candles}` candles...",
+        f"⏳ Running your free backtest for {scope_label} on `{timeframe}` using the latest `{candles}` candles...",
         parse_mode="Markdown",
     )
 
     try:
-        result = await asyncio.to_thread(
-            run_backtest_recent,
-            config or {},
-            symbol,
-            timeframe,
-            candles,
-        )
+        if symbol:
+            result = await asyncio.to_thread(
+                run_backtest_recent,
+                config or {},
+                symbol,
+                timeframe,
+                candles,
+            )
+        else:
+            result = await asyncio.to_thread(
+                run_backtest_recent_universe,
+                config or {},
+                timeframe,
+                candles,
+            )
     except BacktestServiceError as exc:
         await _reply(update, f"❌ {exc}", parse_mode="Markdown")
         return
     except Exception as exc:
-        logger.error(f"Unexpected backtest failure for {symbol}: {exc}")
+        logger.error(f"Unexpected backtest failure for {symbol or 'scanner universe'}: {exc}")
         await _reply(
             update,
             "❌ Backtest failed unexpectedly. Please try again shortly.",
@@ -1032,7 +1066,7 @@ async def kb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Scoring:* Trend (30), RSI (25), Volume (25), Momentum (20).\n\n"
         "*Risk controls:* Position sizing, ATR stops, max daily loss, and safety timeout.\n\n"
         "*Modes:* Backtest, simulation, and live execution.\n"
-        "Use `/backtest <symbol> [timeframe] [500|1000]` for free Telegram backtests.\n\n"
+        "Use `/backtest` for a scanner-wide run or `/backtest <symbol> [timeframe] [500|1000]` for one market.\n\n"
         "⚖️ Trading is risky. This project is educational software, not financial advice."
     )
     await _reply(update, kb_text, parse_mode="Markdown")
@@ -1048,9 +1082,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/plans - Compare free vs paid access\n"
         "/subscription - View your current membership\n"
         f"/start_trial - Start your {trial_days}-day Trial Pro\n"
-        "/dashboard_api - Get your gated member dashboard link\n"
-        "/rotate_dashboard_key - Mint a fresh member dashboard link\n"
-        "/backtest - Run a free Phemex backtest (500 or 1000 candles)\n"
+        "/dashboard_api - Get your gated member dashboard token and link\n"
+        "/rotate_dashboard_key - Mint a fresh member dashboard token\n"
+        "/backtest - Run a free Phemex backtest on one market or the scanner universe\n"
         f"/subscribe - Start the {trial_days}-day Trial Pro / Pro checkout\n"
         "/manage_subscription - Open billing portal\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
@@ -1058,6 +1092,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/verify_email - Start email verification\n"
         "/confirm_email - Complete email verification\n"
         "/status - Check bot status\n"
+        "/positions - List open positions\n"
         "/pause - Pause trading\n"
         "/resume - Resume trading\n"
         "/reset - Reset simulation\n"
@@ -1100,13 +1135,14 @@ async def set_commands(application: Application):
         BotCommand("plans", "See free vs paid access"),
         BotCommand("subscription", "View your membership"),
         BotCommand("start_trial", "Start your Trial Pro"),
-        BotCommand("dashboard_api", "Get your member dashboard link"),
-        BotCommand("rotate_dashboard_key", "Refresh your member dashboard link"),
-        BotCommand("backtest", "Run a free 500/1000 candle backtest"),
+        BotCommand("dashboard_api", "Get your member dashboard token"),
+        BotCommand("rotate_dashboard_key", "Refresh your member dashboard token"),
+        BotCommand("backtest", "Run a free market or universe backtest"),
         BotCommand("subscribe", "Start Trial Pro / Stripe checkout"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
         BotCommand("status", "Check bot status"),
+        BotCommand("positions", "Show open positions"),
         BotCommand("verify_email", "Link your email address"),
         BotCommand("confirm_email", "Verify email with 6-digit code"),
         BotCommand("help", "List commands"),
@@ -1175,7 +1211,9 @@ async def post_init(application: Application):
         reason="startup preflight",
     )
     await set_commands(application)
-    application.create_task(_polling_ownership_watchdog(application))
+    application.bot_data["_ownership_watchdog_task"] = asyncio.create_task(
+        _polling_ownership_watchdog(application)
+    )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -1263,7 +1301,7 @@ def run_bot(engine, command_queue):
         )
     )
 
-    for command in ["status", "pause", "resume", "reset", "set_balance", "shutdown", "emergency_stop"]:
+    for command in ["status", "positions", "pause", "resume", "reset", "set_balance", "shutdown", "emergency_stop"]:
         application.add_handler(CommandHandler(command, proxy_command))
 
     logger.info("Telegram Bot Polling...")

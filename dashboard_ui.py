@@ -1122,6 +1122,7 @@ def build_dashboard_html(
         const performance = payload.performance || {};
         const runtime = payload.runtime || {};
         const config = payload.config || {};
+        const memberAccess = !!payload.member_access;
 
         setText("metric-balance", formatMoney(snapshot.balance));
         setText("metric-positions", formatMaybeNumber(snapshot.open_positions, 0));
@@ -1151,6 +1152,10 @@ def build_dashboard_html(
         }
         els.statusText.textContent = snapshot.running ? (snapshot.paused ? "Running, but paused" : "Engine live") : "Engine stopped";
 
+        if (memberAccess) {
+          setMessage(els.controlMessage, "Read-only member access active. Telegram controls stay in the bot.", false);
+        }
+
         renderSetup(config);
         renderPositions(payload.positions || []);
         renderTrades(payload.recent_trades || []);
@@ -1158,13 +1163,24 @@ def build_dashboard_html(
       }
 
       async function loadDashboard() {
+        if (AUTH_REQUIRED && !state.token) {
+          setMessage(
+            els.authMessage,
+            PUBLIC_MODE
+              ? "Member dashboard locked. Use /dashboard_api in Telegram for a fresh access link."
+              : "Dashboard locked. Add a valid API token.",
+            true
+          );
+          return;
+        }
+
         try {
           const response = await fetch(DATA_ENDPOINT, {
             headers: headers(),
           });
 
           if (response.status === 401) {
-            setMessage(els.authMessage, "Dashboard locked. Add a valid API token.", true);
+            setMessage(els.authMessage, "Dashboard locked. Add a valid dashboard token or API key.", true);
             return;
           }
 
@@ -1173,7 +1189,10 @@ def build_dashboard_html(
           }
 
           const payload = await response.json();
-          setMessage(els.authMessage, AUTH_REQUIRED ? "Dashboard unlocked." : "Dashboard is live.");
+          setMessage(
+            els.authMessage,
+            payload.member_access ? "Read-only member dashboard unlocked." : (AUTH_REQUIRED ? "Dashboard unlocked." : "Dashboard is live.")
+          );
           renderData(payload);
         } catch (error) {
           setMessage(els.authMessage, error.message || "Could not load dashboard.", true);
@@ -1182,7 +1201,7 @@ def build_dashboard_html(
 
       async function runControl(action) {
         if (PUBLIC_MODE) {
-          setMessage(els.controlMessage, "Public overview is read-only. Use /dashboard/admin for controls.", true);
+          setMessage(els.controlMessage, "Member overview is read-only. Use /dashboard for protected operator controls.", true);
           return;
         }
         const requiresConfirm = action === "shutdown";

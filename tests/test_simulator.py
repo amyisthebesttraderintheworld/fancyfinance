@@ -98,3 +98,36 @@ async def test_simulator_unlock_api_command(sim):
     assert sim.config["phemex"]["api_key"] == "vault_key"
     assert sim.config["phemex"]["api_secret"] == "vault_secret"
     mock_exchange.assert_called_with("phemex", "vault_key", "vault_secret")
+
+
+def test_simulator_parse_phemex_kline_row_uses_correct_ohlcv_columns(sim):
+    row = [1774433940, 60, 713869000, 713984000, 714100000, 713900000, 714050000, 411561, 576447970]
+
+    candle = sim._parse_candle("BTCUSD", row)
+
+    assert candle is not None
+    assert candle.symbol == "BTCUSD"
+    assert candle.open == 71398.4
+    assert candle.high == 71410.0
+    assert candle.low == 71390.0
+    assert candle.close == 71405.0
+    assert candle.volume == 411561.0
+
+
+@pytest.mark.asyncio
+async def test_simulator_positions_command_reports_open_positions(sim, mock_notifier):
+    sim.positions["BTCUSD"] = MagicMock(
+        direction="long",
+        entry_price=40000.0,
+        quantity=0.5,
+        stop_loss=39000.0,
+        take_profit=42000.0,
+    )
+
+    with patch("simulator.requests.post", side_effect=RuntimeError("offline")):
+        await sim._handle_command(("/positions", [], 12345))
+
+    mock_notifier.send_message.assert_called()
+    message = mock_notifier.send_message.call_args[0][0]
+    assert "Open Positions" in message
+    assert "BTCUSD" in message

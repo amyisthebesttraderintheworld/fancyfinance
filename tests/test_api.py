@@ -111,6 +111,21 @@ def test_dashboard_data_returns_live_payload(sample_config):
     assert payload["positions"][0]["symbol"] == "BTCUSD"
 
 
+def test_dashboard_data_accepts_member_token_for_read_only_payload(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard/data", headers={"x-api-key": token})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["member_access"] is True
+    assert payload["user_id"] == 12345
+    assert payload["snapshot"]["balance"] is None
+    assert payload["positions"][0]["symbol"] == "BTCUSD"
+
+
 def test_member_dashboard_page_renders(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
@@ -205,3 +220,40 @@ def test_backtest_run_endpoint_supports_recent_candle_mode(sample_config, monkey
     assert payload["symbol"] == "BTCUSD"
     assert payload["candles"] == 1000
     assert payload["window"] == "latest_1000_candles"
+
+
+def test_backtest_run_endpoint_supports_scanner_universe_recent_mode(sample_config, monkeypatch):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        api,
+        "run_backtest_recent_universe",
+        lambda config, timeframe=None, candles=500: {
+            "symbol": "SCANNER_UNIVERSE",
+            "scope": "universe",
+            "scope_label": "scanner universe",
+            "timeframe": timeframe or "1m",
+            "start_date": "2026-03-24 00:00:00",
+            "end_date": "2026-03-24 08:19:00",
+            "candles": candles,
+            "window": f"latest_{candles}_candles",
+            "symbols": ["BTCUSD", "ETHUSD"],
+            "successful_symbols": 2,
+            "failed_symbols": [],
+            "top_symbols": [{"symbol": "BTCUSD", "total_return": 5.0}],
+            "capital_model": "Each asset ran independently with the same starting balance.",
+            "report": {"final_balance": 20500.0, "total_return": 2.5},
+        },
+    )
+
+    response = client.post(
+        "/backtest/run",
+        params={"timeframe": "5m", "candles": 1000},
+        headers={"x-api-key": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scope"] == "universe"
+    assert payload["candles"] == 1000
