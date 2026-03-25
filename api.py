@@ -126,6 +126,91 @@ def _position_mark_price(engine, symbol: str, user_id: Optional[int] = None) -> 
     return max(candidates, key=lambda item: item[0])[1]
 
 
+def _position_unrealized_pnl(position: Dict[str, Any]) -> Optional[float]:
+    entry = _coerce_float(position.get("entry_price"))
+    quantity = _coerce_float(position.get("quantity"))
+    mark = _coerce_float(position.get("mark_price"))
+    direction = str(position.get("direction") or "").strip().lower()
+    if entry is None or quantity is None or mark is None:
+        return None
+    if direction == "short":
+        return (entry - mark) * quantity
+    return (mark - entry) * quantity
+
+
+def _portfolio_summary(snapshot: Dict[str, Any], positions: list[Dict[str, Any]]) -> Dict[str, Any]:
+    balance = _coerce_float(snapshot.get("balance"))
+    marked_positions = 0
+    winning_positions = 0
+    losing_positions = 0
+    live_upnl = 0.0
+    notional_exposure = 0.0
+
+    for position in positions:
+        entry = _coerce_float(position.get("entry_price"))
+        quantity = _coerce_float(position.get("quantity"))
+        if entry is not None and quantity is not None:
+            notional_exposure += abs(entry * quantity)
+
+        pnl = _position_unrealized_pnl(position)
+        if pnl is None:
+            continue
+        marked_positions += 1
+        live_upnl += pnl
+        if pnl > 0:
+            winning_positions += 1
+        elif pnl < 0:
+            losing_positions += 1
+
+    return {
+        "balance": balance,
+        "live_upnl": round(live_upnl, 4),
+        "marked_equity": round(balance + live_upnl, 4) if balance is not None else None,
+        "notional_exposure": round(notional_exposure, 4),
+        "marked_positions": marked_positions,
+        "winning_positions": winning_positions,
+        "losing_positions": losing_positions,
+    }
+
+
+def _activity_payload(
+    engine,
+    user_id: Optional[int] = None,
+    limit: int = 25,
+    recent_trades: Optional[list[Dict[str, Any]]] = None,
+) -> list[Dict[str, Any]]:
+    notifier = getattr(engine, "notifier", None)
+    getter = getattr(notifier, "get_recent_messages", None)
+    if callable(getter):
+        messages = getter(user_id=user_id, limit=limit)
+        if messages:
+            return list(messages)
+
+    fallback = []
+    trades = list(recent_trades or [])[-limit:] if recent_trades is not None else _recent_trades(engine, limit=limit, user_id=user_id)
+    for trade in trades:
+        symbol = str(trade.get("symbol") or "UNK")
+        trade_type = str(trade.get("type") or "trade").upper()
+        direction = str(trade.get("direction") or "").upper()
+        price = _coerce_float(trade.get("price"))
+        pnl = _coerce_float(trade.get("pnl"))
+        suffix = ""
+        if price is not None:
+            suffix += f" @ {price:.4f}"
+        if pnl is not None:
+            suffix += f" PnL {pnl:+.2f}"
+        fallback.append(
+            {
+                "timestamp": trade.get("timestamp"),
+                "created_at": trade.get("created_at"),
+                "text": f"{trade_type} {symbol} {direction}{suffix}".strip(),
+                "user_id": None if user_id is None else str(user_id),
+                "source": "trade",
+            }
+        )
+    return fallback[-limit:]
+
+
 def _trade_count(engine, user_id: Optional[int] = None) -> int:
     if _uses_user_sessions(engine):
         if user_id is not None:
@@ -326,15 +411,19 @@ def _runtime_summary(engine, user_id: Optional[int] = None):
             is_paused = bool(getattr(session, "is_paused", False)) if session is not None else False
             paused_until = float(getattr(session, "safety_paused_until", 0) or 0) if session is not None else 0.0
             active_user_count = 1 if session is not None else 0
+            runtime_api_ready = bool(getattr(session, "runtime_api_ready", False)) if session is not None else False
         else:
             sessions = _list_user_sessions(engine)
             is_paused = bool(sessions) and all(bool(getattr(session, "is_paused", False)) for session in sessions)
             paused_until = max((float(getattr(session, "safety_paused_until", 0) or 0) for session in sessions), default=0.0)
             active_user_count = len(sessions)
+            runtime_api_ready = any(bool(getattr(session, "runtime_api_ready", False)) for session in sessions)
     else:
         is_paused = bool(engine.is_paused)
         paused_until = float(getattr(engine, "safety_paused_until", 0) or 0)
         active_user_count = None
+        checker = getattr(engine, "_runtime_api_ready", None)
+        runtime_api_ready = bool(checker()) if callable(checker) else False
 
     remaining_seconds = max(paused_until - time.time(), 0)
     return {
@@ -348,6 +437,7 @@ def _runtime_summary(engine, user_id: Optional[int] = None):
             else None
         ),
         "active_user_count": active_user_count,
+        "runtime_api_ready": runtime_api_ready,
     }
 
 
@@ -397,13 +487,17 @@ def _user_summary(engine):
 
 def _dashboard_payload(engine, auth_token: Optional[str]):
     trades = _recent_trades(engine)
+    snapshot = _snapshot(engine)
+    positions = _positions_payload(engine)
     return {
-        "snapshot": _snapshot(engine),
+        "snapshot": snapshot,
         "runtime": _runtime_summary(engine),
         "config": _config_summary(engine, auth_token),
-        "positions": _positions_payload(engine),
+        "positions": positions,
         "recent_trades": trades,
         "performance": _performance_summary(engine, trades),
+        "portfolio": _portfolio_summary(snapshot, positions),
+        "activity": _activity_payload(engine, recent_trades=trades),
         "users": _user_summary(engine),
     }
 
@@ -411,16 +505,18 @@ def _dashboard_payload(engine, auth_token: Optional[str]):
 def _member_dashboard_payload(engine, user_id: int):
     trades = _recent_trades(engine, user_id=user_id)
     snapshot = _snapshot(engine, user_id=user_id)
-    snapshot["balance"] = None
     snapshot["initial_balance"] = None
+    positions = _positions_payload(engine, user_id=user_id)
     return {
         "member_access": True,
         "user_id": user_id,
         "snapshot": snapshot,
         "runtime": _runtime_summary(engine, user_id=user_id),
-        "positions": _positions_payload(engine, user_id=user_id),
+        "positions": positions,
         "recent_trades": trades,
         "performance": _performance_summary(engine, trades),
+        "portfolio": _portfolio_summary(snapshot, positions),
+        "activity": _activity_payload(engine, user_id=user_id, recent_trades=trades),
         "config": {},
         "users": {},
     }

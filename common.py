@@ -451,12 +451,11 @@ class TelegramNotifier:
         self.admin_chat_ids = config['telegram']['admin_chat_ids']
         self.enable_notifications = config['telegram']['enable_notifications']
         self.user_chat_map = {} # user_id -> chat_id for customer mode
+        self.message_history: List[Dict[str, Any]] = []
+        self.message_history_limit = 250
         self.logger = get_logger("TelegramNotifier")
 
-    def send_message(self, text: str, user_id: str = None):
-        if not self.enable_notifications or not self.token:
-            return
-
+    def record_message(self, text: str, user_id: str = None, *, source: str = "notification"):
         # Simple emoji mapping for better UX
         formatted_text = text
         if "ENTRY" in text:
@@ -470,6 +469,35 @@ class TelegramNotifier:
             formatted_text = f"🔴 *TRADE CLOSED* 🏁\n\n{text}"
         elif "PAUSED" in text:
             formatted_text = f"⏸ *SYSTEM PAUSED* \n\n{text}"
+
+        entry = {
+            "timestamp": int(time.time() * 1000),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "text": formatted_text,
+            "user_id": None if user_id is None else str(user_id),
+            "source": source,
+        }
+        self.message_history.append(entry)
+        if len(self.message_history) > self.message_history_limit:
+            self.message_history = self.message_history[-self.message_history_limit :]
+        return formatted_text
+
+    def get_recent_messages(self, user_id: str = None, limit: int = 25):
+        if user_id is None:
+            return self.message_history[-limit:]
+
+        normalized = str(user_id)
+        filtered = [
+            entry
+            for entry in self.message_history
+            if entry.get("user_id") in {None, normalized}
+        ]
+        return filtered[-limit:]
+
+    def send_message(self, text: str, user_id: str = None):
+        formatted_text = self.record_message(text, user_id=user_id)
+        if not self.enable_notifications or not self.token:
+            return
 
         chat_ids = []
         if self.personal_mode:

@@ -223,6 +223,8 @@ def test_dashboard_data_returns_live_payload(sample_config):
     payload = response.json()
     assert payload["snapshot"]["symbol_count"] == 2
     assert payload["performance"]["realized_pnl"] == 125.5
+    assert payload["portfolio"]["marked_equity"] == 10125.5
+    assert payload["activity"][0]["source"] == "trade"
     assert payload["users"]["total"] == 2
     assert payload["positions"][0]["symbol"] == "BTCUSD"
     assert payload["positions"][0]["entry_time"] == 1711320000000
@@ -258,7 +260,8 @@ def test_dashboard_data_accepts_member_token_for_read_only_payload(sample_config
     payload = response.json()
     assert payload["member_access"] is True
     assert payload["user_id"] == 12345
-    assert payload["snapshot"]["balance"] is None
+    assert payload["snapshot"]["balance"] == 10125.5
+    assert payload["portfolio"]["balance"] == 10125.5
     assert payload["positions"][0]["symbol"] == "BTCUSD"
     assert payload["positions"][0]["entry_time"] == 1711320000000
     assert payload["positions"][0]["mark_price"] is None
@@ -295,11 +298,12 @@ def test_member_dashboard_data_returns_read_only_payload(sample_config):
     payload = response.json()
     assert payload["member_access"] is True
     assert payload["user_id"] == 12345
-    assert payload["snapshot"]["balance"] is None
+    assert payload["snapshot"]["balance"] == 10125.5
     assert payload["users"] == {}
     assert payload["positions"][0]["symbol"] == "BTCUSD"
     assert payload["positions"][0]["entry_time"] == 1711320000000
     assert payload["positions"][0]["mark_price"] is None
+    assert payload["activity"][0]["source"] == "trade"
 
 
 def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_config):
@@ -313,6 +317,8 @@ def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_c
     payload = response.json()
     assert payload["user_id"] == 12345
     assert payload["snapshot"]["open_positions"] == 1
+    assert payload["snapshot"]["balance"] == 1200.0
+    assert payload["portfolio"]["balance"] == 1200.0
     assert payload["positions"] == [
         {
             "symbol": "BTCUSD",

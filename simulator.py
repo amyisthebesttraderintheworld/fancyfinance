@@ -259,6 +259,9 @@ class Simulator:
                     json={"chat_id": chat_id, "text": text},
                     timeout=15,
                 )
+                recorder = getattr(self.notifier, "record_message", None)
+                if callable(recorder):
+                    recorder(text, source="command")
                 return
             except Exception as exc:
                 self.logger.warning(f"Failed to send direct command response to chat {chat_id}: {exc}")

@@ -43,7 +43,7 @@ def build_dashboard_html(
     footer_note = (
         "Use /dashboard_api in Telegram any time you need a fresh access token."
         if public_mode
-        else "Auto-refresh runs every 10 seconds while this tab is visible."
+        else "Auto-refresh runs every 3 seconds while this tab is visible."
     )
 
     template = """<!doctype html>
@@ -319,7 +319,7 @@ def build_dashboard_html(
       .hero-grid,
       .list-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
         gap: 14px;
         margin-top: 24px;
       }
@@ -641,6 +641,18 @@ def build_dashboard_html(
         font-weight: 700;
       }
 
+      .positive {
+        color: #6ef0bf;
+      }
+
+      .negative {
+        color: #ff93a4;
+      }
+
+      .amber {
+        color: #ffd892;
+      }
+
       .position-stat.positive {
         border-color: rgba(47, 208, 111, 0.2);
       }
@@ -740,6 +752,103 @@ def build_dashboard_html(
         font-size: 11px;
         letter-spacing: 0.08em;
         text-transform: uppercase;
+      }
+
+      .position-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 12px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      .keyval-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .keyval {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .keyval .key {
+        color: var(--muted-foreground);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .keyval .value {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .activity-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .activity-row {
+        display: grid;
+        gap: 6px;
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .activity-row.bad {
+        border-color: rgba(212, 87, 87, 0.22);
+      }
+
+      .activity-row.warn {
+        border-color: rgba(240, 180, 77, 0.22);
+      }
+
+      .activity-row.good {
+        border-color: rgba(47, 208, 111, 0.22);
+      }
+
+      .activity-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .activity-stamp {
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      .activity-source {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted-foreground);
+      }
+
+      .activity-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 14px;
+        line-height: 1.5;
       }
 
       table {
@@ -877,8 +986,20 @@ def build_dashboard_html(
           </div>
           <div class="hero-grid">
             <div class="metric">
-              <span class="metric-label">Balance</span>
+              <span class="metric-label">Wallet</span>
               <span class="metric-value" id="metric-balance">--</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Live uPnL</span>
+              <span class="metric-value" id="metric-upnl">--</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Marked Equity</span>
+              <span class="metric-value" id="metric-equity">--</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Session Delta</span>
+              <span class="metric-value" id="metric-delta">--</span>
             </div>
             <div class="metric">
               <span class="metric-label">Open Positions</span>
@@ -957,6 +1078,14 @@ def build_dashboard_html(
                 <div class="label">Tracked Symbols</div>
                 <div class="value" id="runtime-symbols">--</div>
               </div>
+              <div class="mini-card">
+                <div class="label">API Vault</div>
+                <div class="value" id="runtime-api">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Active Users</div>
+                <div class="value" id="runtime-users">--</div>
+              </div>
             </div>
             <div class="footer-note" id="runtime-note">Waiting for runtime data.</div>
           </div>
@@ -983,6 +1112,16 @@ def build_dashboard_html(
         </div>
 
         <div class="stack">
+          <div class="panel surface">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Wallet Snapshot</h2>
+                <div class="panel-subtitle">Live mark-to-market, exposure, and how many positions are actually receiving price updates.</div>
+              </div>
+            </div>
+            <div class="keyval-grid" id="wallet-wrap"></div>
+          </div>
+
           <div class="panel surface">
             <div class="panel-header">
               <div>
@@ -1017,7 +1156,33 @@ def build_dashboard_html(
                 <div class="label">Trade Count</div>
                 <div class="value" id="perf-count">--</div>
               </div>
+              <div class="mini-card">
+                <div class="label">Avg Trade</div>
+                <div class="value" id="perf-avg">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Exposure</div>
+                <div class="value" id="perf-exposure">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Marked Prices</div>
+                <div class="value" id="perf-marked">--</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Alert Load</div>
+                <div class="value" id="perf-alerts">--</div>
+              </div>
             </div>
+          </div>
+
+          <div class="panel surface">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Activity Feed</h2>
+                <div class="panel-subtitle">Recent engine messages, fills, and direct command responses.</div>
+              </div>
+            </div>
+            <div id="activity-wrap"></div>
           </div>
 
           <div class="panel surface" id="users-panel" style="__USERS_PANEL_STYLE__">
@@ -1078,6 +1243,8 @@ def build_dashboard_html(
         : "";
       const state = {
         token: queryToken || localStorage.getItem(TOKEN_KEY) || "",
+        sessionBaseline: null,
+        sessionBaselineKey: "",
       };
 
       if (queryToken) {
@@ -1108,6 +1275,18 @@ def build_dashboard_html(
         const node = document.getElementById(id);
         if (node) {
           node.textContent = value;
+        }
+      }
+
+      function setTextWithTone(id, value, tone = "") {
+        const node = document.getElementById(id);
+        if (!node) {
+          return;
+        }
+        node.textContent = value;
+        node.classList.remove("positive", "negative", "amber");
+        if (tone) {
+          node.classList.add(tone);
         }
       }
 
@@ -1187,6 +1366,33 @@ def build_dashboard_html(
           return `${days}d ago`;
         }
         return formatTimestamp(normalized);
+      }
+
+      function tradeTimeMs(trade) {
+        const raw = trade?.timestamp ?? trade?.created_at;
+        if (raw === null || raw === undefined || raw === "") {
+          return 0;
+        }
+        if (typeof raw === "number" || /^\\d+(\\.\\d+)?$/.test(String(raw))) {
+          const numeric = Number(raw);
+          return numeric < 1e12 ? numeric * 1000 : numeric;
+        }
+        const parsed = new Date(raw).getTime();
+        return Number.isNaN(parsed) ? 0 : parsed;
+      }
+
+      function activityTone(entry) {
+        const text = String(entry?.text || "").toUpperCase();
+        if (text.includes("ERROR") || text.includes("FAIL") || text.includes("STOPPED") || text.includes("UNAUTHORIZED")) {
+          return "bad";
+        }
+        if (text.includes("PAUSE") || text.includes("WARNING") || text.includes("WARN") || text.includes("PENDING")) {
+          return "warn";
+        }
+        if (text.includes("ENTRY") || text.includes("EXIT") || text.includes("STARTED") || text.includes("RESUMED") || text.includes("UNLOCKED")) {
+          return "good";
+        }
+        return "";
       }
 
       function humanizeMembership(value) {
@@ -1345,6 +1551,122 @@ def build_dashboard_html(
         `;
       }
 
+      function computePortfolio(payload) {
+        const snapshot = payload.snapshot || {};
+        const positions = Array.isArray(payload.positions) ? payload.positions : [];
+        const apiPortfolio = payload.portfolio || {};
+        const balance = apiPortfolio.balance ?? snapshot.balance ?? null;
+        const liveUpnl = positions.reduce((sum, position) => {
+          const entry = Number(position.entry_price);
+          const quantity = Number(position.quantity);
+          const mark = position.mark_price === null || position.mark_price === undefined || Number.isNaN(Number(position.mark_price))
+            ? null
+            : Number(position.mark_price);
+          if (!Number.isFinite(entry) || !Number.isFinite(quantity) || mark === null) {
+            return sum;
+          }
+          const direction = String(position.direction || "").toLowerCase();
+          return sum + (direction === "short" ? (entry - mark) : (mark - entry)) * quantity;
+        }, 0);
+        const exposure = positions.reduce((sum, position) => {
+          const entry = Number(position.entry_price);
+          const quantity = Number(position.quantity);
+          if (!Number.isFinite(entry) || !Number.isFinite(quantity)) {
+            return sum;
+          }
+          return sum + Math.abs(entry * quantity);
+        }, 0);
+        const markedPositions = positions.filter((position) => position.mark_price !== null && position.mark_price !== undefined && !Number.isNaN(Number(position.mark_price))).length;
+        const markedEquity = balance === null || balance === undefined || Number.isNaN(Number(balance))
+          ? null
+          : Number(balance) + liveUpnl;
+        const baselineKey = `${payload.user_id || "global"}:${snapshot.session_started_at || snapshot.mode || "session"}`;
+        if (state.sessionBaselineKey !== baselineKey) {
+          state.sessionBaselineKey = baselineKey;
+          state.sessionBaseline = markedEquity;
+        } else if (state.sessionBaseline == null && markedEquity != null) {
+          state.sessionBaseline = markedEquity;
+        }
+        const sessionDelta = state.sessionBaseline == null || markedEquity == null ? null : markedEquity - state.sessionBaseline;
+        return {
+          balance,
+          liveUpnl,
+          markedEquity,
+          exposure,
+          markedPositions,
+          openPositions: positions.length,
+          winningPositions: apiPortfolio.winning_positions ?? 0,
+          losingPositions: apiPortfolio.losing_positions ?? 0,
+          sessionDelta,
+        };
+      }
+
+      function renderWallet(portfolio) {
+        const wrap = document.getElementById("wallet-wrap");
+        if (!wrap) {
+          return;
+        }
+
+        wrap.innerHTML = `
+          <div class="keyval">
+            <span class="key">Wallet balance</span>
+            <span class="value">${formatMoney(portfolio.balance)}</span>
+          </div>
+          <div class="keyval">
+            <span class="key">Live uPnL</span>
+            <span class="value ${portfolio.liveUpnl >= 0 ? "positive" : "negative"}">${formatSignedMoney(portfolio.liveUpnl)}</span>
+          </div>
+          <div class="keyval">
+            <span class="key">Marked equity</span>
+            <span class="value ${portfolio.sessionDelta == null ? "" : portfolio.sessionDelta >= 0 ? "positive" : "negative"}">${formatMoney(portfolio.markedEquity)}</span>
+          </div>
+          <div class="keyval">
+            <span class="key">Session delta</span>
+            <span class="value ${portfolio.sessionDelta == null ? "" : portfolio.sessionDelta >= 0 ? "positive" : "negative"}">${formatSignedMoney(portfolio.sessionDelta)}</span>
+          </div>
+          <div class="keyval">
+            <span class="key">Notional exposure</span>
+            <span class="value">${formatMoney(portfolio.exposure)}</span>
+          </div>
+          <div class="keyval">
+            <span class="key">Marked prices live</span>
+            <span class="value">${formatMaybeNumber(portfolio.markedPositions, 0)} / ${formatMaybeNumber(portfolio.openPositions, 0)}</span>
+          </div>
+        `;
+      }
+
+      function renderActivity(activity) {
+        const wrap = document.getElementById("activity-wrap");
+        if (!wrap) {
+          return;
+        }
+        const entries = Array.isArray(activity) ? [...activity].sort((left, right) => tradeTimeMs(right) - tradeTimeMs(left)).slice(0, 18) : [];
+        if (!entries.length) {
+          wrap.innerHTML = '<div class="empty">No recent engine activity yet.</div>';
+          return;
+        }
+
+        wrap.innerHTML = `
+          <div class="activity-list">
+            ${
+              entries.map((entry, index) => {
+                const tone = activityTone(entry);
+                const source = String(entry.source || "event").replaceAll("_", " ");
+                return `
+                  <article class="activity-row ${tone}" key="${index}">
+                    <div class="activity-head">
+                      <span class="activity-stamp">${escapeHtml(formatTimestamp(entry.created_at || entry.timestamp))}</span>
+                      <span class="activity-source">${escapeHtml(source)}</span>
+                    </div>
+                    <div class="activity-text">${escapeHtml(String(entry.text || "--"))}</div>
+                  </article>
+                `;
+              }).join("")
+            }
+          </div>
+        `;
+      }
+
       function renderPositions(positions) {
         const wrap = document.getElementById("positions-wrap");
         if (!positions || !positions.length) {
@@ -1378,6 +1700,7 @@ def build_dashboard_html(
                   ? null
                   : (direction === "short" ? (entry - mark) : (mark - entry)) * quantity;
                 const pnlClass = unrealizedPnl === null ? "" : unrealizedPnl >= 0 ? "positive" : "negative";
+                const notional = Number.isFinite(entry) && Number.isFinite(quantity) ? Math.abs(entry * quantity) : null;
                 const userPill = position.user_id === null || position.user_id === undefined
                   ? ""
                   : `<span class="position-pill user">Acct ${escapeHtml(position.user_id)}</span>`;
@@ -1421,6 +1744,11 @@ def build_dashboard_html(
                         <span class="value">${formatMaybeNumber(position.take_profit, 4)}</span>
                       </div>
                     </div>
+                    <div class="position-footer">
+                      <span>${notional == null ? "Notional --" : `Notional ${escapeHtml(formatMoney(notional))}`}</span>
+                      <span>${mark === null ? "Live mark pending" : "Live mark online"}</span>
+                      <span>${unrealizedPnl == null ? "uPnL waiting" : (unrealizedPnl >= 0 ? "Position green" : "Position red")}</span>
+                    </div>
                   </article>
                 `;
               }).join("")
@@ -1436,6 +1764,8 @@ def build_dashboard_html(
           return;
         }
 
+        const ordered = [...trades].sort((left, right) => tradeTimeMs(right) - tradeTimeMs(left));
+
         wrap.innerHTML = `
           <div class="table-shell">
             <table>
@@ -1447,12 +1777,20 @@ def build_dashboard_html(
                   <th>Direction</th>
                   <th>Price</th>
                   <th>Qty</th>
+                  <th>Reason</th>
                   <th>PnL</th>
                 </tr>
               </thead>
               <tbody>
                 ${
-                  trades.map((trade) => `
+                  ordered.map((trade) => {
+                    const pnl = trade.pnl === null || trade.pnl === undefined || Number.isNaN(Number(trade.pnl))
+                      ? "--"
+                      : formatSignedMoney(trade.pnl);
+                    const pnlTone = trade.pnl === null || trade.pnl === undefined || Number.isNaN(Number(trade.pnl))
+                      ? ""
+                      : Number(trade.pnl) >= 0 ? "positive" : "negative";
+                    return `
                     <tr>
                       <td>${escapeHtml(formatTimestamp(trade.created_at || trade.timestamp))}</td>
                       <td>${escapeHtml(trade.symbol)}</td>
@@ -1460,9 +1798,11 @@ def build_dashboard_html(
                       <td>${escapeHtml(trade.direction || "--")}</td>
                       <td>${formatMaybeNumber(trade.price, 4)}</td>
                       <td>${formatMaybeNumber(trade.qty, 4)}</td>
-                      <td>${formatMaybeNumber(trade.pnl, 2)}</td>
+                      <td>${escapeHtml(trade.reason || "--")}</td>
+                      <td class="${pnlTone}">${pnl}</td>
                     </tr>
-                  `).join("")
+                  `;
+                  }).join("")
                 }
               </tbody>
             </table>
@@ -1528,24 +1868,41 @@ def build_dashboard_html(
         const runtime = payload.runtime || {};
         const config = payload.config || {};
         const memberAccess = !!payload.member_access;
+        const portfolio = computePortfolio(payload);
+        const averageTrade = performance.closed_trades ? Number(performance.realized_pnl || 0) / Number(performance.closed_trades || 1) : null;
+        const alerts = (Array.isArray(payload.activity) ? payload.activity : []).filter((entry) => {
+          const tone = activityTone(entry);
+          return tone === "bad" || tone === "warn";
+        }).length
+          + (runtime.websocket_connected ? 0 : 1)
+          + (runtime.safety_pause_remaining_seconds > 0 ? 1 : 0);
 
-        setText("metric-balance", formatMoney(snapshot.balance));
+        setTextWithTone("metric-balance", formatMoney(portfolio.balance));
+        setTextWithTone("metric-upnl", formatSignedMoney(portfolio.liveUpnl), portfolio.liveUpnl > 0 ? "positive" : portfolio.liveUpnl < 0 ? "negative" : "");
+        setTextWithTone("metric-equity", formatMoney(portfolio.markedEquity), portfolio.sessionDelta == null ? "" : portfolio.sessionDelta >= 0 ? "positive" : "negative");
+        setTextWithTone("metric-delta", formatSignedMoney(portfolio.sessionDelta), portfolio.sessionDelta == null ? "" : portfolio.sessionDelta >= 0 ? "positive" : "negative");
         setText("metric-positions", formatMaybeNumber(snapshot.open_positions, 0));
-        setText("metric-pnl", formatMoney(performance.realized_pnl));
+        setTextWithTone("metric-pnl", formatSignedMoney(performance.realized_pnl), Number(performance.realized_pnl || 0) > 0 ? "positive" : Number(performance.realized_pnl || 0) < 0 ? "negative" : "");
         setText("metric-users", formatMaybeNumber((payload.users || {}).total, 0));
         setText("perf-wins", formatMaybeNumber(performance.wins, 0));
         setText("perf-losses", formatMaybeNumber(performance.losses, 0));
         setText("perf-rate", performance.win_rate !== undefined ? `${formatMaybeNumber(performance.win_rate, 1)}%` : "--");
         setText("perf-count", formatMaybeNumber(snapshot.trade_count, 0));
+        setTextWithTone("perf-avg", averageTrade == null ? "--" : formatSignedMoney(averageTrade), averageTrade == null ? "" : averageTrade > 0 ? "positive" : averageTrade < 0 ? "negative" : "");
+        setText("perf-exposure", formatMoney(portfolio.exposure));
+        setText("perf-marked", `${formatMaybeNumber(portfolio.markedPositions, 0)} / ${formatMaybeNumber(portfolio.openPositions, 0)}`);
+        setTextWithTone("perf-alerts", formatMaybeNumber(alerts, 0), alerts > 0 ? "amber" : "positive");
         setText("runtime-engine", runtime.engine_status || "--");
-        setText("runtime-websocket", runtime.websocket_connected ? "Connected" : "Offline");
+        setTextWithTone("runtime-websocket", runtime.websocket_connected ? "Connected" : "Offline", runtime.websocket_connected ? "positive" : "negative");
         setText("runtime-queue", formatMaybeNumber(runtime.command_queue_depth, 0));
         setText("runtime-symbols", formatMaybeNumber(snapshot.symbol_count || (snapshot.symbols || []).length, 0));
+        setTextWithTone("runtime-api", runtime.runtime_api_ready ? "Ready" : "Locked", runtime.runtime_api_ready ? "positive" : "amber");
+        setText("runtime-users", formatMaybeNumber(runtime.active_user_count, 0));
         setText(
           "runtime-note",
           runtime.safety_pause_remaining_seconds > 0
             ? `Safety pause active for another ${Math.ceil(runtime.safety_pause_remaining_seconds / 60)} minute(s).`
-            : `Last refresh: ${formatTimestamp(snapshot.timestamp)}`
+            : `Last refresh: ${formatTimestamp(snapshot.timestamp)} · ${portfolio.markedPositions}/${portfolio.openPositions} positions have live marks.`
         );
 
         els.modeBadge.textContent = `Mode: ${snapshot.mode || "--"}`;
@@ -1561,9 +1918,11 @@ def build_dashboard_html(
           setMessage(els.controlMessage, "Read-only member access active. Telegram controls stay in the bot.", false);
         }
 
+        renderWallet(portfolio);
         renderSetup(config);
         renderPositions(payload.positions || []);
         renderTrades(payload.recent_trades || []);
+        renderActivity(payload.activity || []);
         renderUsers(payload.users || {});
       }
 
@@ -1676,7 +2035,7 @@ def build_dashboard_html(
         if (document.visibilityState === "visible") {
           loadDashboard();
         }
-      }, 10000);
+      }, 3000);
     </script>
   </body>
 </html>

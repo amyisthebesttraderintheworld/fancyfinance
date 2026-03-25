@@ -99,6 +99,7 @@ def test_telegram_personal_mode(mock_post, sample_config):
     assert mock_post.called
     args, kwargs = mock_post.call_args
     assert kwargs['json']['chat_id'] == 12345
+    assert notifier.get_recent_messages(limit=1)[0]['text'] == 'Hello'
 
 @patch('requests.post')
 def test_telegram_customer_mode(mock_post, sample_config):
@@ -112,3 +113,15 @@ def test_telegram_customer_mode(mock_post, sample_config):
     assert mock_post.called
     args, kwargs = mock_post.call_args
     assert kwargs['json']['chat_id'] == 9999
+    assert notifier.get_recent_messages(user_id='user_1', limit=1)[0]['user_id'] == 'user_1'
+
+
+def test_telegram_notifier_keeps_history_when_notifications_disabled(sample_config):
+    sample_config['telegram']['enable_notifications'] = False
+    notifier = TelegramNotifier(sample_config)
+
+    notifier.send_message("⚠ PAUSED for safety", user_id='42')
+
+    history = notifier.get_recent_messages(user_id='42', limit=1)
+    assert history[0]['source'] == 'notification'
+    assert 'SYSTEM PAUSED' in history[0]['text']
