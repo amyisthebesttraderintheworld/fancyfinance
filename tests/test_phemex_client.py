@@ -21,6 +21,8 @@ def test_get_account_success(mock_get, client):
     
     balance = client.get_account()
     assert balance == 1.0
+    called_url = mock_get.call_args[0][0]
+    assert "currency=USDT" in called_url
 
 @patch('requests.get')
 def test_get_account_error(mock_get, client):
@@ -50,3 +52,20 @@ def test_place_order(mock_post, client):
     assert order['orderID'] == '123'
     # Verify post was called
     assert mock_post.called
+
+
+@patch('requests.post')
+def test_place_order_preserves_fractional_quantity(mock_post, client):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        'code': 0,
+        'data': {'orderID': 'fractional-order'}
+    }
+    mock_post.return_value = mock_response
+
+    order = client.place_order("BTCUSDT", "Buy", 0.0075)
+
+    assert order["orderID"] == "fractional-order"
+    assert mock_post.called
+    assert mock_post.call_args.kwargs["json"]["orderQty"] == 0.0075

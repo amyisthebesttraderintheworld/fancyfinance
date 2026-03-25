@@ -201,16 +201,56 @@ def load_historical_data(symbol: str, timeframe: str, start: str, end: str, data
 # --- Phemex Client ---
 
 class PhemexClient:
-    def __init__(self, api_key: str, api_secret: str, testnet: bool = False):
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        testnet: bool = False,
+        *,
+        account_currency: str = "USDT",
+    ):
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
+        self.account_currency = str(account_currency or "USDT").upper()
         self.base_url = "https://testnet-api.phemex.com" if testnet else "https://api.phemex.com"
         self.logger = get_logger("PhemexClient")
 
     def _generate_signature(self, endpoint: str, query_string: str, expiry: int) -> str:
         message = f"{endpoint}{query_string}{expiry}"
         return hmac.new(self.api_secret.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _price_to_ep(price: float) -> int:
+        return int(round(float(price) * 10000))
+
+    @staticmethod
+    def _normalize_order_qty(qty: float) -> float | int:
+        numeric_qty = float(qty)
+        if numeric_qty <= 0:
+            raise ValueError("Order quantity must be positive.")
+        rounded_qty = round(numeric_qty, 8)
+        if rounded_qty.is_integer():
+            return int(rounded_qty)
+        return rounded_qty
+
+    @staticmethod
+    def _extract_rows(data: Any, *keys: str) -> list[dict]:
+        if isinstance(data, list):
+            return data
+        if not isinstance(data, dict):
+            return []
+
+        for key in keys:
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+            if isinstance(value, dict):
+                for nested_key in ("rows", "data", "list"):
+                    nested_value = value.get(nested_key)
+                    if isinstance(nested_value, list):
+                        return nested_value
+        return []
 
     @retry(times=3)
     def _request(self, method: str, endpoint: str, params: dict = None):
@@ -256,27 +296,47 @@ class PhemexClient:
             raise
 
     def get_account(self) -> float:
-        # Simplified: fetching BTC balance for contract account
-        data = self._request("GET", "/accounts/accountPositions", {"currency": "BTC"})
-        # Parse data to find balance. Structure varies by account type.
-        # This is a placeholder logic for the structure
-        try:
-            return float(data['account']['accountBalanceEv']) / 100000000 # Satoshi to BTC
-        except:
-            return 0.0
+        data = self._request("GET", "/accounts/accountPositions", {"currency": self.account_currency})
+        account = data.get("account", {}) if isinstance(data, dict) else {}
+        for key in ("accountBalanceRv", "accountBalance", "balance"):
+            if account.get(key) is not None:
+                return float(account[key])
+        if account.get("accountBalanceEv") is not None:
+            return float(account["accountBalanceEv"]) / 100000000
+        return 0.0
 
-    def place_order(self, symbol: str, side: str, qty: int, price: float = None, post_only: bool = False):
+    def place_order(
+        self,
+        symbol: str,
+        side: str,
+        qty: int,
+        price: float = None,
+        post_only: bool = False,
+        *,
+        reduce_only: bool = False,
+        stop_loss: float = None,
+        take_profit: float = None,
+        close_on_trigger: bool = False,
+    ):
         # side: Buy or Sell
         params = {
             "symbol": symbol,
             "side": side,
-            "orderQty": int(qty),
+            "orderQty": self._normalize_order_qty(qty),
             "ordType": "Limit" if price else "Market",
         }
         if price:
             params["priceEp"] = int(price * 10000) # Assuming scale
             if post_only:
                 params["postOnly"] = True
+        if reduce_only:
+            params["reduceOnly"] = True
+        if close_on_trigger:
+            params["closeOnTrigger"] = True
+        if stop_loss is not None:
+            params["stopLossEp"] = self._price_to_ep(stop_loss)
+        if take_profit is not None:
+            params["takeProfitEp"] = self._price_to_ep(take_profit)
         
         return self._request("POST", "/orders", params)
 
@@ -284,7 +344,15 @@ class PhemexClient:
         return self._request("DELETE", "/orders/cancel", {"symbol": symbol, "orderID": order_id})
 
     def get_open_orders(self, symbol: str):
-        return self._request("GET", "/orders/activeList", {"symbol": symbol})
+        data = self._request("GET", "/orders/activeList", {"symbol": symbol})
+        return self._extract_rows(data, "rows", "orders", "data")
+
+    def get_positions(self, symbol: str = None):
+        data = self._request("GET", "/accounts/accountPositions", {"currency": self.account_currency})
+        positions = self._extract_rows(data, "positions", "rows", "data")
+        if symbol:
+            return [position for position in positions if str(position.get("symbol") or "") == symbol]
+        return positions
 
     def get_all_symbols(self, type: str = "Perpetual") -> List[str]:
         """

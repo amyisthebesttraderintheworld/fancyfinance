@@ -81,6 +81,7 @@ def test_run_backtest_recent_universe_returns_aggregate_report(sample_config, mo
     )
 
     sample_config["symbols"] = ["BTCUSD", "ETHUSD"]
+    monkeypatch.setattr(backtest_service, "_scanner_picked_symbols", lambda config: ["BTCUSD", "ETHUSD"])
     monkeypatch.setattr(backtest_service, "_create_exchange_client", lambda *args, **kwargs: object())
     monkeypatch.setattr(backtest_service, "_fetch_remote_recent_dataset_with_client", lambda *args, **kwargs: frame)
 
@@ -93,8 +94,37 @@ def test_run_backtest_recent_universe_returns_aggregate_report(sample_config, mo
     assert result["scope"] == "universe"
     assert result["successful_symbols"] == 2
     assert result["candles"] == 500
+    assert result["symbol_source"] == "scanner_picks"
     assert result["report"]["total_trades"] >= 0
     assert len(result["top_symbols"]) <= 2
+
+
+def test_run_backtest_recent_universe_uses_scanner_picks(sample_config, monkeypatch):
+    dates = pd.date_range("2026-03-24", periods=500, freq="1min")
+    frame = pd.DataFrame(
+        {
+            "timestamp": [int(ts.timestamp() * 1000) for ts in dates],
+            "open": [1000 + i for i in range(500)],
+            "high": [1005 + i for i in range(500)],
+            "low": [995 + i for i in range(500)],
+            "close": [1000 + i for i in range(500)],
+            "volume": [1000] * 500,
+        },
+        index=dates,
+    )
+
+    monkeypatch.setattr(backtest_service, "_scanner_picked_symbols", lambda config: ["SOLUSDT"])
+    monkeypatch.setattr(backtest_service, "_create_exchange_client", lambda *args, **kwargs: object())
+    monkeypatch.setattr(backtest_service, "_fetch_remote_recent_dataset_with_client", lambda *args, **kwargs: frame)
+
+    result = backtest_service.run_backtest_recent_universe(
+        sample_config,
+        timeframe="1m",
+        candles=500,
+    )
+
+    assert result["symbols"] == ["SOLUSDT"]
+    assert result["successful_symbols"] == 1
 
 
 def test_run_backtest_recent_rejects_invalid_candle_count(sample_config):

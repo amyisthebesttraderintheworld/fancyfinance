@@ -128,6 +128,38 @@ def _configured_symbols(config: dict) -> list[str]:
     return symbols
 
 
+def _scanner_picked_symbols(config: dict) -> list[str]:
+    try:
+        from fang_engine_runtime import resolve_scan_settings, run_market_scan
+    except Exception as exc:
+        logger.warning("Scanner runtime unavailable for universe backtesting: %s", exc)
+        return _configured_symbols(config)
+
+    settings = resolve_scan_settings(config)
+    available_slots = max(len(_configured_symbols(config)), 50)
+
+    try:
+        candidates = run_market_scan(
+            settings,
+            in_position=set(),
+            available_slots=available_slots,
+        )
+    except Exception as exc:
+        logger.warning("Scanner-driven universe selection failed: %s", exc)
+        return _configured_symbols(config)
+
+    symbols: list[str] = []
+    seen: set[str] = set()
+    for result, _direction in candidates:
+        symbol = str((result or {}).get("inst_id") or "").strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        symbols.append(symbol)
+
+    return symbols
+
+
 def _create_exchange_client(config: dict):
     try:
         from exchange_manager import ExchangeManager
@@ -366,9 +398,9 @@ def run_backtest_recent_universe(
         )
 
     config = deepcopy(base_config or {})
-    symbols = _configured_symbols(config)
+    symbols = _scanner_picked_symbols(config)
     if not symbols:
-        raise BacktestServiceError("No scanner symbols are configured for universe backtesting.")
+        raise BacktestServiceError("The scanner did not pick any assets for a universe backtest right now.")
 
     resolved_timeframe = timeframe or config.get("strategy", {}).get("timeframe") or "1m"
     config.setdefault("strategy", {})
@@ -433,6 +465,7 @@ def run_backtest_recent_universe(
         "symbol": "SCANNER_UNIVERSE",
         "scope": "universe",
         "scope_label": "scanner universe",
+        "symbol_source": "scanner_picks",
         "timeframe": resolved_timeframe,
         "start_date": start_date,
         "end_date": end_date,

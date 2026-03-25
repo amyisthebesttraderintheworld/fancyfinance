@@ -45,6 +45,7 @@ async def test_simulator_pause_resume(sim):
 async def test_simulator_process_candle_entry(sim, mock_notifier):
     candle = Candle(1704067200000, 40000, 40100, 39900, 40050, 100)
     symbol = "BTCUSD"
+    sim.use_market_scan_engine = False
     
     # Mock long scanner to trigger signal
     sim.long_scanners[symbol] = MagicMock()
@@ -64,6 +65,7 @@ async def test_simulator_process_candle_entry(sim, mock_notifier):
 @pytest.mark.asyncio
 async def test_simulator_process_candle_exit_sl(sim, mock_notifier):
     symbol = "BTCUSD"
+    sim.use_market_scan_engine = False
     # Create position manually
     sim.positions[symbol] = MagicMock(
         direction='long', entry_price=40000, quantity=1.0, stop_loss=39000, take_profit=45000
@@ -131,3 +133,28 @@ async def test_simulator_positions_command_reports_open_positions(sim, mock_noti
     message = mock_notifier.send_message.call_args[0][0]
     assert "Open Positions" in message
     assert "BTCUSD" in message
+
+
+def test_simulator_scan_market_candidates_builds_fang_entry_plans(sim):
+    sim.balance = 500.0
+    sim.positions = {}
+
+    expected_plan = {
+        "symbol": "BTCUSDT",
+        "direction": "long",
+        "price": 40000.0,
+        "quantity": 0.02,
+        "stop_loss": 39200.0,
+        "take_profit": 41600.0,
+    }
+
+    with patch(
+        "simulator.run_market_scan",
+        return_value=[({"inst_id": "BTCUSDT", "price": 40000.0, "score": 142}, "LONG")],
+    ) as run_scan_mock:
+        with patch("simulator.build_entry_plan", return_value=expected_plan) as build_plan_mock:
+            plans = sim._scan_market_candidates()
+
+    assert plans == [expected_plan]
+    run_scan_mock.assert_called_once()
+    build_plan_mock.assert_called_once()

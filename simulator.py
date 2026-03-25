@@ -19,6 +19,7 @@ from common import (
     get_logger,
 )
 from exchange_manager import ExchangeManager
+from fang_engine_runtime import build_entry_plan, resolve_scan_settings, run_market_scan
 from scanner_long import LongScanner
 from scanner_short import ShortScanner
 from supabase_client import SupabaseManager
@@ -61,7 +62,10 @@ class Simulator:
         self.is_paused = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._websocket = None
+        self._subscribed_symbols: set[str] = set()
         self.active_api_user_id: Optional[int] = None
+        self.use_market_scan_engine = True
+        self.market_scan_settings = resolve_scan_settings(config)
 
         ws_urls = {
             "phemex": "wss://ws.phemex.com",
@@ -103,6 +107,52 @@ class Simulator:
             self.long_scanners[symbol] = LongScanner(self.config)
         if symbol not in self.short_scanners:
             self.short_scanners[symbol] = ShortScanner(self.config)
+
+    def _subscribe_payload(self, symbol: str) -> dict[str, Any]:
+        return {
+            "id": len(self._subscribed_symbols) + 1,
+            "method": "kline.subscribe",
+            "params": [symbol, 60],
+        }
+
+    def _subscribe_symbol(self, symbol: str):
+        if not symbol or symbol in self._subscribed_symbols:
+            return
+
+        self._ensure_symbol_state(symbol)
+        self._subscribed_symbols.add(symbol)
+        if self._websocket and self._loop and self._loop.is_running():
+            async def _send():
+                await self._websocket.send(json.dumps(self._subscribe_payload(symbol)))
+
+            try:
+                asyncio.run_coroutine_threadsafe(_send(), self._loop)
+            except RuntimeError:
+                pass
+
+    def _scan_market_candidates(self) -> list[dict[str, Any]]:
+        if not self.use_market_scan_engine or self.is_paused:
+            return []
+
+        max_positions = int(self.config["risk"].get("max_positions", 1))
+        available_slots = max_positions - len(self.positions)
+        if available_slots <= 0:
+            return []
+        if self.balance < self.market_scan_settings.margin_usdt:
+            return []
+
+        candidates = run_market_scan(
+            self.market_scan_settings,
+            in_position=set(self.positions.keys()),
+            available_slots=available_slots,
+        )
+        plans: list[dict[str, Any]] = []
+        for result, direction in candidates:
+            plan = build_entry_plan(result, direction, self.market_scan_settings)
+            if not plan or not plan.get("symbol"):
+                continue
+            plans.append(plan)
+        return plans
 
     def _normalize_price(self, value: Any) -> float:
         price = float(value)
@@ -147,13 +197,17 @@ class Simulator:
         return None
 
     async def _subscribe(self, websocket):
-        for index, symbol in enumerate(self.symbols, start=1):
+        symbols = sorted(self.positions.keys()) if self.use_market_scan_engine else list(self.symbols)
+        self._subscribed_symbols = set()
+
+        for index, symbol in enumerate(symbols, start=1):
             subscribe_msg = {
                 "id": index,
                 "method": "kline.subscribe",
                 "params": [symbol, 60],
             }
             await websocket.send(json.dumps(subscribe_msg))
+            self._subscribed_symbols.add(symbol)
             if index % SUBSCRIPTION_PAUSE_EVERY == 0:
                 await asyncio.sleep(SUBSCRIPTION_PAUSE_SECONDS)
             self.logger.debug(f"Subscribed to {symbol}")
@@ -253,7 +307,7 @@ class Simulator:
                 if pos.direction == "short":
                     short_scanner.has_position = False
 
-        elif len(self.positions) < self.config["risk"].get("max_positions", 1):
+        elif not self.use_market_scan_engine and len(self.positions) < self.config["risk"].get("max_positions", 1):
             signal = None
             if long_signal and long_signal.direction == "long":
                 signal = long_signal
@@ -278,6 +332,39 @@ class Simulator:
                         stop_loss=signal.stop_loss,
                         take_profit=signal.take_profit,
                     )
+
+    async def _market_scan_loop(self):
+        if not self.use_market_scan_engine:
+            return
+
+        await asyncio.sleep(1.0)
+        while self.is_running:
+            try:
+                plans = await asyncio.to_thread(self._scan_market_candidates)
+                for plan in plans:
+                    if not self.is_running or self.is_paused:
+                        break
+                    if plan["symbol"] in self.positions:
+                        continue
+                    if len(self.positions) >= self.config["risk"].get("max_positions", 1):
+                        break
+                    self._execute_trade(
+                        plan["symbol"],
+                        plan["direction"],
+                        plan["price"],
+                        plan["quantity"],
+                        is_entry=True,
+                        stop_loss=plan["stop_loss"],
+                        take_profit=plan["take_profit"],
+                    )
+            except Exception as exc:
+                self.logger.error(f"Market scan loop error: {exc}")
+
+            sleep_seconds = max(5, int(self.market_scan_settings.interval_seconds))
+            for _ in range(sleep_seconds):
+                if not self.is_running:
+                    return
+                await asyncio.sleep(1)
 
     def _check_safety_timeout(self):
         if self.is_paused:
@@ -311,6 +398,7 @@ class Simulator:
             self.balance -= fee
             position = Position(symbol, direction, adjusted_price, qty, stop_loss, take_profit, int(time.time() * 1000))
             self.positions[symbol] = position
+            self._subscribe_symbol(symbol)
 
             self.db.log_trade(
                 {
@@ -469,6 +557,7 @@ class Simulator:
         await asyncio.gather(
             self._ws_handler(),
             self._command_listener(),
+            self._market_scan_loop(),
         )
 
     def start(self):

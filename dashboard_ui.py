@@ -527,6 +527,93 @@ def build_dashboard_html(
         background: rgba(12, 17, 15, 0.72);
       }
 
+      .positions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+
+      .position-card {
+        position: relative;
+        overflow: hidden;
+        padding: 18px;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(23, 31, 28, 0.92), rgba(14, 19, 18, 0.98));
+      }
+
+      .position-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 100%;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(237, 139, 99, 0.32), rgba(47, 208, 111, 0.28));
+      }
+
+      .position-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .position-symbol {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .position-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .position-badge.long {
+        border-color: rgba(47, 208, 111, 0.22);
+      }
+
+      .position-badge.short {
+        border-color: rgba(237, 139, 99, 0.22);
+      }
+
+      .position-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .position-stat {
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+        padding: 12px;
+      }
+
+      .position-stat .label {
+        display: block;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .position-stat .value {
+        display: block;
+        margin-top: 8px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -992,34 +1079,50 @@ def build_dashboard_html(
           return;
         }
 
+        const badgeForDirection = (direction) => {
+          const normalized = String(direction || "").toLowerCase();
+          if (normalized === "long") {
+            return { tone: "long", label: "🙂 Long" };
+          }
+          if (normalized === "short") {
+            return { tone: "short", label: "😈 Short" };
+          }
+          return { tone: "", label: "😐 Open" };
+        };
+
         wrap.innerHTML = `
-          <div class="table-shell">
-            <table>
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Direction</th>
-                  <th>Entry</th>
-                  <th>Qty</th>
-                  <th>Stop</th>
-                  <th>Target</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${
-                  positions.map((position) => `
-                    <tr>
-                      <td>${escapeHtml(position.symbol)}</td>
-                      <td>${escapeHtml(position.direction)}</td>
-                      <td>${formatMaybeNumber(position.entry_price, 4)}</td>
-                      <td>${formatMaybeNumber(position.quantity, 4)}</td>
-                      <td>${formatMaybeNumber(position.stop_loss, 4)}</td>
-                      <td>${formatMaybeNumber(position.take_profit, 4)}</td>
-                    </tr>
-                  `).join("")
-                }
-              </tbody>
-            </table>
+          <div class="positions-grid">
+            ${
+              positions.map((position) => {
+                const badge = badgeForDirection(position.direction);
+                return `
+                  <article class="position-card">
+                    <div class="position-head">
+                      <div class="position-symbol">${escapeHtml(position.symbol)}</div>
+                      <div class="position-badge ${badge.tone}">${badge.label}</div>
+                    </div>
+                    <div class="position-stats">
+                      <div class="position-stat">
+                        <span class="label">Entry</span>
+                        <span class="value">${formatMaybeNumber(position.entry_price, 4)}</span>
+                      </div>
+                      <div class="position-stat">
+                        <span class="label">Qty</span>
+                        <span class="value">${formatMaybeNumber(position.quantity, 4)}</span>
+                      </div>
+                      <div class="position-stat">
+                        <span class="label">Stop</span>
+                        <span class="value">${formatMaybeNumber(position.stop_loss, 4)}</span>
+                      </div>
+                      <div class="position-stat">
+                        <span class="label">Target</span>
+                        <span class="value">${formatMaybeNumber(position.take_profit, 4)}</span>
+                      </div>
+                    </div>
+                  </article>
+                `;
+              }).join("")
+            }
           </div>
         `;
       }
