@@ -121,6 +121,8 @@ class Position:
     stop_loss: float
     take_profit: float
     open_time: int
+    mark_price: Optional[float] = None
+    current_pnl: Optional[float] = None
 
 @dataclass
 class Trade:

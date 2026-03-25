@@ -75,6 +75,7 @@ class Simulator:
         self._user_sessions: dict[int, SimulationSession] = {}
         self._global_session = self._build_session(user_id=None)
         self._latest_market_prices: dict[str, tuple[int, float]] = {}
+        self._next_ws_request_id = 1
 
         self.is_running = True
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -280,10 +281,38 @@ class Simulator:
 
     def _subscribe_payload(self, symbol: str) -> dict[str, Any]:
         return {
-            "id": len(self._subscribed_symbols) + 1,
+            "id": self._next_request_id(),
             "method": "kline.subscribe",
             "params": [symbol, 60],
         }
+
+    def _market_price_subscribe_payload(self, symbol: str) -> dict[str, Any]:
+        return {
+            "id": self._next_request_id(),
+            "method": "market24h_p.subscribe",
+            "params": [symbol],
+        }
+
+    def _next_request_id(self) -> int:
+        request_id = self._next_ws_request_id
+        self._next_ws_request_id += 1
+        return request_id
+
+    def _update_position_marks(self, symbol: str, current_price: float, timestamp_ms: Optional[int] = None):
+        normalized_price = float(current_price)
+        stamp = int(timestamp_ms or time.time() * 1000)
+        self._latest_market_prices[symbol] = (stamp, normalized_price)
+
+        for session in self._runtime_sessions():
+            position = session.positions.get(symbol)
+            if position is None:
+                continue
+
+            position.mark_price = normalized_price
+            if position.direction == "short":
+                position.current_pnl = (position.entry_price - normalized_price) * position.quantity
+            else:
+                position.current_pnl = (normalized_price - position.entry_price) * position.quantity
 
     def _subscribe_symbol(self, symbol: str):
         if not symbol or symbol in self._subscribed_symbols:
@@ -294,7 +323,8 @@ class Simulator:
         if self._websocket and self._loop and self._loop.is_running():
 
             async def _send():
-                await self._websocket.send(json.dumps(self._subscribe_payload(symbol)))
+                for payload in (self._subscribe_payload(symbol), self._market_price_subscribe_payload(symbol)):
+                    await self._websocket.send(json.dumps(payload))
 
             try:
                 asyncio.run_coroutine_threadsafe(_send(), self._loop)
@@ -388,18 +418,36 @@ class Simulator:
         self._subscribed_symbols = set()
 
         for index, symbol in enumerate(symbols, start=1):
-            subscribe_msg = {
-                "id": index,
-                "method": "kline.subscribe",
-                "params": [symbol, 60],
-            }
-            await websocket.send(json.dumps(subscribe_msg))
+            for subscribe_msg in (self._subscribe_payload(symbol), self._market_price_subscribe_payload(symbol)):
+                await websocket.send(json.dumps(subscribe_msg))
             self._subscribed_symbols.add(symbol)
             if index % SUBSCRIPTION_PAUSE_EVERY == 0:
                 await asyncio.sleep(SUBSCRIPTION_PAUSE_SECONDS)
             self.logger.debug(f"Subscribed to {symbol}")
 
+    def _extract_market_price(self, data: Dict[str, Any]) -> Optional[tuple[str, float]]:
+        tick = data.get("market24h_p")
+        if not isinstance(tick, dict):
+            return None
+
+        symbol = tick.get("symbol")
+        price = tick.get("closeRp")
+        if price is None:
+            price = tick.get("lastRp")
+        if not symbol or price is None:
+            return None
+
+        try:
+            return str(symbol), float(price)
+        except (TypeError, ValueError):
+            return None
+
     async def _handle_ws_message(self, data: Dict[str, Any]):
+        market_price = self._extract_market_price(data)
+        if market_price is not None:
+            symbol, price = market_price
+            self._update_position_marks(symbol, price)
+
         symbol = data.get("symbol") or data.get("s")
         kline_payload = data.get("kline") or data.get("data")
         if not symbol or not kline_payload:
@@ -544,7 +592,7 @@ class Simulator:
         if not sessions:
             return
 
-        self._latest_market_prices[symbol] = (int(candle.timestamp), float(candle.close))
+        self._update_position_marks(symbol, float(candle.close), timestamp_ms=int(candle.timestamp))
 
         for session in sessions:
             await self._process_candle_for_session(session, symbol, candle)
@@ -659,8 +707,11 @@ class Simulator:
         if is_entry:
             session.balance -= fee
             position = Position(symbol, direction, adjusted_price, qty, stop_loss, take_profit, int(time.time() * 1000))
+            position.mark_price = adjusted_price
+            position.current_pnl = 0.0
             session.positions[symbol] = position
             self._subscribe_symbol(symbol)
+            self._update_position_marks(symbol, adjusted_price)
 
             entry_payload = self._record_trade_event(
                 {

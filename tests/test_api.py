@@ -341,6 +341,7 @@ def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_c
             "take_profit": 43500.0,
             "entry_time": 1711320000000,
             "mark_price": None,
+            "current_pnl": None,
         }
     ]
     assert payload["recent_trades"][0]["symbol"] == "BTCUSD"

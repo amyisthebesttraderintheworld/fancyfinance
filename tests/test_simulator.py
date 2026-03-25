@@ -4,7 +4,7 @@ import queue
 import json
 from unittest.mock import MagicMock, AsyncMock, patch
 from simulator import Simulator
-from common import Candle, TelegramNotifier
+from common import Candle, Position, TelegramNotifier
 
 @pytest.fixture
 def mock_notifier():
@@ -170,6 +170,27 @@ async def test_simulator_tracks_latest_market_price_while_session_is_paused(sim)
     await sim._process_candle("BTCUSD", candle)
 
     assert sim.get_latest_market_price("BTCUSD") == 40050.0
+
+
+@pytest.mark.asyncio
+async def test_simulator_market_tick_updates_position_mark_and_upnl(sim):
+    session = sim.get_user_session(12345, create=True)
+    session.positions["BTCUSD"] = Position(
+        symbol="BTCUSD",
+        direction="long",
+        entry_price=40000.0,
+        quantity=0.5,
+        stop_loss=39000.0,
+        take_profit=42000.0,
+        open_time=1704067200000,
+    )
+
+    await sim._handle_ws_message({"market24h_p": {"symbol": "BTCUSD", "closeRp": "40120.5"}})
+
+    position = session.positions["BTCUSD"]
+    assert sim.get_latest_market_price("BTCUSD") == 40120.5
+    assert position.mark_price == 40120.5
+    assert position.current_pnl == pytest.approx(60.25)
 
 
 def test_simulator_scan_market_candidates_builds_fang_entry_plans(sim):

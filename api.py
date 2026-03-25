@@ -148,6 +148,10 @@ def _position_mark_price(engine, symbol: str, user_id: Optional[int] = None) -> 
 
 
 def _position_unrealized_pnl(position: Dict[str, Any]) -> Optional[float]:
+    direct_pnl = _coerce_float(position.get("current_pnl", position.get("pnl")))
+    if direct_pnl is not None:
+        return direct_pnl
+
     entry = _coerce_float(position.get("entry_price"))
     quantity = _coerce_float(position.get("quantity"))
     mark = _coerce_float(position.get("mark_price"))
@@ -323,6 +327,11 @@ def _snapshot(engine, user_id: Optional[int] = None):
 
 def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[float] = None) -> Dict[str, Any]:
     if isinstance(position, dict):
+        resolved_mark_price = position.get("mark_price")
+        if resolved_mark_price is None:
+            resolved_mark_price = position.get("current_price")
+        if resolved_mark_price is None:
+            resolved_mark_price = mark_price
         return {
             "symbol": symbol,
             "direction": position.get("direction"),
@@ -331,9 +340,13 @@ def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[floa
             "stop_loss": position.get("stop_loss"),
             "take_profit": position.get("take_profit"),
             "entry_time": position.get("entry_time", position.get("open_time")),
-            "mark_price": position.get("mark_price", position.get("current_price", mark_price)),
+            "mark_price": resolved_mark_price,
+            "current_pnl": position.get("current_pnl", position.get("pnl")),
         }
 
+    resolved_mark_price = getattr(position, "mark_price", None)
+    if resolved_mark_price is None:
+        resolved_mark_price = mark_price
     return {
         "symbol": symbol,
         "direction": getattr(position, "direction", None),
@@ -342,7 +355,8 @@ def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[floa
         "stop_loss": getattr(position, "stop_loss", None),
         "take_profit": getattr(position, "take_profit", None),
         "entry_time": getattr(position, "open_time", None),
-        "mark_price": mark_price,
+        "mark_price": resolved_mark_price,
+        "current_pnl": getattr(position, "current_pnl", None),
     }
 
 

@@ -1565,6 +1565,27 @@ def build_dashboard_html(
         `;
       }
 
+      function positionUpnl(position) {
+        const directPnl = position.current_pnl === null || position.current_pnl === undefined || Number.isNaN(Number(position.current_pnl))
+          ? null
+          : Number(position.current_pnl);
+        if (directPnl !== null) {
+          return directPnl;
+        }
+
+        const entry = Number(position.entry_price);
+        const quantity = Number(position.quantity);
+        const mark = position.mark_price === null || position.mark_price === undefined || Number.isNaN(Number(position.mark_price))
+          ? null
+          : Number(position.mark_price);
+        if (!Number.isFinite(entry) || !Number.isFinite(quantity) || mark === null) {
+          return null;
+        }
+
+        const direction = String(position.direction || "").toLowerCase();
+        return (direction === "short" ? (entry - mark) : (mark - entry)) * quantity;
+      }
+
       function computePortfolio(payload) {
         const snapshot = payload.snapshot || {};
         const positions = Array.isArray(payload.positions) ? payload.positions : [];
@@ -1575,16 +1596,8 @@ def build_dashboard_html(
           ? null
           : Number(referenceBalanceRaw);
         const liveUpnl = positions.reduce((sum, position) => {
-          const entry = Number(position.entry_price);
-          const quantity = Number(position.quantity);
-          const mark = position.mark_price === null || position.mark_price === undefined || Number.isNaN(Number(position.mark_price))
-            ? null
-            : Number(position.mark_price);
-          if (!Number.isFinite(entry) || !Number.isFinite(quantity) || mark === null) {
-            return sum;
-          }
-          const direction = String(position.direction || "").toLowerCase();
-          return sum + (direction === "short" ? (entry - mark) : (mark - entry)) * quantity;
+          const unrealized = positionUpnl(position);
+          return unrealized == null ? sum : sum + unrealized;
         }, 0);
         const exposure = positions.reduce((sum, position) => {
           const entry = Number(position.entry_price);
@@ -1725,9 +1738,7 @@ def build_dashboard_html(
                 const entry = Number(position.entry_price);
                 const quantity = Number(position.quantity);
                 const direction = String(position.direction || "").toLowerCase();
-                const unrealizedPnl = mark === null || !Number.isFinite(entry) || !Number.isFinite(quantity)
-                  ? null
-                  : (direction === "short" ? (entry - mark) : (mark - entry)) * quantity;
+                const unrealizedPnl = positionUpnl(position);
                 const pnlClass = unrealizedPnl === null ? "" : unrealizedPnl >= 0 ? "positive" : "negative";
                 const notional = Number.isFinite(entry) && Number.isFinite(quantity) ? Math.abs(entry * quantity) : null;
                 const userPill = position.user_id === null || position.user_id === undefined
@@ -1968,8 +1979,10 @@ def build_dashboard_html(
         }
 
         try {
-          const response = await fetch(DATA_ENDPOINT, {
+          const separator = DATA_ENDPOINT.includes("?") ? "&" : "?";
+          const response = await fetch(`${DATA_ENDPOINT}${separator}_ts=${Date.now()}`, {
             headers: headers(),
+            cache: "no-store",
           });
 
           if (response.status === 401) {
