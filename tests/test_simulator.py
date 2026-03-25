@@ -156,7 +156,9 @@ async def test_simulator_set_balance_is_isolated_per_user(sim):
     assert primary is not None
     assert secondary is not None
     assert primary.balance == 100.0
+    assert primary.reference_balance == 100.0
     assert secondary.balance == sim.initial_balance
+    assert secondary.reference_balance == sim.initial_balance
 
 
 @pytest.mark.asyncio

@@ -161,6 +161,7 @@ def _position_unrealized_pnl(position: Dict[str, Any]) -> Optional[float]:
 
 def _portfolio_summary(snapshot: Dict[str, Any], positions: list[Dict[str, Any]]) -> Dict[str, Any]:
     balance = _coerce_float(snapshot.get("balance"))
+    reference_balance = _coerce_float(snapshot.get("reference_balance"))
     marked_positions = 0
     winning_positions = 0
     losing_positions = 0
@@ -185,8 +186,12 @@ def _portfolio_summary(snapshot: Dict[str, Any], positions: list[Dict[str, Any]]
 
     return {
         "balance": balance,
+        "reference_balance": reference_balance,
         "live_upnl": round(live_upnl, 4),
         "marked_equity": round(balance + live_upnl, 4) if balance is not None else None,
+        "session_delta": round((balance + live_upnl) - reference_balance, 4)
+        if balance is not None and reference_balance is not None
+        else None,
         "notional_exposure": round(notional_exposure, 4),
         "marked_positions": marked_positions,
         "winning_positions": winning_positions,
@@ -251,6 +256,11 @@ def _snapshot(engine, user_id: Optional[int] = None):
         if user_id is not None:
             session = _get_user_session(engine, user_id, create=True)
             balance = getattr(session, "balance", 0.0) if session is not None else 0.0
+            reference_balance = (
+                getattr(session, "reference_balance", balance)
+                if session is not None
+                else balance
+            )
             started_at = getattr(session, "session_started_at", None) if session is not None else None
             paused = getattr(session, "is_paused", False) if session is not None else False
             open_positions = len(getattr(session, "positions", {}) or {}) if session is not None else 0
@@ -259,6 +269,10 @@ def _snapshot(engine, user_id: Optional[int] = None):
         else:
             sessions = _list_user_sessions(engine)
             balance = sum(float(getattr(session, "balance", 0.0) or 0.0) for session in sessions)
+            reference_balance = sum(
+                float(getattr(session, "reference_balance", getattr(session, "balance", 0.0)) or 0.0)
+                for session in sessions
+            )
             started_at = min((session.session_started_at for session in sessions if session.session_started_at), default=None)
             paused = bool(sessions) and all(bool(getattr(session, "is_paused", False)) for session in sessions)
             open_positions = sum(len(getattr(session, "positions", {}) or {}) for session in sessions)
@@ -274,6 +288,7 @@ def _snapshot(engine, user_id: Optional[int] = None):
             "running": engine.is_running,
             "paused": paused,
             "balance": balance,
+            "reference_balance": reference_balance,
             "initial_balance": initial_balance,
             "symbols": symbols,
             "symbol_count": len(symbols),
@@ -281,6 +296,11 @@ def _snapshot(engine, user_id: Optional[int] = None):
             "trade_count": _trade_count(engine, user_id=user_id),
             "active_user_count": active_user_count,
         }
+
+    global_session = getattr(engine, "_global_session", None)
+    reference_balance = getattr(global_session, "reference_balance", None)
+    if reference_balance is None:
+        reference_balance = getattr(engine, "reference_balance", engine.balance)
 
     return {
         "app": APP_NAME,
@@ -292,6 +312,7 @@ def _snapshot(engine, user_id: Optional[int] = None):
         "running": engine.is_running,
         "paused": engine.is_paused,
         "balance": engine.balance,
+        "reference_balance": reference_balance,
         "initial_balance": engine.config.get("backtest", {}).get("initial_balance"),
         "symbols": symbols,
         "symbol_count": len(symbols),

@@ -36,6 +36,7 @@ SUBSCRIPTION_PAUSE_SECONDS = 0.01
 class SimulationSession:
     user_id: Optional[int]
     balance: float
+    reference_balance: float = 0.0
     positions: dict[str, Position] = field(default_factory=dict)
     trade_history: list[dict[str, Any]] = field(default_factory=list)
     safety_paused_until: float = 0.0
@@ -209,6 +210,7 @@ class Simulator:
         target = session or self._global_session
         target.session_started_at = self._now_iso()
         target.session_started_epoch = time.time()
+        target.reference_balance = float(target.balance)
 
     def _record_trade_event(
         self,
@@ -809,6 +811,7 @@ class Simulator:
             if args:
                 try:
                     target.balance = float(args[0])
+                    target.reference_balance = float(target.balance)
                     response = f"Balance set to {target.balance}"
                 except ValueError:
                     response = "Invalid amount."

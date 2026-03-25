@@ -1570,6 +1570,10 @@ def build_dashboard_html(
         const positions = Array.isArray(payload.positions) ? payload.positions : [];
         const apiPortfolio = payload.portfolio || {};
         const balance = apiPortfolio.balance ?? snapshot.balance ?? null;
+        const referenceBalanceRaw = apiPortfolio.reference_balance ?? snapshot.reference_balance ?? null;
+        const referenceBalance = referenceBalanceRaw === null || referenceBalanceRaw === undefined || Number.isNaN(Number(referenceBalanceRaw))
+          ? null
+          : Number(referenceBalanceRaw);
         const liveUpnl = positions.reduce((sum, position) => {
           const entry = Number(position.entry_price);
           const quantity = Number(position.quantity);
@@ -1595,15 +1599,26 @@ def build_dashboard_html(
           ? null
           : Number(balance) + liveUpnl;
         const baselineKey = `${payload.user_id || "global"}:${snapshot.session_started_at || snapshot.mode || "session"}`;
-        if (state.sessionBaselineKey !== baselineKey) {
+        if (referenceBalance !== null) {
+          state.sessionBaselineKey = baselineKey;
+          state.sessionBaseline = referenceBalance;
+        } else if (state.sessionBaselineKey !== baselineKey) {
           state.sessionBaselineKey = baselineKey;
           state.sessionBaseline = markedEquity;
         } else if (state.sessionBaseline == null && markedEquity != null) {
           state.sessionBaseline = markedEquity;
+        } else if (markedEquity != null && positions.length === 0 && Number(snapshot.trade_count || 0) === 0) {
+          state.sessionBaseline = markedEquity;
         }
-        const sessionDelta = state.sessionBaseline == null || markedEquity == null ? null : markedEquity - state.sessionBaseline;
+        const apiSessionDelta = apiPortfolio.session_delta === null || apiPortfolio.session_delta === undefined || Number.isNaN(Number(apiPortfolio.session_delta))
+          ? null
+          : Number(apiPortfolio.session_delta);
+        const sessionDelta = apiSessionDelta !== null
+          ? apiSessionDelta
+          : (state.sessionBaseline == null || markedEquity == null ? null : markedEquity - state.sessionBaseline);
         return {
           balance,
+          referenceBalance,
           liveUpnl,
           markedEquity,
           exposure,

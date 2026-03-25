@@ -348,6 +348,7 @@ def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_c
 
 def test_member_dashboard_data_uses_latest_market_price_for_live_upnl(sample_config):
     engine = _build_user_scoped_engine(sample_config)
+    engine.get_user_session(12345).reference_balance = 100.0
     engine.get_latest_market_price = lambda symbol: 42150.0 if symbol == "BTCUSD" else None
     app = create_app(engine, auth_token="secret-token")
     client = TestClient(app)
@@ -360,6 +361,8 @@ def test_member_dashboard_data_uses_latest_market_price_for_live_upnl(sample_con
     assert payload["positions"][0]["mark_price"] == 42150.0
     assert payload["portfolio"]["live_upnl"] == 15.0
     assert payload["portfolio"]["marked_equity"] == 1215.0
+    assert payload["portfolio"]["reference_balance"] == 100.0
+    assert payload["portfolio"]["session_delta"] == 1115.0
     assert payload["portfolio"]["marked_positions"] == 1
     assert payload["portfolio"]["winning_positions"] == 1
 
