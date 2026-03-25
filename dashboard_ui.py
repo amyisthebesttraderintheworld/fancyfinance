@@ -529,7 +529,7 @@ def build_dashboard_html(
 
       .positions-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 14px;
       }
 
@@ -540,6 +540,7 @@ def build_dashboard_html(
         border-radius: 18px;
         border: 1px solid var(--border);
         background: linear-gradient(180deg, rgba(23, 31, 28, 0.92), rgba(14, 19, 18, 0.98));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
       }
 
       .position-card::before {
@@ -565,6 +566,32 @@ def build_dashboard_html(
         font-weight: 700;
       }
 
+      .position-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .position-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted-foreground);
+      }
+
+      .position-pill.user {
+        border-color: rgba(237, 139, 99, 0.18);
+      }
+
       .position-badge {
         display: inline-flex;
         align-items: center;
@@ -588,7 +615,7 @@ def build_dashboard_html(
 
       .position-stats {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
       }
 
@@ -612,6 +639,107 @@ def build_dashboard_html(
         margin-top: 8px;
         font-size: 15px;
         font-weight: 700;
+      }
+
+      .position-stat.positive {
+        border-color: rgba(47, 208, 111, 0.2);
+      }
+
+      .position-stat.negative {
+        border-color: rgba(212, 87, 87, 0.24);
+      }
+
+      .price-line {
+        margin-bottom: 14px;
+        padding: 14px 14px 12px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: linear-gradient(180deg, rgba(8, 12, 11, 0.78), rgba(16, 22, 20, 0.88));
+      }
+
+      .price-line-bar {
+        position: relative;
+        height: 48px;
+      }
+
+      .price-line-track {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 10px;
+        transform: translateY(-50%);
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(212, 87, 87, 0.18), rgba(255, 196, 95, 0.18), rgba(47, 208, 111, 0.18));
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      }
+
+      .price-line-fill {
+        position: absolute;
+        top: 50%;
+        height: 10px;
+        transform: translateY(-50%);
+        border-radius: 999px;
+      }
+
+      .price-line-marker {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--foreground);
+      }
+
+      .price-line-stop {
+        color: #ff7f8e;
+      }
+
+      .price-line-entry {
+        color: #ffc45f;
+      }
+
+      .price-line-target {
+        color: #63e3b0;
+      }
+
+      .price-line-face {
+        top: 0;
+        transform: translate(-50%, 0);
+        font-size: 18px;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+        text-shadow: 0 0 18px rgba(255, 255, 255, 0.18);
+      }
+
+      .price-line-face-flat {
+        color: #d6d5de;
+      }
+
+      .price-line-face-profit {
+        color: #6ef0bf;
+      }
+
+      .price-line-face-loss {
+        color: #ff93a4;
+      }
+
+      .price-line-face-near {
+        color: #ffe07d;
+      }
+
+      .price-line-labels {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 8px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       table {
@@ -704,6 +832,11 @@ def build_dashboard_html(
         .panel-header {
           flex-direction: column;
           align-items: flex-start;
+        }
+
+        .position-stats,
+        .price-line-labels {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
     </style>
@@ -1000,6 +1133,15 @@ def build_dashboard_html(
         });
       }
 
+      function formatSignedMoney(value) {
+        if (value === null || value === undefined || Number.isNaN(Number(value))) {
+          return "--";
+        }
+        const numeric = Number(value);
+        const sign = numeric > 0 ? "+" : numeric < 0 ? "-" : "";
+        return `${sign}${formatMoney(Math.abs(numeric))}`;
+      }
+
       function formatTimestamp(value) {
         if (!value) {
           return "--";
@@ -1014,6 +1156,37 @@ def build_dashboard_html(
           return String(value);
         }
         return date.toLocaleString();
+      }
+
+      function formatAge(value) {
+        if (!value) {
+          return "--";
+        }
+        let timestamp = Number(value);
+        if (!Number.isFinite(timestamp)) {
+          timestamp = new Date(value).getTime();
+        }
+        if (!Number.isFinite(timestamp)) {
+          return "--";
+        }
+        const normalized = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+        const elapsedMs = Math.max(Date.now() - normalized, 0);
+        const minutes = Math.floor(elapsedMs / 60000);
+        if (minutes < 1) {
+          return "just now";
+        }
+        if (minutes < 60) {
+          return `${minutes}m ago`;
+        }
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) {
+          return `${hours}h ago`;
+        }
+        const days = Math.floor(hours / 24);
+        if (days < 7) {
+          return `${days}d ago`;
+        }
+        return formatTimestamp(normalized);
       }
 
       function humanizeMembership(value) {
@@ -1077,6 +1250,101 @@ def build_dashboard_html(
           .join("");
       }
 
+      function toPct(value, low, high) {
+        if (!Number.isFinite(value) || !Number.isFinite(low) || !Number.isFinite(high)) {
+          return 50;
+        }
+        if (low === high) {
+          return 50;
+        }
+        const pct = ((value - low) / (high - low)) * 100;
+        return Math.min(98, Math.max(2, pct));
+      }
+
+      function buildPriceLine(position) {
+        const entry = Number(position.entry_price);
+        const stop = Number(position.stop_loss);
+        const target = Number(position.take_profit);
+        const mark = position.mark_price === null || position.mark_price === undefined || Number.isNaN(Number(position.mark_price))
+          ? null
+          : Number(position.mark_price);
+        const hasEntry = Number.isFinite(entry) && entry > 0;
+        const hasStop = Number.isFinite(stop) && stop > 0;
+        const hasTarget = Number.isFinite(target) && target > 0;
+        if (!hasEntry) {
+          return "";
+        }
+
+        const values = [entry];
+        if (hasStop) {
+          values.push(stop);
+        }
+        if (hasTarget) {
+          values.push(target);
+        }
+        if (mark !== null && Number.isFinite(mark) && mark > 0) {
+          values.push(mark);
+        }
+        if (values.length < 2) {
+          return "";
+        }
+
+        const low = Math.min(...values);
+        const high = Math.max(...values);
+        const direction = String(position.direction || "").toLowerCase();
+        const isLong = direction !== "short";
+        const traveler = mark !== null ? mark : entry;
+        const fillAnchor = hasStop ? stop : entry;
+        const fillLeft = Math.min(toPct(entry, low, high), toPct(fillAnchor, low, high));
+        const fillRight = Math.max(toPct(entry, low, high), toPct(fillAnchor, low, high));
+        const fillWidth = Math.max(fillRight - fillLeft, 0);
+
+        let face = "(-_-)";
+        let faceClass = "price-line-face-flat";
+        if (mark !== null) {
+          const losing = isLong ? mark < entry : mark > entry;
+          face = "(^_^)";
+          faceClass = "price-line-face-profit";
+          if (losing) {
+            face = "(>_<)";
+            faceClass = "price-line-face-loss";
+          } else if (hasTarget) {
+            const totalDistance = Math.abs(target - entry);
+            const remainingDistance = Math.abs(target - mark);
+            const progress = totalDistance > 0 ? remainingDistance / totalDistance : 1;
+            if (progress < 0.15) {
+              face = "(*_*)";
+              faceClass = "price-line-face-near";
+            }
+          }
+        }
+
+        const fillTone = mark === null
+          ? "linear-gradient(90deg, rgba(133, 146, 168, 0.24), rgba(214, 213, 222, 0.16))"
+          : ((isLong ? mark >= entry : mark <= entry)
+              ? "linear-gradient(90deg, rgba(47, 208, 111, 0.26), rgba(99, 227, 176, 0.18))"
+              : "linear-gradient(90deg, rgba(212, 87, 87, 0.28), rgba(255, 127, 142, 0.2))");
+
+        return `
+          <div class="price-line">
+            <div class="price-line-bar">
+              <div class="price-line-track"></div>
+              ${fillWidth > 0.5 ? `<div class="price-line-fill" style="left:${fillLeft}%; width:${fillWidth}%; background:${fillTone};"></div>` : ""}
+              ${hasStop ? `<span class="price-line-marker price-line-stop" style="left:${toPct(stop, low, high)}%">S</span>` : ""}
+              <span class="price-line-marker price-line-entry" style="left:${toPct(entry, low, high)}%">E</span>
+              ${hasTarget ? `<span class="price-line-marker price-line-target" style="left:${toPct(target, low, high)}%">T</span>` : ""}
+              <span class="price-line-marker price-line-face ${faceClass}" style="left:${toPct(traveler, low, high)}%">${face}</span>
+            </div>
+            <div class="price-line-labels">
+              <span>Stop ${hasStop ? formatMaybeNumber(stop, 4) : "--"}</span>
+              <span>Entry ${formatMaybeNumber(entry, 4)}</span>
+              <span>Mark ${mark === null ? "--" : formatMaybeNumber(mark, 4)}</span>
+              <span>Target ${hasTarget ? formatMaybeNumber(target, 4) : "--"}</span>
+            </div>
+          </div>
+        `;
+      }
+
       function renderPositions(positions) {
         const wrap = document.getElementById("positions-wrap");
         if (!positions || !positions.length) {
@@ -1100,16 +1368,45 @@ def build_dashboard_html(
             ${
               positions.map((position) => {
                 const badge = badgeForDirection(position.direction);
+                const mark = position.mark_price === null || position.mark_price === undefined || Number.isNaN(Number(position.mark_price))
+                  ? null
+                  : Number(position.mark_price);
+                const entry = Number(position.entry_price);
+                const quantity = Number(position.quantity);
+                const direction = String(position.direction || "").toLowerCase();
+                const unrealizedPnl = mark === null || !Number.isFinite(entry) || !Number.isFinite(quantity)
+                  ? null
+                  : (direction === "short" ? (entry - mark) : (mark - entry)) * quantity;
+                const pnlClass = unrealizedPnl === null ? "" : unrealizedPnl >= 0 ? "positive" : "negative";
+                const userPill = position.user_id === null || position.user_id === undefined
+                  ? ""
+                  : `<span class="position-pill user">Acct ${escapeHtml(position.user_id)}</span>`;
+                const openedPill = `<span class="position-pill">Opened ${escapeHtml(formatAge(position.entry_time))}</span>`;
+                const markPill = `<span class="position-pill">${mark === null ? "Mark pending" : `Mark ${escapeHtml(formatMaybeNumber(mark, 4))}`}</span>`;
                 return `
                   <article class="position-card">
                     <div class="position-head">
                       <div class="position-symbol">${escapeHtml(position.symbol)}</div>
                       <div class="position-badge ${badge.tone}">${badge.label}</div>
                     </div>
+                    <div class="position-meta">
+                      ${userPill}
+                      ${openedPill}
+                      ${markPill}
+                    </div>
+                    ${buildPriceLine(position)}
                     <div class="position-stats">
                       <div class="position-stat">
                         <span class="label">Entry</span>
                         <span class="value">${formatMaybeNumber(position.entry_price, 4)}</span>
+                      </div>
+                      <div class="position-stat">
+                        <span class="label">Mark</span>
+                        <span class="value">${mark === null ? "--" : formatMaybeNumber(mark, 4)}</span>
+                      </div>
+                      <div class="position-stat ${pnlClass}">
+                        <span class="label">Unrealized</span>
+                        <span class="value">${formatSignedMoney(unrealizedPnl)}</span>
                       </div>
                       <div class="position-stat">
                         <span class="label">Qty</span>

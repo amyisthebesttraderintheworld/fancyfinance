@@ -55,6 +55,16 @@ def _coerce_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _coerce_float(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:
+        return None
+    return number
+
+
 def _uses_user_sessions(engine) -> bool:
     return bool(getattr(engine, "_user_scoped_simulation", False))
 
@@ -71,6 +81,49 @@ def _list_user_sessions(engine) -> list[Any]:
     if callable(getter):
         return list(getter())
     return []
+
+
+def _latest_scanner_close(scanners: Any, symbol: str) -> Optional[tuple[int, float]]:
+    if not isinstance(scanners, dict):
+        return None
+
+    scanner = scanners.get(symbol)
+    candles = getattr(scanner, "candles", None) or []
+    if not candles:
+        return None
+
+    latest = candles[-1]
+    if isinstance(latest, dict):
+        timestamp = int(_coerce_float(latest.get("timestamp")) or 0)
+        close = _coerce_float(latest.get("close"))
+    else:
+        timestamp = int(_coerce_float(getattr(latest, "timestamp", None)) or 0)
+        close = _coerce_float(getattr(latest, "close", None))
+
+    if close is None or close <= 0:
+        return None
+    return timestamp, close
+
+
+def _position_mark_price(engine, symbol: str, user_id: Optional[int] = None) -> Optional[float]:
+    candidates: list[tuple[int, float]] = []
+    if _uses_user_sessions(engine):
+        session = _get_user_session(engine, user_id, create=True) if user_id is not None else None
+        if session is None:
+            return None
+        for scanner_map in (getattr(session, "long_scanners", None), getattr(session, "short_scanners", None)):
+            latest = _latest_scanner_close(scanner_map, symbol)
+            if latest is not None:
+                candidates.append(latest)
+    else:
+        for scanner_map in (getattr(engine, "long_scanners", None), getattr(engine, "short_scanners", None)):
+            latest = _latest_scanner_close(scanner_map, symbol)
+            if latest is not None:
+                candidates.append(latest)
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def _trade_count(engine, user_id: Optional[int] = None) -> int:
@@ -141,7 +194,7 @@ def _snapshot(engine, user_id: Optional[int] = None):
     }
 
 
-def _serialize_position(symbol: str, position: Any) -> Dict[str, Any]:
+def _serialize_position(symbol: str, position: Any, *, mark_price: Optional[float] = None) -> Dict[str, Any]:
     if isinstance(position, dict):
         return {
             "symbol": symbol,
@@ -150,6 +203,8 @@ def _serialize_position(symbol: str, position: Any) -> Dict[str, Any]:
             "quantity": position.get("quantity", position.get("qty")),
             "stop_loss": position.get("stop_loss"),
             "take_profit": position.get("take_profit"),
+            "entry_time": position.get("entry_time", position.get("open_time")),
+            "mark_price": position.get("mark_price", position.get("current_price", mark_price)),
         }
 
     return {
@@ -159,6 +214,8 @@ def _serialize_position(symbol: str, position: Any) -> Dict[str, Any]:
         "quantity": getattr(position, "quantity", None),
         "stop_loss": getattr(position, "stop_loss", None),
         "take_profit": getattr(position, "take_profit", None),
+        "entry_time": getattr(position, "open_time", None),
+        "mark_price": mark_price,
     }
 
 
@@ -167,17 +224,35 @@ def _positions_payload(engine, user_id: Optional[int] = None):
         if user_id is not None:
             session = _get_user_session(engine, user_id, create=True)
             positions = getattr(session, "positions", {}) if session is not None else {}
-            return [_serialize_position(symbol, position) for symbol, position in positions.items()]
+            return [
+                _serialize_position(
+                    symbol,
+                    position,
+                    mark_price=_position_mark_price(engine, symbol, user_id=user_id),
+                )
+                for symbol, position in positions.items()
+            ]
 
         payload = []
         for session in _list_user_sessions(engine):
             for symbol, position in getattr(session, "positions", {}).items():
-                item = _serialize_position(symbol, position)
+                item = _serialize_position(
+                    symbol,
+                    position,
+                    mark_price=_position_mark_price(engine, symbol, user_id=getattr(session, "user_id", None)),
+                )
                 item["user_id"] = getattr(session, "user_id", None)
                 payload.append(item)
         return payload
 
-    return [_serialize_position(symbol, position) for symbol, position in engine.positions.items()]
+    return [
+        _serialize_position(
+            symbol,
+            position,
+            mark_price=_position_mark_price(engine, symbol),
+        )
+        for symbol, position in engine.positions.items()
+    ]
 
 
 def _recent_trades(engine, limit: int = 20, user_id: Optional[int] = None):

@@ -225,6 +225,8 @@ def test_dashboard_data_returns_live_payload(sample_config):
     assert payload["performance"]["realized_pnl"] == 125.5
     assert payload["users"]["total"] == 2
     assert payload["positions"][0]["symbol"] == "BTCUSD"
+    assert payload["positions"][0]["entry_time"] == 1711320000000
+    assert payload["positions"][0]["mark_price"] is None
     assert payload["recent_trades"][0]["type"] == "exit"
 
 
@@ -258,6 +260,8 @@ def test_dashboard_data_accepts_member_token_for_read_only_payload(sample_config
     assert payload["user_id"] == 12345
     assert payload["snapshot"]["balance"] is None
     assert payload["positions"][0]["symbol"] == "BTCUSD"
+    assert payload["positions"][0]["entry_time"] == 1711320000000
+    assert payload["positions"][0]["mark_price"] is None
 
 
 def test_member_dashboard_page_renders(sample_config):
@@ -294,6 +298,8 @@ def test_member_dashboard_data_returns_read_only_payload(sample_config):
     assert payload["snapshot"]["balance"] is None
     assert payload["users"] == {}
     assert payload["positions"][0]["symbol"] == "BTCUSD"
+    assert payload["positions"][0]["entry_time"] == 1711320000000
+    assert payload["positions"][0]["mark_price"] is None
 
 
 def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_config):
@@ -315,6 +321,8 @@ def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_c
             "quantity": 0.1,
             "stop_loss": 41000.0,
             "take_profit": 43500.0,
+            "entry_time": 1711320000000,
+            "mark_price": None,
         }
     ]
     assert payload["recent_trades"][0]["symbol"] == "BTCUSD"
