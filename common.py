@@ -317,6 +317,7 @@ import os
 class SettingsManager:
     def __init__(self, file_path: str = "bot_settings.json"):
         self.file_path = file_path
+        self.logger = get_logger("SettingsManager")
         self.defaults = {
             "trading_enabled": {"type": "Boolean", "value": True, "desc": "Global master switch for trading."},
             "risk_multiplier": {"type": "Number", "value": 1.0, "desc": "Multiplier for calculated position sizes."},
@@ -327,13 +328,21 @@ class SettingsManager:
 
     def _load(self):
         if os.path.exists(self.file_path):
-            with open(self.file_path, "r") as f:
-                return json.load(f)
+            try:
+                with open(self.file_path, "r") as f:
+                    return json.load(f)
+            except Exception as exc:
+                self.logger.warning(f"Failed to load settings from {self.file_path}: {exc}")
         return json.loads(json.dumps(self.defaults))
 
     def save(self):
-        with open(self.file_path, "w") as f:
-            json.dump(self.settings, f, indent=4)
+        try:
+            with open(self.file_path, "w") as f:
+                json.dump(self.settings, f, indent=4)
+            return True
+        except Exception as exc:
+            self.logger.warning(f"Failed to save settings to {self.file_path}: {exc}")
+            return False
 
     def get(self, key):
         return self.settings.get(key, {}).get("value")
@@ -351,10 +360,11 @@ class SettingsManager:
             elif target_type == "Boolean":
                 value = str(value).lower() in ['true', '1', 'yes']
             self.settings[key]["value"] = value
-            self.save()
             return True
         except:
             return False
+        finally:
+            self.save()
 
     def list_all(self):
         return self.settings

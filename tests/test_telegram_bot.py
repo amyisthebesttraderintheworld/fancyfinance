@@ -81,6 +81,26 @@ async def test_button_handler_agree_shows_main_menu(mock_context):
 
     query.answer.assert_called_once()
     query.edit_message_text.assert_called_once()
+    assert "Trading Bot Connected" in query.edit_message_text.call_args.args[0]
+    assert query.edit_message_text.call_args.kwargs["reply_markup"] is not None
+    mock_context.bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_button_handler_agree_falls_back_to_new_message(mock_context):
+    query = MagicMock()
+    query.data = "agree_12345"
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock(side_effect=RuntimeError("cannot edit"))
+    query.message.chat.id = 12345
+    mock_context.bot.send_message = AsyncMock()
+
+    update = MagicMock()
+    update.callback_query = query
+
+    await button_handler(update, mock_context)
+
+    query.answer.assert_called_once()
     mock_context.bot.send_message.assert_called_once()
     assert "Trading Bot Connected" in mock_context.bot.send_message.call_args.kwargs["text"]
 

@@ -63,25 +63,23 @@ def get_main_menu():
     return InlineKeyboardMarkup(keyboard)
 
 
-async def _send_welcome_menu(target):
-    welcome_text = (
+def _welcome_menu_text() -> str:
+    return (
         f"🤖 *{APP_NAME} v{__version__}*\n\n"
         "Trading Bot Connected. Use /help for commands.\n\n"
         "Use the buttons below to control the engine or type a command directly."
     )
-    await _reply(target, welcome_text, parse_mode="Markdown", reply_markup=get_main_menu())
+
+
+async def _send_welcome_menu(target):
+    await _reply(target, _welcome_menu_text(), parse_mode="Markdown", reply_markup=get_main_menu())
 
 
 async def _send_welcome_menu_to_chat(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    welcome_text = (
-        f"🤖 *{APP_NAME} v{__version__}*\n\n"
-        "Trading Bot Connected. Use /help for commands.\n\n"
-        "Use the buttons below to control the engine or type a command directly."
-    )
     await _maybe_await(
         context.bot.send_message(
             chat_id=chat_id,
-            text=welcome_text,
+            text=_welcome_menu_text(),
             parse_mode="Markdown",
             reply_markup=get_main_menu(),
         )
@@ -254,6 +252,10 @@ async def set_value_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
+
+    logger.info(f"Telegram callback received: {query.data}")
 
     if query.data.startswith("agree_"):
         user_id = query.data.split("_", 1)[1]
@@ -267,17 +269,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Could not save agreement. Please try again.", show_alert=True)
             return
 
-        await query.answer("Agreement recorded")
+        await query.answer("Agreement recorded", show_alert=True)
         try:
             await _maybe_await(
                 query.edit_message_text(
-                    "✅ *Agreement recorded. Welcome to FancyFinance.*",
+                    _welcome_menu_text(),
                     parse_mode="Markdown",
+                    reply_markup=get_main_menu(),
                 )
             )
         except Exception as exc:
-            logger.warning(f"Failed to update agreement message: {exc}")
-        await _send_welcome_menu_to_chat(context, query.message.chat.id)
+            logger.warning(f"Failed to update agreement message in place: {exc}")
+            await _send_welcome_menu_to_chat(context, query.message.chat.id)
         logger.info(f"User {user_id} accepted the risk disclosure.")
         return
 
