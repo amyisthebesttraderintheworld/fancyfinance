@@ -106,6 +106,22 @@ def _latest_scanner_close(scanners: Any, symbol: str) -> Optional[tuple[int, flo
 
 
 def _position_mark_price(engine, symbol: str, user_id: Optional[int] = None) -> Optional[float]:
+    latest_price_getter = getattr(engine, "get_latest_market_price", None)
+    if callable(latest_price_getter):
+        latest_price = _coerce_float(latest_price_getter(symbol))
+        if latest_price is not None and latest_price > 0:
+            return latest_price
+
+    latest_prices = getattr(engine, "_latest_market_prices", None)
+    if isinstance(latest_prices, dict):
+        latest = latest_prices.get(symbol)
+        if isinstance(latest, (list, tuple)) and len(latest) >= 2:
+            latest_price = _coerce_float(latest[1])
+        else:
+            latest_price = _coerce_float(latest)
+        if latest_price is not None and latest_price > 0:
+            return latest_price
+
     candidates: list[tuple[int, float]] = []
     if _uses_user_sessions(engine):
         session = _get_user_session(engine, user_id, create=True) if user_id is not None else None

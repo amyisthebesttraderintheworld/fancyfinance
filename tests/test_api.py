@@ -334,6 +334,24 @@ def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_c
     assert payload["recent_trades"][0]["symbol"] == "BTCUSD"
 
 
+def test_member_dashboard_data_uses_latest_market_price_for_live_upnl(sample_config):
+    engine = _build_user_scoped_engine(sample_config)
+    engine.get_latest_market_price = lambda symbol: 42150.0 if symbol == "BTCUSD" else None
+    app = create_app(engine, auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard/member-data", params={"access": token})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["positions"][0]["mark_price"] == 42150.0
+    assert payload["portfolio"]["live_upnl"] == 15.0
+    assert payload["portfolio"]["marked_equity"] == 1215.0
+    assert payload["portfolio"]["marked_positions"] == 1
+    assert payload["portfolio"]["winning_positions"] == 1
+
+
 def test_backtest_run_endpoint_returns_report(sample_config, monkeypatch):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)

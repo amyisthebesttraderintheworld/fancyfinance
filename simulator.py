@@ -73,6 +73,7 @@ class Simulator:
         self._user_scoped_simulation = str(config.get("mode") or "").strip().lower() == "simulation"
         self._user_sessions: dict[int, SimulationSession] = {}
         self._global_session = self._build_session(user_id=None)
+        self._latest_market_prices: dict[str, tuple[int, float]] = {}
 
         self.is_running = True
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -374,6 +375,12 @@ class Simulator:
             tracked.update(session.positions.keys())
         return tracked
 
+    def get_latest_market_price(self, symbol: str) -> Optional[float]:
+        latest = self._latest_market_prices.get(symbol)
+        if latest is None:
+            return None
+        return float(latest[1])
+
     async def _subscribe(self, websocket):
         symbols = sorted(self._tracked_symbols()) if self.use_market_scan_engine else list(self.symbols)
         self._subscribed_symbols = set()
@@ -534,6 +541,8 @@ class Simulator:
         sessions = self._runtime_sessions()
         if not sessions:
             return
+
+        self._latest_market_prices[symbol] = (int(candle.timestamp), float(candle.close))
 
         for session in sessions:
             await self._process_candle_for_session(session, symbol, candle)

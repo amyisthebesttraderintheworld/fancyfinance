@@ -159,6 +159,17 @@ async def test_simulator_set_balance_is_isolated_per_user(sim):
     assert secondary.balance == sim.initial_balance
 
 
+@pytest.mark.asyncio
+async def test_simulator_tracks_latest_market_price_while_session_is_paused(sim):
+    session = sim.get_user_session(12345, create=True)
+    session.is_paused = True
+    candle = Candle(1704067200000, 40000, 40100, 39900, 40050, 100)
+
+    await sim._process_candle("BTCUSD", candle)
+
+    assert sim.get_latest_market_price("BTCUSD") == 40050.0
+
+
 def test_simulator_scan_market_candidates_builds_fang_entry_plans(sim):
     sim.balance = 500.0
     sim.positions = {}
