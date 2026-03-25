@@ -40,6 +40,7 @@ TRIAL_PRO_MEMBERSHIP_ALIASES = {
 PRO_MEMBERSHIP_ALIASES = {"pro", "paid", "premium", "plus", "simulation", "sim", "live"}
 ACTIVE_STRIPE_STATUSES = {"active", "trialing"}
 DEFAULT_TRIAL_DAYS = 7
+GLOBAL_ACCOUNT_USER_ID = 0
 
 
 class CipherManager:
@@ -238,7 +239,13 @@ class SupabaseManager:
         return "user_id" in str(exc).lower()
 
     def _position_store_key(self, symbol: str, user_id: Optional[int] = None) -> str:
-        return f"{user_id}:{symbol}" if user_id is not None else symbol
+        scoped_user_id = self._stored_user_id(user_id)
+        return f"{scoped_user_id}:{symbol}"
+
+    def _stored_user_id(self, user_id: Optional[int]) -> int:
+        if user_id is None:
+            return GLOBAL_ACCOUNT_USER_ID
+        return int(user_id)
 
     def _warn_missing_trade_scope(self):
         if self._trade_user_scope_warning_logged:
@@ -840,9 +847,9 @@ class SupabaseManager:
             return False
 
     def log_trade(self, trade_data: Dict[str, Any], user_id: Optional[int] = None) -> bool:
+        scoped_user_id = self._stored_user_id(user_id)
         payload = {"created_at": self._now(), **trade_data}
-        if user_id is not None:
-            payload.setdefault("user_id", user_id)
+        payload.setdefault("user_id", scoped_user_id)
         self._trades.append(payload)
 
         if not self.client:
@@ -854,48 +861,43 @@ class SupabaseManager:
             self.client.table("trades").insert(db_payload).execute()
             return True
         except Exception as exc:
-            if user_id is not None and self._has_optional_trade_scope_error(exc):
+            if self._has_optional_trade_scope_error(exc):
                 self._warn_missing_trade_scope()
                 return False
             self.logger.error(f"Failed to log trade: {exc}")
             return False
 
     def update_position(self, symbol: str, position_data: Dict[str, Any], user_id: Optional[int] = None) -> bool:
+        scoped_user_id = self._stored_user_id(user_id)
         payload = {**position_data, "symbol": symbol, "updated_at": self._now()}
-        if user_id is not None:
-            payload.setdefault("user_id", user_id)
-        self._positions[self._position_store_key(symbol, user_id)] = payload
+        payload.setdefault("user_id", scoped_user_id)
+        self._positions[self._position_store_key(symbol, scoped_user_id)] = payload
 
         if not self.client:
             return True
 
         try:
-            if user_id is None:
-                self.client.table("positions").upsert(payload, on_conflict="symbol").execute()
-            else:
-                self.client.table("positions").upsert(payload, on_conflict="user_id,symbol").execute()
+            self.client.table("positions").upsert(payload, on_conflict="user_id,symbol").execute()
             return True
         except Exception as exc:
-            if user_id is not None and self._has_optional_trade_scope_error(exc):
+            if self._has_optional_trade_scope_error(exc):
                 self._warn_missing_position_scope()
                 return False
             self.logger.error(f"Failed to update position for {symbol}: {exc}")
             return False
 
     def remove_position(self, symbol: str, user_id: Optional[int] = None) -> bool:
-        self._positions.pop(self._position_store_key(symbol, user_id), None)
+        scoped_user_id = self._stored_user_id(user_id)
+        self._positions.pop(self._position_store_key(symbol, scoped_user_id), None)
 
         if not self.client:
             return True
 
         try:
-            query = self.client.table("positions").delete().eq("symbol", symbol)
-            if user_id is not None:
-                query = query.eq("user_id", user_id)
-            query.execute()
+            self.client.table("positions").delete().eq("symbol", symbol).eq("user_id", scoped_user_id).execute()
             return True
         except Exception as exc:
-            if user_id is not None and self._has_optional_trade_scope_error(exc):
+            if self._has_optional_trade_scope_error(exc):
                 self._warn_missing_position_scope()
                 return False
             self.logger.error(f"Failed to remove position for {symbol}: {exc}")
@@ -906,7 +908,7 @@ class SupabaseManager:
             try:
                 query = self.client.table("positions").select("*")
                 if user_id is not None:
-                    query = query.eq("user_id", user_id)
+                    query = query.eq("user_id", self._stored_user_id(user_id))
                 response = query.execute()
                 self._positions = {
                     self._position_store_key(item["symbol"], item.get("user_id")): item
@@ -919,7 +921,8 @@ class SupabaseManager:
                 else:
                     self.logger.error(f"Failed to list open positions: {exc}")
         if user_id is not None:
-            return [position for position in self._positions.values() if position.get("user_id") == user_id]
+            scoped_user_id = self._stored_user_id(user_id)
+            return [position for position in self._positions.values() if position.get("user_id") == scoped_user_id]
         return list(self._positions.values())
 
     def get_recent_trades(
@@ -936,7 +939,7 @@ class SupabaseManager:
                 if since:
                     query = query.gte("created_at", since)
                 if user_id is not None:
-                    query = query.eq("user_id", user_id)
+                    query = query.eq("user_id", self._stored_user_id(user_id))
                 response = query.order("created_at", desc=True).limit(limit).execute()
                 self._trades = list(response.data or [])
                 return list(self._trades)
@@ -948,7 +951,8 @@ class SupabaseManager:
 
         filtered = list(self._trades)
         if user_id is not None:
-            filtered = [trade for trade in filtered if trade.get("user_id") == user_id]
+            scoped_user_id = self._stored_user_id(user_id)
+            filtered = [trade for trade in filtered if trade.get("user_id") == scoped_user_id]
 
         if since_dt:
             filtered = [
