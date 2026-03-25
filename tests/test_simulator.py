@@ -36,31 +36,35 @@ async def test_simulator_command_handler(sim, command_queue, mock_notifier):
 
 @pytest.mark.asyncio
 async def test_simulator_pause_resume(sim):
+    session = sim.get_user_session(12345, create=True)
     await sim._handle_command(('/pause', [], 12345))
-    assert sim.is_paused
+    assert session.is_paused
     await sim._handle_command(('/resume', [], 12345))
-    assert not sim.is_paused
+    assert not session.is_paused
 
 @pytest.mark.asyncio
 async def test_simulator_process_candle_entry(sim, mock_notifier):
     candle = Candle(1704067200000, 40000, 40100, 39900, 40050, 100)
     symbol = "BTCUSD"
     sim.use_market_scan_engine = False
+    session = sim.get_user_session(12345, create=True)
     
     # Mock long scanner to trigger signal
-    sim.long_scanners[symbol] = MagicMock()
+    session.long_scanners[symbol] = MagicMock()
     # Return long signal on first call
-    sim.long_scanners[symbol].update.return_value = MagicMock(
+    session.long_scanners[symbol].update.return_value = MagicMock(
         direction='long', entry_price=40050, stop_loss=39000, take_profit=42000
     )
+    session.short_scanners[symbol] = MagicMock()
+    session.short_scanners[symbol].update.return_value = None
     
     await sim._process_candle(symbol, candle)
     
     # Should have executed entry
-    assert symbol in sim.positions
-    assert sim.positions[symbol].direction == 'long'
-    assert sim.trade_history[-1]["type"] == "entry"
-    assert sim.trade_history[-1]["symbol"] == symbol
+    assert symbol in session.positions
+    assert session.positions[symbol].direction == 'long'
+    assert session.trade_history[-1]["type"] == "entry"
+    assert session.trade_history[-1]["symbol"] == symbol
     mock_notifier.send_message.assert_called()
     assert "SIM ENTRY" in mock_notifier.send_message.call_args[0][0]
 
@@ -68,8 +72,9 @@ async def test_simulator_process_candle_entry(sim, mock_notifier):
 async def test_simulator_process_candle_exit_sl(sim, mock_notifier):
     symbol = "BTCUSD"
     sim.use_market_scan_engine = False
+    session = sim.get_user_session(12345, create=True)
     # Create position manually
-    sim.positions[symbol] = MagicMock(
+    session.positions[symbol] = MagicMock(
         direction='long', entry_price=40000, quantity=1.0, stop_loss=39000, take_profit=45000
     )
     
@@ -77,17 +82,17 @@ async def test_simulator_process_candle_exit_sl(sim, mock_notifier):
     candle = Candle(1704067200000, 38500, 39000, 38000, 38500, 100)
     
     # Mock scanners to return neutral
-    sim.long_scanners[symbol] = MagicMock()
-    sim.long_scanners[symbol].update.return_value = None
-    sim.short_scanners[symbol] = MagicMock()
-    sim.short_scanners[symbol].update.return_value = None
+    session.long_scanners[symbol] = MagicMock()
+    session.long_scanners[symbol].update.return_value = None
+    session.short_scanners[symbol] = MagicMock()
+    session.short_scanners[symbol].update.return_value = None
     
     await sim._process_candle(symbol, candle)
     
     # Position should be closed
-    assert symbol not in sim.positions
-    assert sim.trade_history[-1]["type"] == "exit"
-    assert sim.trade_history[-1]["reason"] == "Stop Loss"
+    assert symbol not in session.positions
+    assert session.trade_history[-1]["type"] == "exit"
+    assert session.trade_history[-1]["reason"] == "Stop Loss"
     mock_notifier.send_message.assert_called()
     assert "SIM EXIT" in mock_notifier.send_message.call_args[0][0]
     assert "Stop Loss" in mock_notifier.send_message.call_args[0][0]
@@ -97,13 +102,13 @@ async def test_simulator_process_candle_exit_sl(sim, mock_notifier):
 async def test_simulator_unlock_api_command(sim):
     sim.db.get_user_api_keys = MagicMock(return_value={"api_key": "vault_key", "api_secret": "vault_secret"})
 
-    with patch("simulator.ExchangeManager") as mock_exchange:
-        with patch("simulator.requests.post", side_effect=RuntimeError("offline")):
-            await sim._handle_command(('/unlock_api', ['12345', 'correct horse battery staple'], 12345))
+    with patch("simulator.requests.post", side_effect=RuntimeError("offline")):
+        await sim._handle_command(('/unlock_api', ['12345', 'correct horse battery staple'], 12345))
 
-    assert sim.config["phemex"]["api_key"] == "vault_key"
-    assert sim.config["phemex"]["api_secret"] == "vault_secret"
-    mock_exchange.assert_called_with("phemex", "vault_key", "vault_secret")
+    session = sim.get_user_session(12345, create=False)
+    assert session is not None
+    assert session.runtime_api_ready is True
+    assert session.active_api_user_id == 12345
 
 
 def test_simulator_parse_phemex_kline_row_uses_correct_ohlcv_columns(sim):
@@ -122,7 +127,8 @@ def test_simulator_parse_phemex_kline_row_uses_correct_ohlcv_columns(sim):
 
 @pytest.mark.asyncio
 async def test_simulator_positions_command_reports_open_positions(sim, mock_notifier):
-    sim.positions["BTCUSD"] = MagicMock(
+    session = sim.get_user_session(12345, create=True)
+    session.positions["BTCUSD"] = MagicMock(
         direction="long",
         entry_price=40000.0,
         quantity=0.5,
@@ -137,6 +143,20 @@ async def test_simulator_positions_command_reports_open_positions(sim, mock_noti
     message = mock_notifier.send_message.call_args[0][0]
     assert "Open Positions" in message
     assert "BTCUSD" in message
+
+
+@pytest.mark.asyncio
+async def test_simulator_set_balance_is_isolated_per_user(sim):
+    await sim._handle_command(("/set_balance", ["100"], 12345))
+    await sim._handle_command(("/status", [], 67890))
+
+    primary = sim.get_user_session(12345, create=False)
+    secondary = sim.get_user_session(67890, create=False)
+
+    assert primary is not None
+    assert secondary is not None
+    assert primary.balance == 100.0
+    assert secondary.balance == sim.initial_balance
 
 
 def test_simulator_scan_market_candidates_builds_fang_entry_plans(sim):

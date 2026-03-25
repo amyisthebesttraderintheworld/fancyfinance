@@ -4,6 +4,7 @@ import asyncio
 import json
 import queue
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -31,6 +32,22 @@ SUBSCRIPTION_PAUSE_EVERY = 50
 SUBSCRIPTION_PAUSE_SECONDS = 0.01
 
 
+@dataclass
+class SimulationSession:
+    user_id: Optional[int]
+    balance: float
+    positions: dict[str, Position] = field(default_factory=dict)
+    trade_history: list[dict[str, Any]] = field(default_factory=list)
+    safety_paused_until: float = 0.0
+    is_paused: bool = False
+    session_started_at: Optional[str] = None
+    session_started_epoch: float = 0.0
+    long_scanners: dict[str, LongScanner] = field(default_factory=dict)
+    short_scanners: dict[str, ShortScanner] = field(default_factory=dict)
+    active_api_user_id: Optional[int] = None
+    runtime_api_ready: bool = False
+
+
 class Simulator:
     def __init__(self, config, notifier: TelegramNotifier, command_queue: queue.Queue):
         self.config = config
@@ -47,24 +64,20 @@ class Simulator:
         )
 
         exchange_config = config.get(self.exchange_id, {})
-        self.balance = config["backtest"]["initial_balance"]
+        self.initial_balance = float(config["backtest"]["initial_balance"])
         self.risk_per_trade = config["risk"]["risk_per_trade"]
         self.fee_rate = config["backtest"]["fee_rate"]
         self.slippage = config["backtest"]["slippage"]
         self.symbols = config.get("symbols") or exchange_config.get("symbols", [])
 
-        self.long_scanners = {symbol: LongScanner(config) for symbol in self.symbols}
-        self.short_scanners = {symbol: ShortScanner(config) for symbol in self.symbols}
+        self._user_scoped_simulation = str(config.get("mode") or "").strip().lower() == "simulation"
+        self._user_sessions: dict[int, SimulationSession] = {}
+        self._global_session = self._build_session(user_id=None)
 
-        self.positions: dict[str, Position] = {}
-        self.trade_history: list[dict[str, Any]] = []
-        self.safety_paused_until = 0.0
         self.is_running = True
-        self.is_paused = False
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._websocket = None
         self._subscribed_symbols: set[str] = set()
-        self.active_api_user_id: Optional[int] = None
         self.use_market_scan_engine = True
         self.market_scan_settings = resolve_scan_settings(config)
 
@@ -72,30 +85,162 @@ class Simulator:
             "phemex": "wss://ws.phemex.com",
         }
         self.ws_url = ws_urls.get(self.exchange_id, "")
-        self._start_new_session()
+
+    @property
+    def balance(self) -> float:
+        return self._global_session.balance
+
+    @balance.setter
+    def balance(self, value: float):
+        self._global_session.balance = float(value)
+
+    @property
+    def positions(self) -> dict[str, Position]:
+        return self._global_session.positions
+
+    @positions.setter
+    def positions(self, value: dict[str, Position]):
+        self._global_session.positions = dict(value)
+
+    @property
+    def trade_history(self) -> list[dict[str, Any]]:
+        return self._global_session.trade_history
+
+    @trade_history.setter
+    def trade_history(self, value: list[dict[str, Any]]):
+        self._global_session.trade_history = list(value)
+
+    @property
+    def safety_paused_until(self) -> float:
+        return self._global_session.safety_paused_until
+
+    @safety_paused_until.setter
+    def safety_paused_until(self, value: float):
+        self._global_session.safety_paused_until = float(value)
+
+    @property
+    def is_paused(self) -> bool:
+        return self._global_session.is_paused
+
+    @is_paused.setter
+    def is_paused(self, value: bool):
+        self._global_session.is_paused = bool(value)
+
+    @property
+    def session_started_at(self) -> Optional[str]:
+        return self._global_session.session_started_at
+
+    @session_started_at.setter
+    def session_started_at(self, value: Optional[str]):
+        self._global_session.session_started_at = value
+
+    @property
+    def session_started_epoch(self) -> float:
+        return self._global_session.session_started_epoch
+
+    @session_started_epoch.setter
+    def session_started_epoch(self, value: float):
+        self._global_session.session_started_epoch = float(value)
+
+    @property
+    def long_scanners(self) -> dict[str, LongScanner]:
+        return self._global_session.long_scanners
+
+    @long_scanners.setter
+    def long_scanners(self, value: dict[str, LongScanner]):
+        self._global_session.long_scanners = dict(value)
+
+    @property
+    def short_scanners(self) -> dict[str, ShortScanner]:
+        return self._global_session.short_scanners
+
+    @short_scanners.setter
+    def short_scanners(self, value: dict[str, ShortScanner]):
+        self._global_session.short_scanners = dict(value)
+
+    @property
+    def active_api_user_id(self) -> Optional[int]:
+        return self._global_session.active_api_user_id
+
+    @active_api_user_id.setter
+    def active_api_user_id(self, value: Optional[int]):
+        self._global_session.active_api_user_id = value
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
-    def _start_new_session(self):
-        self.session_started_at = self._now_iso()
-        self.session_started_epoch = time.time()
+    def _build_session(self, user_id: Optional[int]) -> SimulationSession:
+        session = SimulationSession(user_id=user_id, balance=self.initial_balance)
+        self._start_new_session(session)
+        return session
 
-    def _record_trade_event(self, trade_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_user_id(self, user_id: Optional[int], chat_id: Optional[int] = None) -> Optional[int]:
+        candidate = user_id if user_id is not None else chat_id
+        if candidate is None:
+            return None
+        try:
+            return int(candidate)
+        except (TypeError, ValueError):
+            return None
+
+    def get_user_session(self, user_id: Optional[int], *, create: bool = False) -> Optional[SimulationSession]:
+        normalized_user_id = self._normalize_user_id(user_id)
+        if not self._user_scoped_simulation or normalized_user_id is None:
+            return self._global_session
+
+        session = self._user_sessions.get(normalized_user_id)
+        if session is None and create:
+            session = self._build_session(normalized_user_id)
+            self._user_sessions[normalized_user_id] = session
+        return session
+
+    def list_user_sessions(self) -> list[SimulationSession]:
+        if not self._user_scoped_simulation:
+            return [self._global_session]
+        return list(self._user_sessions.values())
+
+    def _runtime_sessions(self) -> list[SimulationSession]:
+        if not self._user_scoped_simulation:
+            return [self._global_session]
+        return list(self._user_sessions.values())
+
+    def _start_new_session(self, session: Optional[SimulationSession] = None):
+        target = session or self._global_session
+        target.session_started_at = self._now_iso()
+        target.session_started_epoch = time.time()
+
+    def _record_trade_event(
+        self,
+        trade_data: Dict[str, Any],
+        session: Optional[SimulationSession] = None,
+    ) -> Dict[str, Any]:
+        target = session or self._global_session
         payload = dict(trade_data)
         payload.setdefault("timestamp", int(time.time() * 1000))
         payload.setdefault("created_at", self._now_iso())
-        self.trade_history.append(payload)
-        if len(self.trade_history) > 500:
-            self.trade_history = self.trade_history[-500:]
+        if target.user_id is not None:
+            payload.setdefault("user_id", target.user_id)
+        target.trade_history.append(payload)
+        if len(target.trade_history) > 500:
+            target.trade_history = target.trade_history[-500:]
         return payload
 
-    def _runtime_api_ready(self) -> bool:
+    def _runtime_api_ready(self, session: Optional[SimulationSession] = None) -> bool:
+        if self._user_scoped_simulation and session is not None:
+            return bool(session.runtime_api_ready)
+
         api_key = self.config.get(self.exchange_id, {}).get("api_key") or self.config.get("api_key")
         api_secret = self.config.get(self.exchange_id, {}).get("api_secret") or self.config.get("api_secret")
         return bool(api_key and api_secret and api_key != "YOUR_API_KEY" and api_secret != "YOUR_API_SECRET")
 
     def _apply_runtime_api_keys(self, user_id: int, api_key: str, api_secret: str):
+        if self._user_scoped_simulation:
+            session = self.get_user_session(user_id, create=True)
+            if session is not None:
+                session.active_api_user_id = user_id
+                session.runtime_api_ready = True
+            return
+
         self.config.setdefault(self.exchange_id, {})
         self.config[self.exchange_id]["api_key"] = api_key
         self.config[self.exchange_id]["api_secret"] = api_secret
@@ -120,11 +265,12 @@ class Simulator:
 
         self.notifier.send_message(text)
 
-    def _ensure_symbol_state(self, symbol: str):
-        if symbol not in self.long_scanners:
-            self.long_scanners[symbol] = LongScanner(self.config)
-        if symbol not in self.short_scanners:
-            self.short_scanners[symbol] = ShortScanner(self.config)
+    def _ensure_symbol_state(self, symbol: str, *, session: Optional[SimulationSession] = None):
+        target = session or self._global_session
+        if symbol not in target.long_scanners:
+            target.long_scanners[symbol] = LongScanner(self.config)
+        if symbol not in target.short_scanners:
+            target.short_scanners[symbol] = ShortScanner(self.config)
 
     def _subscribe_payload(self, symbol: str) -> dict[str, Any]:
         return {
@@ -140,6 +286,7 @@ class Simulator:
         self._ensure_symbol_state(symbol)
         self._subscribed_symbols.add(symbol)
         if self._websocket and self._loop and self._loop.is_running():
+
             async def _send():
                 await self._websocket.send(json.dumps(self._subscribe_payload(symbol)))
 
@@ -148,20 +295,21 @@ class Simulator:
             except RuntimeError:
                 pass
 
-    def _scan_market_candidates(self) -> list[dict[str, Any]]:
-        if not self.use_market_scan_engine or self.is_paused:
+    def _scan_market_candidates(self, session: Optional[SimulationSession] = None) -> list[dict[str, Any]]:
+        target = session or self._global_session
+        if not self.use_market_scan_engine or target.is_paused:
             return []
 
         max_positions = int(self.config["risk"].get("max_positions", 1))
-        available_slots = max_positions - len(self.positions)
+        available_slots = max_positions - len(target.positions)
         if available_slots <= 0:
             return []
-        if self.balance < self.market_scan_settings.margin_usdt:
+        if target.balance < self.market_scan_settings.margin_usdt:
             return []
 
         candidates = run_market_scan(
             self.market_scan_settings,
-            in_position=set(self.positions.keys()),
+            in_position=set(target.positions.keys()),
             available_slots=available_slots,
         )
         plans: list[dict[str, Any]] = []
@@ -214,8 +362,17 @@ class Simulator:
 
         return None
 
+    def _tracked_symbols(self) -> set[str]:
+        if not self._user_scoped_simulation:
+            return set(self.positions.keys())
+
+        tracked: set[str] = set()
+        for session in self._runtime_sessions():
+            tracked.update(session.positions.keys())
+        return tracked
+
     async def _subscribe(self, websocket):
-        symbols = sorted(self.positions.keys()) if self.use_market_scan_engine else list(self.symbols)
+        symbols = sorted(self._tracked_symbols()) if self.use_market_scan_engine else list(self.symbols)
         self._subscribed_symbols = set()
 
         for index, symbol in enumerate(symbols, start=1):
@@ -277,21 +434,21 @@ class Simulator:
             finally:
                 self._websocket = None
 
-    async def _process_candle(self, symbol: str, candle: Candle):
-        if self.is_paused:
+    async def _process_candle_for_session(self, session: SimulationSession, symbol: str, candle: Candle):
+        if session.is_paused:
             return
 
-        self._ensure_symbol_state(symbol)
+        self._ensure_symbol_state(symbol, session=session)
         candle.symbol = symbol
 
-        long_scanner = self.long_scanners[symbol]
-        short_scanner = self.short_scanners[symbol]
+        long_scanner = session.long_scanners[symbol]
+        short_scanner = session.short_scanners[symbol]
 
         long_signal = long_scanner.update(candle)
         short_signal = short_scanner.update(candle)
 
-        if symbol in self.positions:
-            pos = self.positions[symbol]
+        if symbol in session.positions:
+            pos = session.positions[symbol]
             exit_price = None
             reason = None
 
@@ -319,37 +476,64 @@ class Simulator:
                     reason = short_signal.exit_reason
 
             if exit_price is not None:
-                self._execute_trade(symbol, pos.direction, exit_price, pos.quantity, is_entry=False, reason=reason)
+                self._execute_trade_for_session(
+                    session,
+                    symbol,
+                    pos.direction,
+                    exit_price,
+                    pos.quantity,
+                    is_entry=False,
+                    reason=reason,
+                )
                 if pos.direction == "long":
                     long_scanner.has_position = False
                 if pos.direction == "short":
                     short_scanner.has_position = False
+            return
 
-        elif not self.use_market_scan_engine and len(self.positions) < self.config["risk"].get("max_positions", 1):
-            signal = None
-            if long_signal and long_signal.direction == "long":
-                signal = long_signal
-            elif short_signal and short_signal.direction == "short":
-                signal = short_signal
+        if self.use_market_scan_engine:
+            return
 
-            if signal:
-                stop_distance = abs(signal.entry_price - signal.stop_loss)
-                quantity = calculate_position_size(
-                    self.balance,
-                    self.risk_per_trade,
-                    stop_distance,
-                    signal.entry_price,
-                )
-                if quantity > 0:
-                    self._execute_trade(
-                        symbol,
-                        signal.direction,
-                        signal.entry_price,
-                        quantity,
-                        is_entry=True,
-                        stop_loss=signal.stop_loss,
-                        take_profit=signal.take_profit,
-                    )
+        if len(session.positions) >= self.config["risk"].get("max_positions", 1):
+            return
+
+        signal = None
+        if long_signal and long_signal.direction == "long":
+            signal = long_signal
+        elif short_signal and short_signal.direction == "short":
+            signal = short_signal
+
+        if not signal:
+            return
+
+        stop_distance = abs(signal.entry_price - signal.stop_loss)
+        quantity = calculate_position_size(
+            session.balance,
+            self.risk_per_trade,
+            stop_distance,
+            signal.entry_price,
+        )
+        if quantity <= 0:
+            return
+
+        self._execute_trade_for_session(
+            session,
+            symbol,
+            signal.direction,
+            signal.entry_price,
+            quantity,
+            is_entry=True,
+            stop_loss=signal.stop_loss,
+            take_profit=signal.take_profit,
+        )
+
+    async def _process_candle(self, symbol: str, candle: Candle):
+        sessions = self._runtime_sessions()
+        if not sessions:
+            return
+
+        for session in sessions:
+            await self._process_candle_for_session(session, symbol, candle)
 
     async def _market_scan_loop(self):
         if not self.use_market_scan_engine:
@@ -358,23 +542,29 @@ class Simulator:
         await asyncio.sleep(1.0)
         while self.is_running:
             try:
-                plans = await asyncio.to_thread(self._scan_market_candidates)
-                for plan in plans:
-                    if not self.is_running or self.is_paused:
-                        break
-                    if plan["symbol"] in self.positions:
+                sessions = self._runtime_sessions()
+                for session in sessions:
+                    if not self.is_running or session.is_paused:
                         continue
-                    if len(self.positions) >= self.config["risk"].get("max_positions", 1):
-                        break
-                    self._execute_trade(
-                        plan["symbol"],
-                        plan["direction"],
-                        plan["price"],
-                        plan["quantity"],
-                        is_entry=True,
-                        stop_loss=plan["stop_loss"],
-                        take_profit=plan["take_profit"],
-                    )
+
+                    plans = await asyncio.to_thread(self._scan_market_candidates, session)
+                    for plan in plans:
+                        if not self.is_running or session.is_paused:
+                            break
+                        if plan["symbol"] in session.positions:
+                            continue
+                        if len(session.positions) >= self.config["risk"].get("max_positions", 1):
+                            break
+                        self._execute_trade_for_session(
+                            session,
+                            plan["symbol"],
+                            plan["direction"],
+                            plan["price"],
+                            plan["quantity"],
+                            is_entry=True,
+                            stop_loss=plan["stop_loss"],
+                            take_profit=plan["take_profit"],
+                        )
             except Exception as exc:
                 self.logger.error(f"Market scan loop error: {exc}")
 
@@ -384,38 +574,78 @@ class Simulator:
                     return
                 await asyncio.sleep(1)
 
-    def _check_safety_timeout(self):
-        if self.is_paused:
+    def _check_safety_timeout(self, session: Optional[SimulationSession] = None):
+        target = session or self._global_session
+        if target.is_paused:
             return
 
         consecutive_losses = 0
-        for trade in reversed(self.trade_history):
+        for trade in reversed(target.trade_history):
             if trade["pnl"] < 0:
                 consecutive_losses += 1
             else:
                 break
 
         max_losses = self.config["safety"]["max_consecutive_losses"]
-        if consecutive_losses >= max_losses:
-            self.is_paused = True
-            self.safety_paused_until = time.time() + (self.config["safety"]["timeout_duration_minutes"] * 60)
-            msg = (
-                "🛡️ *SAFETY TIMEOUT TRIGGERED*\n\n"
-                f"Reason: {consecutive_losses} consecutive losses.\n"
-                f"Trading paused for {self.config['safety']['timeout_duration_minutes']} minutes."
-            )
-            self.notifier.send_message(msg)
-            self.logger.warning(f"Safety timeout triggered: {consecutive_losses} losses.")
+        if consecutive_losses < max_losses:
+            return
 
-    def _execute_trade(self, symbol, direction, price, qty, is_entry, stop_loss=None, take_profit=None, reason=None):
+        target.is_paused = True
+        target.safety_paused_until = time.time() + (self.config["safety"]["timeout_duration_minutes"] * 60)
+        msg = (
+            "🛡️ *SAFETY TIMEOUT TRIGGERED*\n\n"
+            f"Reason: {consecutive_losses} consecutive losses.\n"
+            f"Trading paused for {self.config['safety']['timeout_duration_minutes']} minutes."
+        )
+        self.notifier.send_message(msg, user_id=target.user_id)
+        self.logger.warning(
+            f"Safety timeout triggered for user {target.user_id or 'global'}: {consecutive_losses} losses."
+        )
+
+    def _execute_trade(
+        self,
+        symbol,
+        direction,
+        price,
+        qty,
+        is_entry,
+        stop_loss=None,
+        take_profit=None,
+        reason=None,
+    ):
+        return self._execute_trade_for_session(
+            self._global_session,
+            symbol,
+            direction,
+            price,
+            qty,
+            is_entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            reason=reason,
+        )
+
+    def _execute_trade_for_session(
+        self,
+        session: SimulationSession,
+        symbol,
+        direction,
+        price,
+        qty,
+        is_entry,
+        stop_loss=None,
+        take_profit=None,
+        reason=None,
+    ):
         adjusted_direction = direction if is_entry else ("short" if direction == "long" else "long")
         adjusted_price = apply_slippage(price, self.slippage, adjusted_direction)
         fee = calculate_fee(qty, adjusted_price, self.fee_rate)
+        notify_user_id = session.user_id
 
         if is_entry:
-            self.balance -= fee
+            session.balance -= fee
             position = Position(symbol, direction, adjusted_price, qty, stop_loss, take_profit, int(time.time() * 1000))
-            self.positions[symbol] = position
+            session.positions[symbol] = position
             self._subscribe_symbol(symbol)
 
             entry_payload = self._record_trade_event(
@@ -425,9 +655,10 @@ class Simulator:
                     "price": adjusted_price,
                     "qty": qty,
                     "type": "entry",
-                }
+                },
+                session=session,
             )
-            self.db.log_trade(entry_payload)
+            self.db.log_trade(entry_payload, user_id=session.user_id)
             self.db.update_position(
                 symbol,
                 {
@@ -438,20 +669,24 @@ class Simulator:
                     "stop_loss": stop_loss,
                     "take_profit": take_profit,
                 },
+                user_id=session.user_id,
             )
 
-            self.notifier.send_message(f"🔵 SIM ENTRY: {direction.upper()} {symbol} @ {adjusted_price:.2f} Qty: {qty:.4f}")
-            self.logger.info(f"Entry {symbol} {direction} @ {adjusted_price}")
+            self.notifier.send_message(
+                f"🔵 SIM ENTRY: {direction.upper()} {symbol} @ {adjusted_price:.2f} Qty: {qty:.4f}",
+                user_id=notify_user_id,
+            )
+            self.logger.info(f"Entry {symbol} {direction} @ {adjusted_price} for user {session.user_id or 'global'}")
             return
 
-        position = self.positions[symbol]
+        position = session.positions[symbol]
         if direction == "long":
             pnl = (adjusted_price - position.entry_price) * qty
         else:
             pnl = (position.entry_price - adjusted_price) * qty
 
         pnl -= fee
-        self.balance += pnl
+        session.balance += pnl
 
         exit_payload = self._record_trade_event(
             {
@@ -462,24 +697,27 @@ class Simulator:
                 "type": "exit",
                 "pnl": pnl,
                 "reason": reason,
-            }
+            },
+            session=session,
         )
-        self.db.log_trade(exit_payload)
-        self.db.remove_position(symbol)
+        self.db.log_trade(exit_payload, user_id=session.user_id)
+        self.db.remove_position(symbol, user_id=session.user_id)
 
-        del self.positions[symbol]
+        del session.positions[symbol]
         self.notifier.send_message(
-            f"🔴 SIM EXIT: {direction.upper()} {symbol} @ {adjusted_price:.2f} PnL: {pnl:.2f} Reason: {reason}"
+            f"🔴 SIM EXIT: {direction.upper()} {symbol} @ {adjusted_price:.2f} PnL: {pnl:.2f} Reason: {reason}",
+            user_id=notify_user_id,
         )
-        self.logger.info(f"Exit {symbol} {direction} @ {adjusted_price} PnL: {pnl}")
-        self._check_safety_timeout()
+        self.logger.info(f"Exit {symbol} {direction} @ {adjusted_price} PnL: {pnl} for user {session.user_id or 'global'}")
+        self._check_safety_timeout(session)
 
-    def _positions_summary_text(self) -> str:
-        if not self.positions:
+    def _positions_summary_text(self, session: Optional[SimulationSession] = None) -> str:
+        target = session or self._global_session
+        if not target.positions:
             return "No open positions right now."
 
         lines = ["Open Positions:"]
-        for symbol, position in self.positions.items():
+        for symbol, position in target.positions.items():
             lines.append(
                 f"{symbol}: {position.direction.upper()} | Entry {position.entry_price:.4f} | "
                 f"Qty {position.quantity:.4f} | SL {position.stop_loss:.4f} | TP {position.take_profit:.4f}"
@@ -496,46 +734,70 @@ class Simulator:
             except Exception as exc:
                 self.logger.error(f"Command listener error: {exc}")
 
+    def _unpack_command(self, cmd) -> tuple[str, list[str], Optional[int], Optional[int]]:
+        if not isinstance(cmd, (list, tuple)):
+            raise ValueError("Unsupported command payload.")
+
+        if len(cmd) == 4:
+            command, args, chat_id, user_id = cmd
+            return command, list(args or []), chat_id, self._normalize_user_id(user_id, chat_id)
+
+        if len(cmd) == 3:
+            command, args, chat_id = cmd
+            return command, list(args or []), chat_id, self._normalize_user_id(None, chat_id)
+
+        raise ValueError("Unsupported command payload.")
+
+    def _reset_session(self, session: SimulationSession):
+        session.balance = self.initial_balance
+        session.positions = {}
+        session.trade_history = []
+        session.is_paused = False
+        session.safety_paused_until = 0.0
+        self._start_new_session(session)
+        for scanner in session.long_scanners.values():
+            scanner.reset()
+        for scanner in session.short_scanners.values():
+            scanner.reset()
+
     async def _handle_command(self, cmd):
-        command, args, chat_id = cmd
+        command, args, chat_id, user_id = self._unpack_command(cmd)
         response = ""
+        session = self.get_user_session(user_id, create=self._user_scoped_simulation)
 
         if command == "/status":
+            target = session or self._global_session
             response = (
-                f"Balance: {self.balance:.2f}\n"
-                f"Open Positions: {len(self.positions)}\n"
-                f"Paused: {self.is_paused}\n"
-                f"API Vault Unlocked: {self._runtime_api_ready()}"
+                f"Balance: {target.balance:.2f}\n"
+                f"Open Positions: {len(target.positions)}\n"
+                f"Paused: {target.is_paused}\n"
+                f"API Vault Unlocked: {self._runtime_api_ready(target)}"
             )
         elif command == "/positions":
-            response = self._positions_summary_text()
+            response = self._positions_summary_text(session)
         elif command == "/pause":
-            self.is_paused = True
+            target = session or self._global_session
+            target.is_paused = True
             response = "Simulation paused."
         elif command == "/resume":
+            target = session or self._global_session
             now = time.time()
-            if now < self.safety_paused_until:
-                remaining = int((self.safety_paused_until - now) / 60)
+            if now < target.safety_paused_until:
+                remaining = int((target.safety_paused_until - now) / 60)
                 response = f"⚠️ Still in Safety Timeout. {remaining} minutes remaining."
             else:
-                self.is_paused = False
-                self.safety_paused_until = 0
+                target.is_paused = False
+                target.safety_paused_until = 0
                 response = "Simulation resumed."
         elif command == "/reset":
-            self.balance = self.config["backtest"]["initial_balance"]
-            self.positions = {}
-            self.trade_history = []
-            self._start_new_session()
-            for scanner in self.long_scanners.values():
-                scanner.reset()
-            for scanner in self.short_scanners.values():
-                scanner.reset()
+            self._reset_session(session or self._global_session)
             response = "Simulation reset."
         elif command == "/set_balance":
+            target = session or self._global_session
             if args:
                 try:
-                    self.balance = float(args[0])
-                    response = f"Balance set to {self.balance}"
+                    target.balance = float(args[0])
+                    response = f"Balance set to {target.balance}"
                 except ValueError:
                     response = "Invalid amount."
             else:
@@ -548,13 +810,13 @@ class Simulator:
                 response = "Usage: /unlock_api <passphrase>"
             else:
                 try:
-                    user_id = int(args[0])
+                    target_user_id = int(args[0])
                 except ValueError:
                     response = "Invalid user ID for vault unlock."
                 else:
                     passphrase = " ".join(args[1:])
                     credentials = self.db.get_user_api_keys(
-                        user_id,
+                        target_user_id,
                         passphrase=passphrase,
                         exchange=self.exchange_id,
                     )
@@ -562,7 +824,7 @@ class Simulator:
                         response = "Could not unlock the API vault. Check your passphrase and stored keys."
                     else:
                         self._apply_runtime_api_keys(
-                            user_id,
+                            target_user_id,
                             credentials["api_key"],
                             credentials["api_secret"],
                         )

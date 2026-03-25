@@ -42,6 +42,7 @@ from supabase_client import DEFAULT_TRIAL_DAYS, FREE_MEMBERSHIP, PRO_MEMBERSHIP,
 
 cmd_queue = None
 config = None
+active_engine = None
 db = SupabaseManager()
 settings_mgr = SettingsManager()
 logger = get_logger("TelegramBot")
@@ -124,6 +125,8 @@ MENU_BUTTON_COMMANDS = {
     "🛑 Shutdown": "/shutdown",
 }
 
+SIMULATION_SELF_SERVICE_COMMANDS = {"/pause", "/resume", "/reset", "/set_balance"}
+
 
 def _admin_ids() -> list[int]:
     telegram_cfg = (config or {}).get("telegram", {})
@@ -132,6 +135,62 @@ def _admin_ids() -> list[int]:
 
 def _is_admin_chat(chat_id: int) -> bool:
     return chat_id in _admin_ids()
+
+
+def _engine_mode() -> str:
+    return str((config or {}).get("mode") or "").strip().lower()
+
+
+def _remember_user_chat(update: Update):
+    user = getattr(update, "effective_user", None)
+    chat = getattr(update, "effective_chat", None)
+    notifier = getattr(active_engine, "notifier", None)
+    if not user or not chat or notifier is None:
+        return
+
+    user_chat_map = getattr(notifier, "user_chat_map", None)
+    if isinstance(user_chat_map, dict):
+        user_chat_map[user.id] = chat.id
+
+
+def _queue_engine_command(update: Update, command: str, args: list[str] | None = None) -> bool:
+    if not cmd_queue:
+        return False
+
+    chat = getattr(update, "effective_chat", None)
+    user = getattr(update, "effective_user", None)
+    chat_id = getattr(chat, "id", None)
+    user_id = getattr(user, "id", None)
+
+    _remember_user_chat(update)
+    cmd_queue.put((command, list(args or []), chat_id, user_id))
+    return True
+
+
+async def _authorize_engine_command(update: Update, command: str) -> bool:
+    chat_id = update.effective_chat.id
+    user = getattr(update, "effective_user", None)
+    user_id = getattr(user, "id", None)
+    mode = _engine_mode()
+
+    if command in SIMULATION_SELF_SERVICE_COMMANDS and mode == "simulation" and not _is_admin_chat(chat_id):
+        membership = db.get_membership_summary(
+            user_id,
+            getattr(user, "username", "") or "",
+            getattr(user, "first_name", "") or "",
+        )
+        if not membership or not membership.get("can_simulation"):
+            await _reply(update, _paid_upgrade_message(membership), parse_mode="Markdown")
+            return False
+
+    admin_only_commands = {"/shutdown", "/emergency_stop"}
+    if mode != "simulation":
+        admin_only_commands.update(SIMULATION_SELF_SERVICE_COMMANDS)
+    if command in admin_only_commands and not _is_admin_chat(chat_id):
+        await _reply(update, "Unauthorized.")
+        return False
+
+    return True
 
 
 def _format_membership(summary: dict | None) -> tuple[str, str, str]:
@@ -357,8 +416,13 @@ async def menu_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await settings_command(update, context)
         return
 
-    update.message.text = command
-    await proxy_command(update, context)
+    if not await _authorize_engine_command(update, command):
+        return
+
+    if _queue_engine_command(update, command):
+        await _reply(update, f"Command {command} queued.")
+    else:
+        await _reply(update, "Engine not connected.")
 
 
 async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -434,8 +498,12 @@ async def unlock_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _delete_sensitive_message(update, context)
         return
 
-    cmd_queue.put(("/unlock_api", [str(update.effective_user.id), passphrase], update.effective_chat.id))
-    await _reply(update, "🔓 Unlock request queued. The passphrase will only be used for this session.", parse_mode="Markdown")
+    _queue_engine_command(update, "/unlock_api", [str(update.effective_user.id), passphrase])
+    await _reply(
+        update,
+        "🔓 Unlock request queued. The passphrase will only be used for this session.",
+        parse_mode="Markdown",
+    )
     await _delete_sensitive_message(update, context)
 
 
@@ -1112,15 +1180,10 @@ async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = text.split()
     command = parts[0]
     args = parts[1:]
-    chat_id = update.effective_chat.id
-
-    admin_only_commands = {"/pause", "/resume", "/reset", "/set_balance", "/shutdown", "/emergency_stop"}
-    if command in admin_only_commands and not _is_admin_chat(chat_id):
-        await _reply(update, "Unauthorized.")
+    if not await _authorize_engine_command(update, command):
         return
 
-    if cmd_queue:
-        cmd_queue.put((command, args, chat_id))
+    if _queue_engine_command(update, command, args):
         await _reply(update, f"Command {command} queued.")
     else:
         await _reply(update, "Engine not connected.")
@@ -1253,7 +1316,8 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 def run_bot(engine, command_queue):
-    global cmd_queue, config
+    global active_engine, cmd_queue, config
+    active_engine = engine
     cmd_queue = command_queue
     config = engine.config
 

@@ -87,6 +87,8 @@ class SupabaseManager:
         self._user_configs: Dict[int, Dict[str, Any]] = {}
         self._positions: Dict[str, Dict[str, Any]] = {}
         self._trades: List[Dict[str, Any]] = []
+        self._trade_user_scope_warning_logged = False
+        self._position_user_scope_warning_logged = False
 
         if create_client and self.url and self.key:
             try:
@@ -231,6 +233,30 @@ class SupabaseManager:
     def _has_optional_user_columns_error(self, exc: Exception) -> bool:
         message = str(exc)
         return "membership_" in message or "stripe_" in message or "trial_" in message
+
+    def _has_optional_trade_scope_error(self, exc: Exception) -> bool:
+        return "user_id" in str(exc).lower()
+
+    def _position_store_key(self, symbol: str, user_id: Optional[int] = None) -> str:
+        return f"{user_id}:{symbol}" if user_id is not None else symbol
+
+    def _warn_missing_trade_scope(self):
+        if self._trade_user_scope_warning_logged:
+            return
+        self._trade_user_scope_warning_logged = True
+        self.logger.warning(
+            "Trades table is missing the user_id scope. User-scoped trade history is cached locally only until the "
+            "database schema is expanded."
+        )
+
+    def _warn_missing_position_scope(self):
+        if self._position_user_scope_warning_logged:
+            return
+        self._position_user_scope_warning_logged = True
+        self.logger.warning(
+            "Positions table is missing the user_id scope. User-scoped open positions are cached locally only until "
+            "the database schema is expanded."
+        )
 
     def _persist_user_update(self, telegram_id: int, update_payload: Dict[str, Any]) -> bool:
         if not self.client:
@@ -813,8 +839,10 @@ class SupabaseManager:
             self.logger.error(f"Failed to confirm email verification: {exc}")
             return False
 
-    def log_trade(self, trade_data: Dict[str, Any]) -> bool:
+    def log_trade(self, trade_data: Dict[str, Any], user_id: Optional[int] = None) -> bool:
         payload = {"created_at": self._now(), **trade_data}
+        if user_id is not None:
+            payload.setdefault("user_id", user_id)
         self._trades.append(payload)
 
         if not self.client:
@@ -826,48 +854,80 @@ class SupabaseManager:
             self.client.table("trades").insert(db_payload).execute()
             return True
         except Exception as exc:
+            if user_id is not None and self._has_optional_trade_scope_error(exc):
+                self._warn_missing_trade_scope()
+                return False
             self.logger.error(f"Failed to log trade: {exc}")
             return False
 
-    def update_position(self, symbol: str, position_data: Dict[str, Any]) -> bool:
+    def update_position(self, symbol: str, position_data: Dict[str, Any], user_id: Optional[int] = None) -> bool:
         payload = {**position_data, "symbol": symbol, "updated_at": self._now()}
-        self._positions[symbol] = payload
+        if user_id is not None:
+            payload.setdefault("user_id", user_id)
+        self._positions[self._position_store_key(symbol, user_id)] = payload
 
         if not self.client:
             return True
 
         try:
-            self.client.table("positions").upsert(payload, on_conflict="symbol").execute()
+            if user_id is None:
+                self.client.table("positions").upsert(payload, on_conflict="symbol").execute()
+            else:
+                self.client.table("positions").upsert(payload, on_conflict="user_id,symbol").execute()
             return True
         except Exception as exc:
+            if user_id is not None and self._has_optional_trade_scope_error(exc):
+                self._warn_missing_position_scope()
+                return False
             self.logger.error(f"Failed to update position for {symbol}: {exc}")
             return False
 
-    def remove_position(self, symbol: str) -> bool:
-        self._positions.pop(symbol, None)
+    def remove_position(self, symbol: str, user_id: Optional[int] = None) -> bool:
+        self._positions.pop(self._position_store_key(symbol, user_id), None)
 
         if not self.client:
             return True
 
         try:
-            self.client.table("positions").delete().eq("symbol", symbol).execute()
+            query = self.client.table("positions").delete().eq("symbol", symbol)
+            if user_id is not None:
+                query = query.eq("user_id", user_id)
+            query.execute()
             return True
         except Exception as exc:
+            if user_id is not None and self._has_optional_trade_scope_error(exc):
+                self._warn_missing_position_scope()
+                return False
             self.logger.error(f"Failed to remove position for {symbol}: {exc}")
             return False
 
-    def list_open_positions(self) -> List[Dict[str, Any]]:
+    def list_open_positions(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         if self.client:
             try:
-                response = self.client.table("positions").select("*").execute()
+                query = self.client.table("positions").select("*")
+                if user_id is not None:
+                    query = query.eq("user_id", user_id)
+                response = query.execute()
                 self._positions = {
-                    item["symbol"]: item for item in (response.data or []) if item.get("symbol")
+                    self._position_store_key(item["symbol"], item.get("user_id")): item
+                    for item in (response.data or [])
+                    if item.get("symbol")
                 }
             except Exception as exc:
-                self.logger.error(f"Failed to list open positions: {exc}")
+                if user_id is not None and self._has_optional_trade_scope_error(exc):
+                    self._warn_missing_position_scope()
+                else:
+                    self.logger.error(f"Failed to list open positions: {exc}")
+        if user_id is not None:
+            return [position for position in self._positions.values() if position.get("user_id") == user_id]
         return list(self._positions.values())
 
-    def get_recent_trades(self, limit: int = 50, since: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_recent_trades(
+        self,
+        limit: int = 50,
+        since: Optional[str] = None,
+        user_id: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         since_dt = self._parse_datetime(since)
 
         if self.client:
@@ -875,21 +935,30 @@ class SupabaseManager:
                 query = self.client.table("trades").select("*")
                 if since:
                     query = query.gte("created_at", since)
+                if user_id is not None:
+                    query = query.eq("user_id", user_id)
                 response = query.order("created_at", desc=True).limit(limit).execute()
                 self._trades = list(response.data or [])
                 return list(self._trades)
             except Exception as exc:
-                self.logger.error(f"Failed to fetch recent trades: {exc}")
+                if user_id is not None and self._has_optional_trade_scope_error(exc):
+                    self._warn_missing_trade_scope()
+                else:
+                    self.logger.error(f"Failed to fetch recent trades: {exc}")
+
+        filtered = list(self._trades)
+        if user_id is not None:
+            filtered = [trade for trade in filtered if trade.get("user_id") == user_id]
 
         if since_dt:
             filtered = [
                 trade
-                for trade in self._trades
+                for trade in filtered
                 if (trade_dt := self._parse_datetime(trade.get("created_at"))) and trade_dt >= since_dt
             ]
             return filtered[-limit:]
 
-        return self._trades[-limit:]
+        return filtered[-limit:]
 
     def get_user_summary(self, limit: int = 25) -> Dict[str, Any]:
         recent_users = list(self._users.values())

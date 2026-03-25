@@ -6,9 +6,6 @@ export default defineConfig({
   plugins: [react()],
 
   server: {
-    allowedHosts: ['university-holders-bean-wow.trycloudflare.com'],
-    allowedHosts: ['university-holders-bean-wow.trycloudflare.com'],
-    // Allow ngrok / cloudflared tunnels for local Telegram testing
     allowedHosts: 'all',
     port: 5173,
   },

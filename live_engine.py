@@ -382,7 +382,7 @@ class LiveEngine(Simulator):
         )
 
     async def _handle_command(self, cmd):
-        command, args, chat_id = cmd
+        command, args, chat_id, _user_id = self._unpack_command(cmd)
         response = ""
 
         if command == "/shutdown":

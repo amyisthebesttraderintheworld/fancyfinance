@@ -1,0 +1,76 @@
+:root {
+  color-scheme: dark;
+  --bg: #06060b;
+  --bg-elevated: rgba(16, 17, 27, 0.92);
+  --bg-soft: rgba(12, 13, 21, 0.7);
+  --panel: linear-gradient(180deg, rgba(20, 21, 34, 0.94), rgba(11, 12, 19, 0.92));
+  --panel-soft: linear-gradient(180deg, rgba(19, 20, 30, 0.88), rgba(10, 10, 16, 0.82));
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.22);
+  --text: #f5f5fb;
+  --text-muted: #a2a4b8;
+  --text-soft: #777b93;
+  --violet: #9a63ff;
+  --violet-strong: #c68bff;
+  --violet-soft: rgba(154, 99, 255, 0.18);
+  --cyan: #86f1ff;
+  --cyan-soft: rgba(134, 241, 255, 0.18);
+  --green: #5bf0b1;
+  --green-soft: rgba(91, 240, 177, 0.18);
+  --amber: #ffca72;
+  --amber-soft: rgba(255, 202, 114, 0.18);
+  --red: #ff7894;
+  --red-soft: rgba(255, 120, 148, 0.18);
+  --shadow-lg: 0 30px 100px rgba(0, 0, 0, 0.48);
+  --shadow-md: 0 18px 50px rgba(0, 0, 0, 0.34);
+  --radius-xl: 30px;
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(154, 99, 255, 0.22), transparent 24%),
+    radial-gradient(circle at 86% 72%, rgba(122, 86, 255, 0.18), transparent 22%),
+    linear-gradient(180deg, #0b0a10 0%, #06060b 46%, #040408 100%);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}

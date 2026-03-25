@@ -55,7 +55,30 @@ def _coerce_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _trade_count(engine) -> int:
+def _uses_user_sessions(engine) -> bool:
+    return bool(getattr(engine, "_user_scoped_simulation", False))
+
+
+def _get_user_session(engine, user_id: Optional[int], *, create: bool = False):
+    getter = getattr(engine, "get_user_session", None)
+    if callable(getter):
+        return getter(user_id, create=create)
+    return None
+
+
+def _list_user_sessions(engine) -> list[Any]:
+    getter = getattr(engine, "list_user_sessions", None)
+    if callable(getter):
+        return list(getter())
+    return []
+
+
+def _trade_count(engine, user_id: Optional[int] = None) -> int:
+    if _uses_user_sessions(engine):
+        if user_id is not None:
+            session = _get_user_session(engine, user_id, create=True)
+            return len(getattr(session, "trade_history", []) or []) if session is not None else 0
+        return sum(len(getattr(session, "trade_history", []) or []) for session in _list_user_sessions(engine))
     if hasattr(engine, "trade_history"):
         return len(engine.trade_history)
     if hasattr(engine, "trades"):
@@ -63,8 +86,43 @@ def _trade_count(engine) -> int:
     return 0
 
 
-def _snapshot(engine):
+def _snapshot(engine, user_id: Optional[int] = None):
     symbols = list(engine.symbols)
+    if _uses_user_sessions(engine):
+        if user_id is not None:
+            session = _get_user_session(engine, user_id, create=True)
+            balance = getattr(session, "balance", 0.0) if session is not None else 0.0
+            started_at = getattr(session, "session_started_at", None) if session is not None else None
+            paused = getattr(session, "is_paused", False) if session is not None else False
+            open_positions = len(getattr(session, "positions", {}) or {}) if session is not None else 0
+            initial_balance = engine.config.get("backtest", {}).get("initial_balance")
+            active_user_count = 1 if session is not None else 0
+        else:
+            sessions = _list_user_sessions(engine)
+            balance = sum(float(getattr(session, "balance", 0.0) or 0.0) for session in sessions)
+            started_at = min((session.session_started_at for session in sessions if session.session_started_at), default=None)
+            paused = bool(sessions) and all(bool(getattr(session, "is_paused", False)) for session in sessions)
+            open_positions = sum(len(getattr(session, "positions", {}) or {}) for session in sessions)
+            initial_balance = (engine.config.get("backtest", {}).get("initial_balance") or 0) * len(sessions)
+            active_user_count = len(sessions)
+        return {
+            "app": APP_NAME,
+            "version": __version__,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "session_started_at": started_at,
+            "mode": engine.config.get("mode"),
+            "exchange": engine.exchange_id,
+            "running": engine.is_running,
+            "paused": paused,
+            "balance": balance,
+            "initial_balance": initial_balance,
+            "symbols": symbols,
+            "symbol_count": len(symbols),
+            "open_positions": open_positions,
+            "trade_count": _trade_count(engine, user_id=user_id),
+            "active_user_count": active_user_count,
+        }
+
     return {
         "app": APP_NAME,
         "version": __version__,
@@ -79,7 +137,7 @@ def _snapshot(engine):
         "symbols": symbols,
         "symbol_count": len(symbols),
         "open_positions": len(engine.positions),
-        "trade_count": _trade_count(engine),
+        "trade_count": _trade_count(engine, user_id=user_id),
     }
 
 
@@ -104,18 +162,59 @@ def _serialize_position(symbol: str, position: Any) -> Dict[str, Any]:
     }
 
 
-def _positions_payload(engine):
+def _positions_payload(engine, user_id: Optional[int] = None):
+    if _uses_user_sessions(engine):
+        if user_id is not None:
+            session = _get_user_session(engine, user_id, create=True)
+            positions = getattr(session, "positions", {}) if session is not None else {}
+            return [_serialize_position(symbol, position) for symbol, position in positions.items()]
+
+        payload = []
+        for session in _list_user_sessions(engine):
+            for symbol, position in getattr(session, "positions", {}).items():
+                item = _serialize_position(symbol, position)
+                item["user_id"] = getattr(session, "user_id", None)
+                payload.append(item)
+        return payload
+
     return [_serialize_position(symbol, position) for symbol, position in engine.positions.items()]
 
 
-def _recent_trades(engine, limit: int = 20):
+def _recent_trades(engine, limit: int = 20, user_id: Optional[int] = None):
+    if _uses_user_sessions(engine):
+        if user_id is not None:
+            session = _get_user_session(engine, user_id, create=True)
+            history = list(getattr(session, "trade_history", []) or []) if session is not None else []
+            if history:
+                return history[-limit:]
+            since = getattr(session, "session_started_at", None) if session is not None else None
+        else:
+            history = []
+            for session in _list_user_sessions(engine):
+                history.extend(list(getattr(session, "trade_history", []) or []))
+            if history:
+                history.sort(key=lambda trade: int(trade.get("timestamp") or 0))
+                return history[-limit:]
+            since = getattr(engine, "session_started_at", None)
+
+        db = getattr(engine, "db", None)
+        if db and hasattr(db, "get_recent_trades"):
+            kwargs = {"limit": limit, "since": since}
+            if user_id is not None:
+                kwargs["user_id"] = user_id
+            return db.get_recent_trades(**kwargs)
+        return []
+
     history = list(getattr(engine, "trade_history", []) or [])
     if history:
         return history[-limit:]
 
     db = getattr(engine, "db", None)
     if db and hasattr(db, "get_recent_trades"):
-        return db.get_recent_trades(limit=limit, since=getattr(engine, "session_started_at", None))
+        kwargs = {"limit": limit, "since": getattr(engine, "session_started_at", None)}
+        if user_id is not None:
+            kwargs["user_id"] = user_id
+        return db.get_recent_trades(**kwargs)
     return []
 
 
@@ -137,7 +236,7 @@ def _performance_summary(engine, trades):
     }
 
 
-def _runtime_summary(engine):
+def _runtime_summary(engine, user_id: Optional[int] = None):
     queue_depth = None
     command_queue = getattr(engine, "command_queue", None)
     if command_queue is not None and hasattr(command_queue, "qsize"):
@@ -146,17 +245,34 @@ def _runtime_summary(engine):
         except Exception:  # pragma: no cover - defensive
             queue_depth = None
 
-    remaining_seconds = max(getattr(engine, "safety_paused_until", 0) - time.time(), 0)
+    if _uses_user_sessions(engine):
+        if user_id is not None:
+            session = _get_user_session(engine, user_id, create=True)
+            is_paused = bool(getattr(session, "is_paused", False)) if session is not None else False
+            paused_until = float(getattr(session, "safety_paused_until", 0) or 0) if session is not None else 0.0
+            active_user_count = 1 if session is not None else 0
+        else:
+            sessions = _list_user_sessions(engine)
+            is_paused = bool(sessions) and all(bool(getattr(session, "is_paused", False)) for session in sessions)
+            paused_until = max((float(getattr(session, "safety_paused_until", 0) or 0) for session in sessions), default=0.0)
+            active_user_count = len(sessions)
+    else:
+        is_paused = bool(engine.is_paused)
+        paused_until = float(getattr(engine, "safety_paused_until", 0) or 0)
+        active_user_count = None
+
+    remaining_seconds = max(paused_until - time.time(), 0)
     return {
-        "engine_status": "paused" if engine.is_paused else ("running" if engine.is_running else "stopped"),
+        "engine_status": "paused" if is_paused else ("running" if engine.is_running else "stopped"),
         "websocket_connected": getattr(engine, "_websocket", None) is not None,
         "command_queue_depth": queue_depth,
         "safety_pause_remaining_seconds": int(remaining_seconds),
         "safety_paused_until": (
-            datetime.fromtimestamp(getattr(engine, "safety_paused_until", 0), tz=timezone.utc).isoformat()
+            datetime.fromtimestamp(paused_until, tz=timezone.utc).isoformat()
             if remaining_seconds
             else None
         ),
+        "active_user_count": active_user_count,
     }
 
 
@@ -218,16 +334,16 @@ def _dashboard_payload(engine, auth_token: Optional[str]):
 
 
 def _member_dashboard_payload(engine, user_id: int):
-    trades = _recent_trades(engine)
-    snapshot = _snapshot(engine)
+    trades = _recent_trades(engine, user_id=user_id)
+    snapshot = _snapshot(engine, user_id=user_id)
     snapshot["balance"] = None
     snapshot["initial_balance"] = None
     return {
         "member_access": True,
         "user_id": user_id,
         "snapshot": snapshot,
-        "runtime": _runtime_summary(engine),
-        "positions": _positions_payload(engine),
+        "runtime": _runtime_summary(engine, user_id=user_id),
+        "positions": _positions_payload(engine, user_id=user_id),
         "recent_trades": trades,
         "performance": _performance_summary(engine, trades),
         "config": {},

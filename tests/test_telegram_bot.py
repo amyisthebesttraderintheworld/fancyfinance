@@ -131,23 +131,48 @@ async def test_proxy_command_authorized(mock_update, mock_context, mock_config):
     
     # Check if command put in queue
     assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id = telegram_bot.cmd_queue.get()
+    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
     assert cmd == "/status"
     assert chat_id == 12345
+    assert user_id == 12345
     mock_update.message.reply_text.assert_called_with("Command /status queued.")
 
 @pytest.mark.asyncio
-async def test_proxy_command_unauthorized(mock_update, mock_context, mock_config):
+async def test_proxy_command_requires_paid_membership_for_sim_self_service(mock_update, mock_context, mock_config):
     telegram_bot.config = mock_config
     telegram_bot.cmd_queue = queue.Queue()
     
     mock_update.message.text = "/pause"
-    mock_update.effective_chat.id = 99999 # Unauthorized
+    mock_update.effective_chat.id = 99999
     
     await proxy_command(mock_update, mock_context)
     
     assert telegram_bot.cmd_queue.empty()
-    mock_update.message.reply_text.assert_called_with("Unauthorized.")
+    assert "Paid Membership Required" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_proxy_command_allows_paid_member_to_control_own_simulation(mock_update, mock_context, mock_config):
+    telegram_bot.config = mock_config
+    telegram_bot.cmd_queue = queue.Queue()
+
+    mock_update.message.text = "/pause"
+    mock_update.effective_chat.id = 99999
+
+    with patch.object(
+        telegram_bot.db,
+        "get_membership_summary",
+        return_value={"can_simulation": True, "tier": "pro", "status": "active"},
+    ):
+        await proxy_command(mock_update, mock_context)
+
+    assert not telegram_bot.cmd_queue.empty()
+    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
+    assert cmd == "/pause"
+    assert args == []
+    assert chat_id == 99999
+    assert user_id == 12345
+    mock_update.message.reply_text.assert_called_with("Command /pause queued.")
 
 
 @pytest.mark.asyncio
@@ -161,9 +186,10 @@ async def test_proxy_command_status_allowed_for_non_admin(mock_update, mock_cont
     await proxy_command(mock_update, mock_context)
 
     assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id = telegram_bot.cmd_queue.get()
+    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
     assert cmd == "/status"
     assert chat_id == 99999
+    assert user_id == 12345
     mock_update.message.reply_text.assert_called_with("Command /status queued.")
 
 
@@ -259,9 +285,10 @@ async def test_menu_button_handler_routes_status(mock_update, mock_context, mock
     await menu_button_handler(mock_update, mock_context)
 
     assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id = telegram_bot.cmd_queue.get()
+    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
     assert cmd == "/status"
     assert chat_id == 99999
+    assert user_id == 12345
 
 
 @pytest.mark.asyncio
@@ -365,10 +392,11 @@ async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_con
         await unlock_api_command(mock_update, mock_context)
 
     assert not telegram_bot.cmd_queue.empty()
-    command, args, chat_id = telegram_bot.cmd_queue.get()
+    command, args, chat_id, user_id = telegram_bot.cmd_queue.get()
     assert command == "/unlock_api"
     assert args == ["12345", "correct horse battery staple"]
     assert chat_id == 12345
+    assert user_id == 12345
     mock_context.bot.delete_message.assert_called_once()
 
 

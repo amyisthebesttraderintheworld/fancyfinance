@@ -90,6 +90,110 @@ def _build_engine(sample_config):
     return engine
 
 
+def _build_user_scoped_engine(sample_config):
+    config = dict(sample_config)
+    config["mode"] = "simulation"
+    config["phemex"] = dict(sample_config["phemex"])
+
+    sessions = {
+        12345: SimpleNamespace(
+            user_id=12345,
+            balance=1200.0,
+            positions={
+                "BTCUSD": Position(
+                    symbol="BTCUSD",
+                    direction="long",
+                    entry_price=42000.0,
+                    quantity=0.1,
+                    stop_loss=41000.0,
+                    take_profit=43500.0,
+                    open_time=1711320000000,
+                )
+            },
+            trade_history=[
+                {
+                    "user_id": 12345,
+                    "symbol": "BTCUSD",
+                    "direction": "long",
+                    "price": 42000.0,
+                    "qty": 0.1,
+                    "type": "exit",
+                    "pnl": 125.5,
+                    "created_at": "2026-03-25T12:05:00+00:00",
+                    "timestamp": 1742904300000,
+                }
+            ],
+            is_paused=False,
+            safety_paused_until=0,
+            session_started_at="2026-03-25T12:00:00+00:00",
+        ),
+        67890: SimpleNamespace(
+            user_id=67890,
+            balance=300.0,
+            positions={
+                "ETHUSD": Position(
+                    symbol="ETHUSD",
+                    direction="short",
+                    entry_price=2500.0,
+                    quantity=0.2,
+                    stop_loss=2550.0,
+                    take_profit=2400.0,
+                    open_time=1711320000001,
+                )
+            },
+            trade_history=[
+                {
+                    "user_id": 67890,
+                    "symbol": "ETHUSD",
+                    "direction": "short",
+                    "price": 2500.0,
+                    "qty": 0.2,
+                    "type": "entry",
+                    "created_at": "2026-03-25T12:06:00+00:00",
+                    "timestamp": 1742904360000,
+                }
+            ],
+            is_paused=True,
+            safety_paused_until=0,
+            session_started_at="2026-03-25T12:01:00+00:00",
+        ),
+    }
+
+    def get_user_session(user_id, create=False):
+        return sessions.get(user_id)
+
+    def list_user_sessions():
+        return list(sessions.values())
+
+    db = MagicMock()
+    db.get_recent_trades.return_value = []
+    db.get_user_summary.return_value = {"total": 2, "verified": 2, "unverified": 0, "with_api_keys": 0, "recent": []}
+    db.url = "https://example.supabase.co"
+    db.key = "service-role"
+    db.client = object()
+    db.cipher = SimpleNamespace(status="configured", using_fallback_key=False)
+
+    engine = SimpleNamespace()
+    engine._user_scoped_simulation = True
+    engine.config = config
+    engine.exchange_id = "phemex"
+    engine.is_running = True
+    engine.is_paused = False
+    engine.balance = 0.0
+    engine.symbols = ["BTCUSD", "ETHUSD"]
+    engine.positions = {}
+    engine.trade_history = []
+    engine.session_started_at = "2026-03-25T12:00:00+00:00"
+    engine.command_queue = SimpleNamespace(qsize=lambda: 1)
+    engine.safety_paused_until = 0
+    engine._websocket = object()
+    engine.db = db
+    engine.get_user_session = get_user_session
+    engine.list_user_sessions = list_user_sessions
+    engine.stop = MagicMock()
+    return engine
+
+
 def test_dashboard_page_renders(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
@@ -190,6 +294,30 @@ def test_member_dashboard_data_returns_read_only_payload(sample_config):
     assert payload["snapshot"]["balance"] is None
     assert payload["users"] == {}
     assert payload["positions"][0]["symbol"] == "BTCUSD"
+
+
+def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_config):
+    app = create_app(_build_user_scoped_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard/member-data", params={"access": token})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user_id"] == 12345
+    assert payload["snapshot"]["open_positions"] == 1
+    assert payload["positions"] == [
+        {
+            "symbol": "BTCUSD",
+            "direction": "long",
+            "entry_price": 42000.0,
+            "quantity": 0.1,
+            "stop_loss": 41000.0,
+            "take_profit": 43500.0,
+        }
+    ]
+    assert payload["recent_trades"][0]["symbol"] == "BTCUSD"
 
 
 def test_backtest_run_endpoint_returns_report(sample_config, monkeypatch):
