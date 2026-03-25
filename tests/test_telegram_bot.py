@@ -1,10 +1,13 @@
 import pytest
 import queue
 from unittest.mock import MagicMock, AsyncMock, patch
+from telegram.error import Conflict
 from telegram_bot import (
     agree_command,
     backtest_command,
     dashboard_api_command,
+    error_handler,
+    post_init,
     start_trial_command,
     start,
     help_command,
@@ -48,6 +51,70 @@ async def test_help_command(mock_update, mock_context):
     # Check if a long help message was sent
     mock_update.message.reply_text.assert_called()
     assert "Available Commands" in mock_update.message.reply_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_post_init_clears_webhook_and_starts_watchdog():
+    application = MagicMock()
+    application.bot = MagicMock()
+    scheduled_tasks = []
+
+    def _capture_task(coro):
+        scheduled_tasks.append(coro)
+        coro.close()
+
+    application.create_task = MagicMock(side_effect=_capture_task)
+
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=True)) as clear_mock:
+        with patch("telegram_bot.set_commands", new=AsyncMock()) as set_commands_mock:
+            await post_init(application)
+
+    clear_mock.assert_awaited_once()
+    set_commands_mock.assert_awaited_once_with(application)
+    application.create_task.assert_called_once()
+    assert len(scheduled_tasks) == 1
+
+
+@pytest.mark.asyncio
+async def test_error_handler_recovers_from_conflict_when_webhook_cleared():
+    telegram_bot._conflict_logged = False
+    telegram_bot._ownership_recovery_logged = False
+
+    application = MagicMock()
+    application.bot = MagicMock()
+    application.running = True
+    application.stop_running = MagicMock()
+
+    context = MagicMock()
+    context.error = Conflict("webhook active")
+    context.application = application
+
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=True)) as clear_mock:
+        await error_handler(None, context)
+
+    clear_mock.assert_awaited_once()
+    application.stop_running.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_error_handler_stops_when_conflict_not_recovered():
+    telegram_bot._conflict_logged = False
+    telegram_bot._ownership_recovery_logged = False
+
+    application = MagicMock()
+    application.bot = MagicMock()
+    application.running = True
+    application.stop_running = MagicMock()
+
+    context = MagicMock()
+    context.error = Conflict("another poller")
+    context.application = application
+
+    with patch("telegram_bot._clear_telegram_webhook", new=AsyncMock(return_value=False)) as clear_mock:
+        await error_handler(None, context)
+
+    clear_mock.assert_awaited_once()
+    application.stop_running.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_proxy_command_authorized(mock_update, mock_context, mock_config):

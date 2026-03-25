@@ -45,6 +45,7 @@ db = SupabaseManager()
 settings_mgr = SettingsManager()
 logger = get_logger("TelegramBot")
 _conflict_logged = False
+_ownership_recovery_logged = False
 
 
 async def _maybe_await(result):
@@ -1117,24 +1118,92 @@ async def set_commands(application: Application):
     await application.bot.set_my_commands(commands)
 
 
-async def post_init(application: Application):
+async def _clear_telegram_webhook(bot, *, drop_pending_updates: bool, reason: str) -> bool:
     try:
-        await application.bot.delete_webhook(drop_pending_updates=False)
+        webhook_info = await bot.get_webhook_info()
     except Exception as exc:
-        logger.warning(f"Unable to clear Telegram webhook before polling: {exc}")
+        logger.warning(f"Unable to inspect Telegram webhook during {reason}: {exc}")
+        return False
+
+    current_url = str(getattr(webhook_info, "url", "") or "").strip()
+    pending_update_count = int(getattr(webhook_info, "pending_update_count", 0) or 0)
+    if not current_url:
+        return True
+
+    logger.warning(
+        f"Telegram webhook detected during {reason}: {current_url} "
+        f"(pending updates: {pending_update_count}). Clearing it so polling can own the bot token."
+    )
+    try:
+        await bot.delete_webhook(drop_pending_updates=drop_pending_updates)
+    except Exception as exc:
+        logger.warning(f"Unable to clear Telegram webhook during {reason}: {exc}")
+        return False
+
+    try:
+        refreshed_info = await bot.get_webhook_info()
+    except Exception as exc:
+        logger.warning(f"Unable to confirm Telegram webhook removal during {reason}: {exc}")
+        return False
+
+    refreshed_url = str(getattr(refreshed_info, "url", "") or "").strip()
+    if refreshed_url:
+        logger.warning(f"Telegram webhook still active after delete attempt during {reason}: {refreshed_url}")
+        return False
+
+    logger.info(f"Telegram webhook cleared during {reason}. Polling retains ownership.")
+    return True
+
+
+async def _polling_ownership_watchdog(application: Application):
+    while application.running:
+        await asyncio.sleep(30)
+        try:
+            await _clear_telegram_webhook(
+                application.bot,
+                drop_pending_updates=False,
+                reason="polling watchdog",
+            )
+        except Exception as exc:
+            logger.warning(f"Telegram polling watchdog failed: {exc}")
+
+
+async def post_init(application: Application):
+    await _clear_telegram_webhook(
+        application.bot,
+        drop_pending_updates=True,
+        reason="startup preflight",
+    )
     await set_commands(application)
+    application.create_task(_polling_ownership_watchdog(application))
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    global _conflict_logged
+    global _conflict_logged, _ownership_recovery_logged
 
     if isinstance(context.error, Conflict):
+        recovered = await _clear_telegram_webhook(
+            context.application.bot,
+            drop_pending_updates=False,
+            reason="polling conflict recovery",
+        )
+        if recovered:
+            if not _ownership_recovery_logged:
+                logger.warning(
+                    "Telegram polling hit a conflict, but FancyFinance cleared the active webhook and will keep trying. "
+                    "If this keeps happening, another service is still reclaiming the same bot token."
+                )
+                _ownership_recovery_logged = True
+            _conflict_logged = False
+            return
+
         if not _conflict_logged:
             logger.error(
                 "Telegram polling conflict detected. Another poller or active webhook is using this bot token. "
                 "Disable FancyFinance polling with TELEGRAM_POLLING_ENABLED=false if another service owns inbound Telegram updates."
             )
             _conflict_logged = True
+        _ownership_recovery_logged = False
         if context.application.running:
             try:
                 context.application.stop_running()
