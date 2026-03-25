@@ -647,6 +647,12 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Dashboard logo not found")
         return FileResponse(DASHBOARD_LOGO_PATH, media_type="image/png")
 
+    @app.get("/favicon.ico")
+    def favicon():
+        if not DASHBOARD_LOGO_PATH.exists():
+            raise HTTPException(status_code=404, detail="Favicon not found")
+        return FileResponse(DASHBOARD_LOGO_PATH, media_type="image/png")
+
     @app.get("/privacy-policy", response_class=HTMLResponse)
     def privacy_policy():
         if not PRIVACY_POLICY_PATH.exists():
