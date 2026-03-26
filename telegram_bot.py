@@ -6,6 +6,7 @@ import os
 import queue
 import re
 import time as clock
+from dataclasses import dataclass, field
 from datetime import datetime, time, timezone
 from urllib.parse import quote
 
@@ -43,11 +44,24 @@ from stripe_service import StripeService
 from strategy_profile import normalize_strategy_profile, parse_flag_args, strategy_profile_summary
 from supabase_client import DEFAULT_TRIAL_DAYS, FREE_MEMBERSHIP, PRO_MEMBERSHIP, TRIAL_PRO_MEMBERSHIP, SupabaseManager
 
+@dataclass
+class BotContext:
+    command_queue: queue.Queue | None = None
+    config: dict | None = None
+    active_engine: object | None = None
+    db: SupabaseManager | None = None
+    settings_mgr: SettingsManager | None = None
+    command_cooldowns: dict[tuple[int, str], float] = field(default_factory=dict)
+
+
+bot_context: BotContext = BotContext()
+
+# Legacy module-level aliases for backward compatibility.
 cmd_queue = None
 config = None
 active_engine = None
-db = SupabaseManager()
-settings_mgr = SettingsManager()
+db = None
+
 logger = get_logger("TelegramBot")
 _conflict_logged = False
 _ownership_recovery_logged = False
@@ -90,7 +104,7 @@ def _running_on_railway() -> bool:
 
 
 def _polling_startup_delay_seconds() -> int:
-    telegram_cfg = (config or {}).get("telegram", {})
+    telegram_cfg = (bot_context.config or {}).get("telegram", {})
     explicit = telegram_cfg.get("startup_delay_seconds", os.getenv("TELEGRAM_POLLING_STARTUP_DELAY_SECONDS"))
     if explicit not in (None, ""):
         try:
@@ -154,12 +168,22 @@ def _welcome_menu_text() -> str:
 
 
 def _record_user_agreement(user_id) -> bool:
-    return settings_mgr.set(
-        f"user_agreed_{user_id}",
-        True,
-        "Boolean",
-        "User agreement to Terms & Conditions",
-    )
+    # Persist agreement in Supabase (primary), fallback to local settings manager.
+    if bot_context.db and hasattr(bot_context.db, "set_user_agreement"):
+        try:
+            return bool(bot_context.db.set_user_agreement(user_id, True))
+        except Exception:
+            pass
+
+    if bot_context.settings_mgr:
+        return bot_context.settings_mgr.set(
+            f"user_agreed_{user_id}",
+            True,
+            "Boolean",
+            "User agreement to Terms & Conditions",
+        )
+
+    return False
 
 
 MENU_BUTTON_COMMANDS = {
@@ -175,7 +199,7 @@ SIMULATION_SELF_SERVICE_COMMANDS = {"/pause", "/resume", "/reset", "/set_balance
 
 
 def _admin_ids() -> list[int]:
-    telegram_cfg = (config or {}).get("telegram", {})
+    telegram_cfg = (bot_context.config or {}).get("telegram", {})
     return telegram_cfg.get("admin_chat_ids", [])
 
 
@@ -184,13 +208,28 @@ def _is_admin_chat(chat_id: int) -> bool:
 
 
 def _engine_mode() -> str:
-    return str((config or {}).get("mode") or "").strip().lower()
+    return str((bot_context.config or {}).get("mode") or "").strip().lower()
+
+
+def _check_command_cooldown(user_id: int | None, command: str, window_seconds: float) -> tuple[bool, float | None]:
+    if user_id is None:
+        return True, None
+
+    key = (int(user_id), command)
+    now = clock.time()
+    last = bot_context.command_cooldowns.get(key, 0.0)
+    remaining = window_seconds - (now - last)
+    if remaining > 0:
+        return False, round(remaining, 1)
+
+    bot_context.command_cooldowns[key] = now
+    return True, None
 
 
 def _remember_user_chat(update: Update):
     user = getattr(update, "effective_user", None)
     chat = getattr(update, "effective_chat", None)
-    notifier = getattr(active_engine, "notifier", None)
+    notifier = getattr(bot_context.active_engine, "notifier", None)
     if not user or not chat or notifier is None:
         return
 
@@ -200,7 +239,7 @@ def _remember_user_chat(update: Update):
 
 
 def _queue_engine_command(update: Update, command: str, args: list[str] | None = None) -> bool:
-    if not cmd_queue:
+    if not bot_context.command_queue:
         return False
 
     chat = getattr(update, "effective_chat", None)
@@ -209,7 +248,7 @@ def _queue_engine_command(update: Update, command: str, args: list[str] | None =
     user_id = getattr(user, "id", None)
 
     _remember_user_chat(update)
-    cmd_queue.put((command, list(args or []), chat_id, user_id))
+    bot_context.command_queue.put((command, list(args or []), chat_id, user_id))
     return True
 
 
@@ -220,7 +259,7 @@ async def _authorize_engine_command(update: Update, command: str) -> bool:
     mode = _engine_mode()
 
     if command in SIMULATION_SELF_SERVICE_COMMANDS and mode == "simulation" and not _is_admin_chat(chat_id):
-        membership = db.get_membership_summary(
+        membership = bot_context.db.get_membership_summary(
             user_id,
             getattr(user, "username", "") or "",
             getattr(user, "first_name", "") or "",
@@ -275,11 +314,11 @@ def _format_membership(summary: dict | None) -> tuple[str, str, str]:
 
 
 def _display_price() -> str:
-    return ((config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
+    return ((bot_context.config or {}).get("stripe") or {}).get("display_price") or "$6.99/month"
 
 
 def _trial_days() -> int:
-    raw = ((config or {}).get("stripe") or {}).get("trial_days", DEFAULT_TRIAL_DAYS)
+    raw = ((bot_context.config or {}).get("stripe") or {}).get("trial_days", DEFAULT_TRIAL_DAYS)
     try:
         return max(int(raw), 0)
     except (TypeError, ValueError):
@@ -287,7 +326,7 @@ def _trial_days() -> int:
 
 
 def _dashboard_base_url() -> str:
-    api_cfg = (config or {}).get("api") or {}
+    api_cfg = (bot_context.config or {}).get("api") or {}
     base_url = str(api_cfg.get("base_url") or "").strip().rstrip("/")
     if base_url:
         return base_url
@@ -300,8 +339,8 @@ def _dashboard_base_url() -> str:
 
 
 def _subscription_page_url() -> str:
-    stripe_cfg = (config or {}).get("stripe") or {}
-    marketing_cfg = (config or {}).get("marketing") or {}
+    stripe_cfg = (bot_context.config or {}).get("stripe") or {}
+    marketing_cfg = (bot_context.config or {}).get("marketing") or {}
     for candidate in (
         stripe_cfg.get("subscribe_url"),
         stripe_cfg.get("checkout_landing_url"),
@@ -341,11 +380,11 @@ def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
 
 
 def _current_strategy_profile(user_id: int | None = None) -> dict:
-    getter = getattr(active_engine, "get_strategy_config", None)
+    getter = getattr(bot_context.active_engine, "get_strategy_config", None)
     if callable(getter):
         current = getter(user_id)
-        return normalize_strategy_profile(config or {}, {}, current=current)
-    return normalize_strategy_profile(config or {}, {})
+        return normalize_strategy_profile(bot_context.config or {}, {}, current=current)
+    return normalize_strategy_profile(bot_context.config or {}, {})
 
 
 def _set_config_usage_text() -> str:
@@ -432,7 +471,7 @@ def _parse_membership_expiry(raw_value: str) -> str | None:
 
 
 def _stripe_service() -> StripeService:
-    return StripeService(config or {})
+    return StripeService(bot_context.config or {})
 
 
 async def _send_welcome_menu(target):
@@ -537,7 +576,7 @@ async def setup_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if db.store_user_api_keys(user_id, api_key, api_secret, passphrase, exchange=config.get("exchange", "phemex")):
+    if bot_context.db and bot_context.db.store_user_api_keys(user_id, api_key, api_secret, passphrase, exchange=(bot_context.config or {}).get("exchange", "phemex")):
         await _reply(
             update,
             "✅ *API keys stored in the zero-knowledge vault.*\n\n"
@@ -573,7 +612,7 @@ async def unlock_api_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _reply(update, "❌ Passphrase is required.", parse_mode="Markdown")
         return
 
-    if not cmd_queue:
+    if not bot_context.command_queue:
         await _reply(update, "Engine not connected.")
         await _delete_sensitive_message(update, context)
         return
@@ -803,7 +842,7 @@ async def dashboard_api_command(update: Update, context: ContextTypes.DEFAULT_TY
         await _reply(update, _paid_upgrade_message(membership), parse_mode="Markdown")
         return
 
-    auth_token = str(((config or {}).get("api") or {}).get("auth_token") or "").strip()
+    auth_token = str(((bot_context.config or {}).get("api") or {}).get("auth_token") or "").strip()
     if not auth_token:
         await _reply(
             update,
@@ -948,14 +987,20 @@ async def manage_subscription_command(update: Update, context: ContextTypes.DEFA
 
 async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    db.get_or_create_user(user.id, user.username or "", user.first_name or "")
+    allowed, wait = _check_command_cooldown(user.id, "backtest", 30.0)
+    if not allowed:
+        await _reply(update, f"⏳ Please wait {wait} seconds before running /backtest again.")
+        return
+
+    if bot_context.db:
+        bot_context.db.get_or_create_user(user.id, user.username or "", user.first_name or "")
 
     args = context.args or []
     base_profile = _current_strategy_profile(user.id)
-    exchange_key = (config or {}).get("exchange", "phemex")
-    exchange_config = (config or {}).get(exchange_key, {})
+    exchange_key = (bot_context.config or {}).get("exchange", "phemex")
+    exchange_config = (bot_context.config or {}).get(exchange_key, {})
     default_symbol = (exchange_config.get("symbols") or ["BTCUSD"])[0]
-    default_timeframe = base_profile.get("timeframe", ((config or {}).get("strategy") or {}).get("timeframe", "1m"))
+    default_timeframe = base_profile.get("timeframe", ((bot_context.config or {}).get("strategy") or {}).get("timeframe", "1m"))
     default_candles = base_profile.get("candles", _default_backtest_candles())
 
     if any(str(arg or "").startswith("--") for arg in args):
@@ -1052,7 +1097,7 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if symbol:
             result = await asyncio.to_thread(
                 run_backtest_recent,
-                config or {},
+                bot_context.config or {},
                 symbol,
                 timeframe,
                 candles,
@@ -1062,7 +1107,7 @@ async def backtest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             result = await asyncio.to_thread(
                 run_backtest_recent_universe,
-                config or {},
+                bot_context.config or {},
                 timeframe,
                 candles,
                 base_profile,
@@ -1099,16 +1144,16 @@ async def set_config_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         parsed.pop("symbol", None)
         if not parsed:
             raise ValueError("no config fields provided")
-        profile = normalize_strategy_profile(config or {}, parsed, current=_current_strategy_profile(user.id))
+        profile = normalize_strategy_profile(bot_context.config or {}, parsed, current=_current_strategy_profile(user.id))
     except ValueError:
         await _reply(update, _set_config_usage_text(), parse_mode="Markdown")
         return
 
-    setter = getattr(active_engine, "set_strategy_config", None)
+    setter = getattr(bot_context.active_engine, "set_strategy_config", None)
     if callable(setter):
         profile = setter(parsed, user_id=user.id)
-    else:
-        db.store_user_strategy_config(user.id, profile)
+    elif bot_context.db:
+        bot_context.db.store_user_strategy_config(user.id, profile)
 
     await _reply(
         update,
@@ -1343,6 +1388,15 @@ async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = text.split()
     command = parts[0]
     args = parts[1:]
+
+    user = update.effective_user
+    if user:
+        if command in {"/status", "/positions"}:
+            allowed, wait = _check_command_cooldown(user.id, "status", 5.0) if command == "/status" else _check_command_cooldown(user.id, "positions", 5.0)
+            if not allowed:
+                await _reply(update, f"⏳ Please wait {wait} seconds before using {command} again.")
+                return
+
     if not await _authorize_engine_command(update, command):
         return
 
@@ -1490,15 +1544,24 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 def run_bot(engine, command_queue):
-    global active_engine, cmd_queue, config, _conflict_logged, _ownership_recovery_logged, _polling_started_at_monotonic
-    active_engine = engine
-    cmd_queue = command_queue
-    config = engine.config
+    bot_context.active_engine = engine
+    bot_context.command_queue = command_queue
+    bot_context.config = engine.config
+    bot_context.db = SupabaseManager(mode=str((engine.config or {}).get("mode", "production")))
+    bot_context.settings_mgr = SettingsManager()
+    bot_context.command_cooldowns.clear()
+
+    # Maintain lightweight module-level aliases for existing code paths.
+    global cmd_queue, config, active_engine, db, _conflict_logged, _ownership_recovery_logged, _polling_started_at_monotonic
+    cmd_queue = bot_context.command_queue
+    config = bot_context.config
+    active_engine = bot_context.active_engine
+    db = bot_context.db
     _conflict_logged = False
     _ownership_recovery_logged = False
     _polling_started_at_monotonic = 0.0
 
-    telegram_config = config.get("telegram", {})
+    telegram_config = (bot_context.config or {}).get("telegram", {})
     token = telegram_config.get("bot_token")
     if not token:
         logger.warning("Telegram bot token missing. Bot controls disabled.")

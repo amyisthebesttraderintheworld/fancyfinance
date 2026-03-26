@@ -1,15 +1,16 @@
+*.Identifier
+*.log
+*.png
+*.pyc
+*.pyd
+*.pyo
+*.zip
+.coverage
 .env
+.pytest_cache/
 .venv/
 __pycache__/
-.pytest_cache/
-.coverage
-htmlcov/
-*.pyc
-*.pyo
-*.pyd
-*.log
-*.zip
-*.png
-*.Identifier
-bot_settings.json
 backtest_equity.png
+bot_settings.json
+fangblenny_bot - Copy/
+htmlcov/

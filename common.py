@@ -226,8 +226,8 @@ class PhemexClient:
         self.base_url = "https://testnet-api.phemex.com" if testnet else "https://api.phemex.com"
         self.logger = get_logger("PhemexClient")
 
-    def _generate_signature(self, endpoint: str, query_string: str, expiry: int) -> str:
-        message = f"{endpoint}{query_string}{expiry}"
+    def _generate_signature(self, endpoint: str, payload: str, expiry: int) -> str:
+        message = f"{endpoint}{payload}{expiry}"
         return hmac.new(self.api_secret.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).hexdigest()
 
     @staticmethod
@@ -265,33 +265,40 @@ class PhemexClient:
     @retry(times=3)
     def _request(self, method: str, endpoint: str, params: dict = None):
         expiry = int(time.time() + 60)
-        query_string = ""
-        if params:
-            # Sort params usually required, but simple approach here
-            query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items()) if v is not None])
-        
-        signature = self._generate_signature(endpoint, query_string, expiry)
-        
+
+        if method.upper() in {"GET", "DELETE"}:
+            query_string = ""
+            if params:
+                # Sort params to maintain deterministic signing and URL encoding
+                query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items()) if v is not None])
+            payload = query_string
+        elif method.upper() == "POST":
+            # POST must sign endpoint + body + expiry (not query string) and send JSON body.
+            payload = json.dumps(params or {}, separators=(",", ":"), sort_keys=True)
+            query_string = ""
+        else:
+            query_string = ""
+            payload = ""
+
+        signature = self._generate_signature(endpoint, payload, expiry)
+
         headers = {
             "x-phemex-access-token": self.api_key,
             "x-phemex-request-expiry": str(expiry),
             "x-phemex-request-signature": signature,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        
+
         url = f"{self.base_url}{endpoint}"
         if query_string:
             url += f"?{query_string}"
-            
+
         try:
-            if method == "GET":
+            if method.upper() == "GET":
                 response = requests.get(url, headers=headers, timeout=15)
-            elif method == "POST":
-                # For POST, params might need to be body. Adjust based on specific Phemex endpoint docs.
-                # Simplification: Phemex often uses query params even for POST or JSON body.
-                # Assuming JSON body for POST in this simplified client if not query.
-                response = requests.post(url, headers=headers, json=params, timeout=15)
-            elif method == "DELETE":
+            elif method.upper() == "POST":
+                response = requests.post(url, headers=headers, json=params or {}, timeout=15)
+            elif method.upper() == "DELETE":
                 response = requests.delete(url, headers=headers, timeout=15)
             else:
                 raise ValueError(f"Unsupported method {method}")
@@ -435,7 +442,7 @@ class SettingsManager:
             self.settings[key] = {"type": data_type, "value": value, "desc": desc}
             self.save()
             return True
-            
+
         target_type = self.settings[key]["type"]
         try:
             if target_type == "Number":
@@ -443,12 +450,10 @@ class SettingsManager:
             elif target_type == "Boolean":
                 value = str(value).lower() in ['true', '1', 'yes']
             self.settings[key]["value"] = value
-            return True
-        except:
+            saved = self.save()
+            return saved
+        except Exception:
             return False
-        finally:
-            self.save()
-
     def list_all(self):
         return self.settings
 

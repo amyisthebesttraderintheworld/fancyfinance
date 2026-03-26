@@ -4,6 +4,7 @@ import asyncio
 import json
 import queue
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -33,6 +34,34 @@ SUBSCRIPTION_PAUSE_EVERY = 50
 SUBSCRIPTION_PAUSE_SECONDS = 0.01
 
 
+class BaseEngine(ABC):
+    @abstractmethod
+    def start(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def stop(self):
+        raise NotImplementedError
+
+    def pause(self):
+        self.is_paused = True
+
+    def resume(self):
+        self.is_paused = False
+        if hasattr(self, "safety_paused_until"):
+            self.safety_paused_until = 0
+
+    @property
+    @abstractmethod
+    def positions(self):
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def balance(self):
+        raise NotImplementedError
+
+
 @dataclass
 class SimulationSession:
     user_id: Optional[int]
@@ -53,13 +82,13 @@ class SimulationSession:
     symbol_cooldowns: dict[str, int] = field(default_factory=dict)
 
 
-class Simulator:
+class Simulator(BaseEngine):
     def __init__(self, config, notifier: TelegramNotifier, command_queue: queue.Queue):
         self.config = config
         self.notifier = notifier
         self.command_queue = command_queue
         self.logger = get_logger("Simulator")
-        self.db = SupabaseManager()
+        self.db = SupabaseManager(mode=str(config.get("mode", "production")))
 
         self.exchange_id = config.get("exchange", "phemex").lower()
         self.exchange = ExchangeManager(

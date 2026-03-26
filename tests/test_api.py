@@ -249,7 +249,7 @@ def test_dashboard_page_renders(sample_config):
     assert '/favicon.ico' in response.text
     assert '/privacy-policy' in response.text
     assert '/terms-of-use' in response.text
-    assert 'lines.join("\\n")' in response.text
+    assert 'fancyfinance_api_token' in response.text
     assert '<option value="500">500</option>' in response.text
     assert '<option value="1000">1000</option>' in response.text
 

@@ -41,15 +41,27 @@ class EmailService:
             "confirm_command": f"/confirm_email {otp}",
         }
 
-        try:
-            response = requests.post(
-                self.confirm_webhook_url,
-                json=payload,
-                timeout=self.confirm_webhook_timeout_seconds,
-            )
-            response.raise_for_status()
-            self.logger.info(f"Verification email webhook accepted for {email}.")
-            return True
-        except Exception as exc:
-            self.logger.error(f"Verification email webhook failed for {email}: {exc}")
-            return False
+        attempts = 3
+        backoff_seconds = 2
+        for attempt in range(1, attempts + 1):
+            try:
+                response = requests.post(
+                    self.confirm_webhook_url,
+                    json=payload,
+                    timeout=self.confirm_webhook_timeout_seconds,
+                )
+                response.raise_for_status()
+                self.logger.info(f"Verification email webhook accepted for {email} on attempt {attempt}.")
+                return True
+            except Exception as exc:
+                self.logger.warning(
+                    f"Verification email webhook attempt {attempt} failed for {email}: {exc}"
+                )
+                if attempt < attempts:
+                    import time
+
+                    time.sleep(backoff_seconds)
+                continue
+
+        self.logger.error(f"Verification email webhook failed for {email} after {attempts} attempts.")
+        return False

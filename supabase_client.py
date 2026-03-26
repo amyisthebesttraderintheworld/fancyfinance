@@ -45,7 +45,7 @@ GLOBAL_ACCOUNT_USER_ID = 0
 
 
 class CipherManager:
-    def __init__(self):
+    def __init__(self, mode="production"):
         self.logger = get_logger("Cipher")
         self.using_fallback_key = False
         self.status = "configured"
@@ -57,6 +57,11 @@ class CipherManager:
             self.using_fallback_key = True
             self.status = "missing"
             self.logger.warning("MASTER_ENCRYPTION_KEY not found. Using temporary in-memory key.")
+
+        if self.using_fallback_key and str(mode).lower() not in {"backtest", "simulation", "dev", "testing", "local"}:
+            raise RuntimeError(
+                "MASTER_ENCRYPTION_KEY is required in non-test modes. Refusing to start with a temporary key."
+            )
 
         try:
             self.cipher = Fernet(key)
@@ -76,9 +81,9 @@ class CipherManager:
 
 
 class SupabaseManager:
-    def __init__(self):
+    def __init__(self, mode: str = "production"):
         self.logger = get_logger("Supabase")
-        self.cipher = CipherManager()
+        self.cipher = CipherManager(mode=mode)
         self.vault = ZeroKnowledgeVault()
         self.url = os.getenv("SUPABASE_URL", "")
         self.key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -178,6 +183,7 @@ class SupabaseManager:
         user["stripe_subscription_id"] = user.get("stripe_subscription_id")
         user["stripe_subscription_status"] = user.get("stripe_subscription_status")
         user["membership_source"] = "stripe" if user.get("stripe_subscription_id") else "manual"
+        user["has_agreed"] = bool(user.get("has_agreed", False))
         return user
 
     def _is_complimentary_pro(self, telegram_id: int) -> bool:
@@ -223,6 +229,7 @@ class SupabaseManager:
             "otp_created_at": None,
             "is_verified": False,
             "trial_started_at": None,
+            "has_agreed": False,
             "created_at": self._now(),
             "updated_at": self._now(),
         }
@@ -235,6 +242,7 @@ class SupabaseManager:
             "stripe_customer_id": None,
             "stripe_subscription_id": None,
             "stripe_subscription_status": None,
+            "has_agreed": False,
         }
 
     def _has_optional_user_columns_error(self, exc: Exception) -> bool:
@@ -950,6 +958,11 @@ class SupabaseManager:
         if not user:
             return None
 
+        if subscription_id and user.get("stripe_subscription_id") == subscription_id and user.get("stripe_subscription_status") == "active":
+            # Idempotent handling: already active with same subscription.
+            self.logger.info(f"Skipping duplicate subscription activation for user {telegram_id} subscription {subscription_id}.")
+            return user
+
         if period_end and self._parse_datetime(period_end) is None:
             raise ValueError("period_end must be an ISO datetime string")
 
@@ -1001,6 +1014,33 @@ class SupabaseManager:
         self._normalize_user_record(user)
         self._persist_user_update(telegram_id, update_payload)
         return user
+
+    def set_user_agreement(self, telegram_id: int, has_agreed: bool = True) -> bool:
+        user = self.get_or_create_user(telegram_id, "", "")
+        if not user:
+            return False
+
+        normalized = bool(has_agreed)
+        user["has_agreed"] = normalized
+        update_payload = {
+            "has_agreed": normalized,
+            "updated_at": self._now(),
+        }
+
+        if not self.client:
+            return True
+
+        try:
+            self.client.table("users").update(update_payload).eq("telegram_id", telegram_id).execute()
+            return True
+        except Exception as exc:
+            if self._has_optional_user_columns_error(exc):
+                self.logger.warning(
+                    "Users table is missing has_agreed column. Agreement state stored locally only."
+                )
+                return True
+            self.logger.error(f"Failed to update user agreement for {telegram_id}: {exc}")
+            return False
 
     def request_email_verification(self, telegram_id: int, email: str) -> Optional[str]:
         user = self.get_or_create_user(telegram_id, "", "")
