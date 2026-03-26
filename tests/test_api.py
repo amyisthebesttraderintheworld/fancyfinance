@@ -208,6 +208,8 @@ def test_dashboard_page_renders(sample_config):
     assert '/privacy-policy' in response.text
     assert '/terms-of-use' in response.text
     assert 'lines.join("\\n")' in response.text
+    assert '<option value="500">500</option>' in response.text
+    assert '<option value="1000">1000</option>' in response.text
 
 
 def test_dashboard_logo_route_serves_png(sample_config):
@@ -562,6 +564,20 @@ def test_backtest_run_endpoint_supports_scanner_universe_recent_mode(sample_conf
     payload = response.json()
     assert payload["scope"] == "universe"
     assert payload["candles"] == 1000
+
+
+def test_backtest_run_endpoint_rejects_invalid_recent_candle_mode(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.post(
+        "/backtest/run",
+        params={"symbol": "BTCUSD", "timeframe": "5m", "candles": 750},
+        headers={"x-api-key": "secret-token"},
+    )
+
+    assert response.status_code == 400
+    assert "Backtest candles must be one of" in response.json()["detail"]
 
 
 def test_strategy_config_endpoint_saves_member_profile(sample_config):

@@ -563,11 +563,12 @@ def _strategy_payload(engine, user_id: Optional[int] = None):
         profile = getter(user_id)
     else:
         profile = normalize_strategy_profile(getattr(engine, "config", {}), {})
+    profile = normalize_strategy_profile(getattr(engine, "config", {}), {}, current=profile)
     return {
         "profile": profile,
         "timeframes": ["1m", "3m", "5m", "15m", "30m", "1H", "2H", "4H", "6H", "12H", "1D"],
         "directions": ["LONG", "SHORT", "BOTH"],
-        "allowed_backtest_candles": sorted({100, *ALLOWED_REMOTE_CANDLE_COUNTS}),
+        "allowed_backtest_candles": sorted(ALLOWED_REMOTE_CANDLE_COUNTS),
     }
 
 
@@ -832,27 +833,30 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         actor_user_id = _authorized_actor(x_api_key)
         getter = getattr(engine, "get_strategy_config", None)
         base_profile = getter(actor_user_id) if callable(getter) else normalize_strategy_profile(engine.config, {})
-        strategy_profile = normalize_strategy_profile(
-            engine.config,
-            {
-                "timeframe": timeframe,
-                "candles": candles,
-                "min_score": min_score,
-                "min_signals": min_signals,
-                "leverage": leverage,
-                "margin": margin,
-                "max_margin": max_margin,
-                "stop_loss_pct": stop_loss_pct,
-                "take_profit_pct": take_profit_pct,
-                "trail_pct": trail_pct,
-                "max_hold": max_hold,
-                "direction": direction,
-                "min_score_gap": min_score_gap,
-                "cooldown": cooldown,
-                "csv": csv_output,
-            },
-            current=base_profile,
-        )
+        try:
+            strategy_profile = normalize_strategy_profile(
+                engine.config,
+                {
+                    "timeframe": timeframe,
+                    "candles": candles,
+                    "min_score": min_score,
+                    "min_signals": min_signals,
+                    "leverage": leverage,
+                    "margin": margin,
+                    "max_margin": max_margin,
+                    "stop_loss_pct": stop_loss_pct,
+                    "take_profit_pct": take_profit_pct,
+                    "trail_pct": trail_pct,
+                    "max_hold": max_hold,
+                    "direction": direction,
+                    "min_score_gap": min_score_gap,
+                    "cooldown": cooldown,
+                    "csv": csv_output,
+                },
+                current=base_profile,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         resolved_timeframe = timeframe or strategy_profile["timeframe"]
         resolved_candles = int(candles or strategy_profile["candles"])
         include_csv = bool(strategy_profile.get("csv"))

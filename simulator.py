@@ -415,12 +415,12 @@ class Simulator:
         if self._user_scoped_simulation and user_id is not None:
             session = self.get_user_session(user_id, create=True)
             if session is not None and session.strategy_profile:
-                return dict(session.strategy_profile)
+                return normalize_strategy_profile(self.config, {}, current=session.strategy_profile)
 
         session = self._global_session
         if session.strategy_profile:
-            return dict(session.strategy_profile)
-        return dict(self.default_strategy_profile)
+            return normalize_strategy_profile(self.config, {}, current=session.strategy_profile)
+        return normalize_strategy_profile(self.config, {}, current=self.default_strategy_profile)
 
     def set_strategy_config(self, strategy_config: dict[str, Any], user_id: Optional[int] = None) -> dict[str, Any]:
         current = self.get_strategy_config(user_id)

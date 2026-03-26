@@ -1245,7 +1245,10 @@ def build_dashboard_html(
               </div>
               <div class="form-field">
                 <label class="field-label" for="strategy-candles">Candles</label>
-                <input id="strategy-candles" type="number" min="100" step="100" />
+                <select id="strategy-candles">
+                  <option value="500">500</option>
+                  <option value="1000">1000</option>
+                </select>
               </div>
               <div class="form-field">
                 <label class="field-label" for="strategy-direction">Direction</label>
@@ -1700,7 +1703,7 @@ def build_dashboard_html(
       function collectStrategyProfile() {
         return {
           timeframe: document.getElementById("strategy-timeframe")?.value || "1m",
-          candles: Number(document.getElementById("strategy-candles")?.value || 100),
+          candles: Number(document.getElementById("strategy-candles")?.value || 500),
           min_score: Number(document.getElementById("strategy-min-score")?.value || 0),
           min_signals: Number(document.getElementById("strategy-min-signals")?.value || 1),
           leverage: Number(document.getElementById("strategy-leverage")?.value || 1),
@@ -1720,7 +1723,7 @@ def build_dashboard_html(
       function renderStrategy(strategy) {
         const profile = strategy?.profile || {};
         setStrategyField("strategy-timeframe", profile.timeframe || "1m");
-        setStrategyField("strategy-candles", profile.candles ?? 100);
+        setStrategyField("strategy-candles", profile.candles ?? 500);
         setStrategyField("strategy-min-score", profile.min_score ?? 0);
         setStrategyField("strategy-min-signals", profile.min_signals ?? 1);
         setStrategyField("strategy-leverage", profile.leverage ?? 1);

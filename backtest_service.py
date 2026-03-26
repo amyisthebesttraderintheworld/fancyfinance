@@ -10,10 +10,10 @@ import pandas as pd
 
 from backtester import Backtester
 from common import get_logger, load_historical_data
-from strategy_profile import normalize_strategy_profile
+from strategy_profile import ALLOWED_BACKTEST_CANDLES, normalize_strategy_profile
 
 logger = get_logger("BacktestService")
-ALLOWED_REMOTE_CANDLE_COUNTS = {100, 500, 1000}
+ALLOWED_REMOTE_CANDLE_COUNTS = set(ALLOWED_BACKTEST_CANDLES)
 
 
 class BacktestServiceError(Exception):

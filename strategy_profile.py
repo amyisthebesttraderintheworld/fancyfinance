@@ -18,6 +18,7 @@ SUPPORTED_TIMEFRAMES = {
     "12H",
     "1D",
 }
+ALLOWED_BACKTEST_CANDLES = (500, 1000)
 
 PROFILE_FIELD_ALIASES = {
     "timeframe": "timeframe",
@@ -97,7 +98,24 @@ def normalize_direction(value: Any) -> str:
     return normalized
 
 
-def _apply_profile_overrides(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_backtest_candles(value: Any, *, strict: bool = False) -> int:
+    try:
+        resolved = int(value)
+    except (TypeError, ValueError) as exc:
+        if strict:
+            raise ValueError(
+                f"Backtest candles must be one of `{list(ALLOWED_BACKTEST_CANDLES)}`."
+            ) from exc
+        return ALLOWED_BACKTEST_CANDLES[0]
+
+    if resolved in ALLOWED_BACKTEST_CANDLES:
+        return resolved
+    if strict:
+        raise ValueError(f"Backtest candles must be one of `{list(ALLOWED_BACKTEST_CANDLES)}`.")
+    return min(ALLOWED_BACKTEST_CANDLES, key=lambda candidate: (abs(candidate - resolved), candidate))
+
+
+def _apply_profile_overrides(base: Dict[str, Any], incoming: Dict[str, Any], *, strict_candles: bool = False) -> Dict[str, Any]:
     normalized = dict(base)
     aliased: Dict[str, Any] = {}
     for raw_key, value in (incoming or {}).items():
@@ -110,7 +128,7 @@ def _apply_profile_overrides(base: Dict[str, Any], incoming: Dict[str, Any]) -> 
     if "timeframe" in aliased:
         normalized["timeframe"] = normalize_timeframe(aliased["timeframe"])
     if "candles" in aliased:
-        normalized["candles"] = max(50, min(int(aliased["candles"]), 1000))
+        normalized["candles"] = normalize_backtest_candles(aliased["candles"], strict=strict_candles)
     if "min_score" in aliased:
         normalized["min_score"] = max(0, int(aliased["min_score"]))
     if "min_signals" in aliased:
@@ -153,7 +171,7 @@ def default_strategy_profile(config: Optional[Dict[str, Any]] = None) -> Dict[st
 
     profile = {
         "timeframe": base_timeframe,
-        "candles": max(50, _env_int("BOT_CANDLES", 100)),
+        "candles": normalize_backtest_candles(_env_int("BOT_CANDLES", ALLOWED_BACKTEST_CANDLES[0])),
         "min_score": max(0, _env_int("BOT_MIN_SCORE", 125)),
         "min_signals": max(1, int(source.get("scoring", {}).get("min_signals", 1) or 1)),
         "leverage": max(1, _env_int("BOT_LEVERAGE", 30)),
@@ -184,19 +202,17 @@ def normalize_strategy_profile(
     current: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     normalized = default_strategy_profile(config)
-    if current:
-        for key in PROFILE_FIELDS:
-            if key in current:
-                normalized[key] = current[key]
+    if current and isinstance(current, dict):
+        normalized = _apply_profile_overrides(normalized, current)
 
     incoming = overrides or {}
     if not isinstance(incoming, dict):
         raise ValueError("Strategy overrides must be an object.")
-    return _apply_profile_overrides(normalized, incoming)
+    return _apply_profile_overrides(normalized, incoming, strict_candles=True)
 
 
 def strategy_profile_summary(profile: Dict[str, Any]) -> str:
-    safe = normalize_strategy_profile({}, profile, current=profile)
+    safe = normalize_strategy_profile({}, {}, current=profile)
     return (
         "Strategy config saved:\n"
         f"Timeframe: {safe['timeframe']}\n"

@@ -311,7 +311,7 @@ def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
     allowed = " or ".join(str(value) for value in sorted(ALLOWED_REMOTE_CANDLE_COUNTS))
     return (
         "📈 *Free Backtesting*\n\n"
-        "Use: `/backtest [symbol] [timeframe] [100|500|1000]`\n"
+        "Use: `/backtest [symbol] [timeframe] [500|1000]`\n"
         "or `/backtest --timeframe 15m --candles 1000 --min-score 5 --min-signals 4 --leverage 5 --margin 10 --max-margin 150 --stop-loss-pct 0.04 --take-profit-pct 0.08 --trail-pct 0.025 --max-hold 72 --direction SHORT --min-score-gap 2 --cooldown 2 --csv`\n\n"
         "If you omit the symbol, FancyFinance backtests the full scanner universe from the latest Phemex candles.\n\n"
         f"Examples:\n"
@@ -328,7 +328,8 @@ def _backtest_usage_text(default_symbol: str, default_timeframe: str) -> str:
 def _current_strategy_profile(user_id: int | None = None) -> dict:
     getter = getattr(active_engine, "get_strategy_config", None)
     if callable(getter):
-        return getter(user_id)
+        current = getter(user_id)
+        return normalize_strategy_profile(config or {}, {}, current=current)
     return normalize_strategy_profile(config or {}, {})
 
 
