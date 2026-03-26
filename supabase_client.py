@@ -385,7 +385,7 @@ class SupabaseManager:
         else:
             return {}
 
-        if "strategy_profile" in parsed or "simulation_state" in parsed:
+        if "strategy_profile" in parsed or "simulation_state" in parsed or "member_state" in parsed:
             return parsed
         return {"strategy_profile": parsed} if parsed else {}
 
@@ -394,12 +394,15 @@ class SupabaseManager:
         *,
         strategy_profile: Optional[Dict[str, Any]] = None,
         simulation_state: Optional[Dict[str, Any]] = None,
+        member_state: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
         payload: Dict[str, Any] = {}
         if strategy_profile:
             payload["strategy_profile"] = dict(strategy_profile)
         if simulation_state:
             payload["simulation_state"] = dict(simulation_state)
+        if member_state:
+            payload["member_state"] = dict(member_state)
         if not payload:
             return None
         return json.dumps(payload, separators=(",", ":"))
@@ -496,6 +499,14 @@ class SupabaseManager:
         state = settings.get("simulation_state")
         return dict(state) if isinstance(state, dict) else None
 
+    def get_user_member_state(self, user_id: int) -> Optional[Dict[str, Any]]:
+        config = self._fetch_user_config(user_id)
+        if not config:
+            return None
+        settings = self._decode_user_settings(config)
+        state = settings.get("member_state")
+        return dict(state) if isinstance(state, dict) else None
+
     def list_user_ids_with_simulation_state(self) -> List[int]:
         results: set[int] = set()
 
@@ -533,6 +544,7 @@ class SupabaseManager:
         encoded = self._encode_user_settings(
             strategy_profile=dict(strategy_config),
             simulation_state=settings.get("simulation_state") if isinstance(settings.get("simulation_state"), dict) else None,
+            member_state=settings.get("member_state") if isinstance(settings.get("member_state"), dict) else None,
         )
         return self._upsert_user_config_fields(
             user_id,
@@ -545,6 +557,20 @@ class SupabaseManager:
         encoded = self._encode_user_settings(
             strategy_profile=settings.get("strategy_profile") if isinstance(settings.get("strategy_profile"), dict) else None,
             simulation_state=dict(simulation_state),
+            member_state=settings.get("member_state") if isinstance(settings.get("member_state"), dict) else None,
+        )
+        return self._upsert_user_config_fields(
+            user_id,
+            {"strategy_config_json": encoded} if encoded is not None else {},
+        )
+
+    def store_user_member_state(self, user_id: int, member_state: Dict[str, Any]) -> bool:
+        cached = dict(self._user_configs.get(user_id) or self._fetch_user_config(user_id) or {})
+        settings = self._decode_user_settings(cached)
+        encoded = self._encode_user_settings(
+            strategy_profile=settings.get("strategy_profile") if isinstance(settings.get("strategy_profile"), dict) else None,
+            simulation_state=settings.get("simulation_state") if isinstance(settings.get("simulation_state"), dict) else None,
+            member_state=dict(member_state),
         )
         return self._upsert_user_config_fields(
             user_id,

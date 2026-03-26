@@ -26,6 +26,7 @@ DASHBOARD_LOGO_PATH = DASHBOARD_ASSETS_DIR / "logo.png"
 LEGAL_PAGES_DIR = Path(__file__).resolve().parent / "legal"
 PRIVACY_POLICY_PATH = LEGAL_PAGES_DIR / "privacy_policy.html"
 TERMS_OF_USE_PATH = LEGAL_PAGES_DIR / "terms_of_use.html"
+MEMBER_ACCESS_COOKIE = "fancyfinance_member_access"
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
@@ -56,6 +57,27 @@ def _authorize_dashboard_request(expected_token: Optional[str], provided_token: 
     except DashboardAccessError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     return int(payload["sub"])
+
+
+def _resolve_dashboard_token(
+    request: Optional[Request],
+    provided_token: Optional[str] = None,
+    access: Optional[str] = None,
+) -> Optional[str]:
+    for candidate in (
+        provided_token,
+        access,
+        request.cookies.get(MEMBER_ACCESS_COOKIE) if request is not None else None,
+    ):
+        if candidate:
+            return candidate
+    return None
+
+
+def _member_access_cookie_secure(request: Optional[Request]) -> bool:
+    if request is None:
+        return False
+    return request.url.scheme == "https"
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -530,6 +552,206 @@ def _runtime_summary(engine, user_id: Optional[int] = None):
     }
 
 
+def _member_profile(engine, user_id: int) -> Dict[str, Any]:
+    db = getattr(engine, "db", None)
+    user: Dict[str, Any] = {}
+    user_getter = getattr(db, "get_user", None)
+    if callable(user_getter):
+        raw_user = user_getter(user_id)
+        if isinstance(raw_user, dict):
+            user = dict(raw_user)
+
+    membership: Dict[str, Any] = {}
+    membership_getter = getattr(db, "get_membership_summary", None)
+    if callable(membership_getter):
+        raw_membership = membership_getter(
+            user_id,
+            str(user.get("username") or ""),
+            str(user.get("first_name") or ""),
+        )
+        if isinstance(raw_membership, dict):
+            membership = dict(raw_membership)
+
+    vault: Dict[str, Any] = {}
+    vault_getter = getattr(db, "get_user_api_key_status", None)
+    if callable(vault_getter):
+        raw_vault = vault_getter(user_id)
+        if isinstance(raw_vault, dict):
+            vault = dict(raw_vault)
+
+    stored_state: Dict[str, Any] = {}
+    member_state_getter = getattr(db, "get_user_member_state", None)
+    if callable(member_state_getter):
+        raw_member_state = member_state_getter(user_id)
+        if isinstance(raw_member_state, dict):
+            stored_state = dict(raw_member_state)
+
+    mode = str(getattr(engine, "config", {}).get("mode") or "").strip().lower()
+    runtime = _runtime_summary(engine, user_id=user_id)
+    active_api_user_id: Optional[int]
+    effective_enabled: bool
+    if _uses_user_sessions(engine):
+        session = _get_user_session(engine, user_id, create=True)
+        active_api_user_id = _coerce_int(getattr(session, "active_api_user_id", None)) if session is not None else None
+        effective_enabled = bool(session is not None and not getattr(session, "is_paused", False))
+    else:
+        active_api_user_id = _coerce_int(getattr(engine, "active_api_user_id", None))
+        effective_enabled = bool(
+            getattr(engine, "is_running", False)
+            and not getattr(engine, "is_paused", False)
+            and (active_api_user_id is None or active_api_user_id == user_id)
+        )
+
+    desired_enabled = bool(stored_state.get("live_enabled", effective_enabled))
+    is_verified = bool(user.get("is_verified"))
+    email = user.get("email") or user.get("pending_email")
+    owns_runtime_session = active_api_user_id in {None, user_id}
+    can_live = bool(membership.get("can_live"))
+    can_simulation = bool(membership.get("can_simulation"))
+    vault_configured = bool(vault.get("configured"))
+    runtime_api_ready = bool(runtime.get("runtime_api_ready"))
+    pause_remaining = int(runtime.get("safety_pause_remaining_seconds") or 0)
+
+    status_label = "Locked"
+    status_tone = "negative"
+    detail = "Use /dashboard_api in Telegram again if this session expires."
+    can_toggle = False
+
+    if mode == "live":
+        if not can_live:
+            detail = "An active Pro membership is required for live trading."
+        elif not is_verified:
+            detail = "Verify your email in Telegram before enabling live trading."
+        elif not vault_configured:
+            detail = "Store exchange API keys with /setup_api before enabling live trading."
+        elif not owns_runtime_session:
+            detail = "Another Telegram account currently owns the live vault on this deployment."
+        elif desired_enabled and effective_enabled:
+            status_label = "Live enabled"
+            status_tone = "positive"
+            detail = "This Railway live engine is armed and trading under your Telegram-linked vault."
+            can_toggle = True
+        elif pause_remaining > 0:
+            status_label = "Safety pause"
+            status_tone = "amber"
+            detail = f"Safety pause is still active for about {max(1, int((pause_remaining + 59) / 60))} minute(s)."
+        elif not runtime_api_ready or active_api_user_id != user_id:
+            status_label = "Vault locked"
+            status_tone = "amber"
+            detail = "Unlock your API vault in Telegram with /unlock_api before enabling live trading."
+            can_toggle = True
+        else:
+            status_label = "Live ready"
+            status_tone = "amber"
+            detail = "Your account is eligible. Enable live trading when you are ready."
+            can_toggle = True
+    elif _uses_user_sessions(engine):
+        if not can_simulation:
+            detail = "A paid membership is required before this deployment can trade for your session."
+        elif effective_enabled:
+            status_label = "Simulation running"
+            status_tone = "positive"
+            detail = "Your Telegram-linked simulation session is active on this deployment."
+            can_toggle = True
+        elif pause_remaining > 0:
+            status_label = "Safety pause"
+            status_tone = "amber"
+            detail = f"Safety pause is still active for about {max(1, int((pause_remaining + 59) / 60))} minute(s)."
+            can_toggle = True
+        else:
+            status_label = "Simulation paused"
+            status_tone = "amber"
+            detail = "Enable trading to let your saved strategy resume on this simulation deployment."
+            can_toggle = True
+    else:
+        detail = "Member live control is unavailable for this deployment mode."
+
+    return {
+        "telegram_id": user_id,
+        "mode": mode or "unknown",
+        "email": email,
+        "is_verified": is_verified,
+        "membership_tier": membership.get("tier", "free"),
+        "membership_status": membership.get("status", "free"),
+        "membership_source": membership.get("source", "manual"),
+        "can_live": can_live,
+        "can_simulation": can_simulation,
+        "vault_configured": vault_configured,
+        "vault_zero_knowledge": bool(vault.get("zero_knowledge")),
+        "runtime_api_ready": runtime_api_ready,
+        "active_api_user_id": active_api_user_id,
+        "owns_runtime_session": owns_runtime_session,
+        "live_enabled": desired_enabled,
+        "effective_enabled": effective_enabled,
+        "can_toggle": can_toggle,
+        "status_label": status_label,
+        "status_tone": status_tone,
+        "detail": detail,
+    }
+
+
+def _set_member_enabled(engine, user_id: int, enabled: bool) -> Dict[str, Any]:
+    mode = str(getattr(engine, "config", {}).get("mode") or "").strip().lower()
+    db = getattr(engine, "db", None)
+    profile = _member_profile(engine, user_id)
+
+    if mode == "live":
+        if not profile["can_live"]:
+            raise HTTPException(status_code=403, detail="Live trading requires an active Pro membership.")
+        if not profile["is_verified"]:
+            raise HTTPException(status_code=403, detail="Verify your email in Telegram before enabling live trading.")
+        if not profile["vault_configured"]:
+            raise HTTPException(status_code=409, detail="Store exchange API keys with /setup_api before enabling live trading.")
+        if not profile["owns_runtime_session"]:
+            raise HTTPException(status_code=409, detail="Another Telegram account currently owns the live vault on this deployment.")
+        if enabled:
+            if not profile["runtime_api_ready"] or profile["active_api_user_id"] != user_id:
+                raise HTTPException(status_code=409, detail="Unlock your API vault in Telegram with /unlock_api before enabling live trading.")
+            remaining = int(_runtime_summary(engine, user_id=user_id).get("safety_pause_remaining_seconds") or 0)
+            if remaining > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Safety pause is still active for about {max(1, int((remaining + 59) / 60))} minute(s).",
+                )
+            engine.is_paused = False
+            engine.safety_paused_until = 0
+        else:
+            engine.is_paused = True
+    elif _uses_user_sessions(engine):
+        if not profile["can_simulation"]:
+            raise HTTPException(status_code=403, detail="A paid membership is required before this deployment can trade for your session.")
+        session = _get_user_session(engine, user_id, create=True)
+        if session is None:
+            raise HTTPException(status_code=503, detail="Could not load your session.")
+        if enabled:
+            remaining = int(max(float(getattr(session, "safety_paused_until", 0) or 0) - time.time(), 0))
+            if remaining > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Safety pause is still active for about {max(1, int((remaining + 59) / 60))} minute(s).",
+                )
+            session.is_paused = False
+            session.safety_paused_until = 0
+        else:
+            session.is_paused = True
+        persister = getattr(engine, "_persist_session_state", None)
+        if callable(persister):
+            persister(session)
+    else:
+        raise HTTPException(status_code=409, detail="Member live control is unavailable for this deployment.")
+
+    if db and hasattr(db, "store_user_member_state"):
+        db.store_user_member_state(
+            user_id,
+            {
+                "live_enabled": bool(enabled),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    return _member_profile(engine, user_id)
+
+
 def _config_summary(engine, auth_token: Optional[str]):
     exchange_config = engine.config.get(engine.exchange_id, {})
     telegram_config = engine.config.get("telegram", {})
@@ -625,6 +847,7 @@ def _member_dashboard_payload(engine, user_id: int):
         "config": {},
         "users": {},
         "strategy": _strategy_payload(engine, user_id=user_id),
+        "member": _member_profile(engine, user_id),
     }
 
 
@@ -651,8 +874,21 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
     stripe_service = StripeService(engine.config)
 
-    def _authorized_actor(provided_token: Optional[str]) -> Optional[int]:
-        return _authorize_dashboard_request(auth_token, provided_token)
+    def _authorized_actor(
+        request: Optional[Request],
+        provided_token: Optional[str],
+        access: Optional[str] = None,
+    ) -> Optional[int]:
+        token = _resolve_dashboard_token(request, provided_token, access)
+        return _authorize_dashboard_request(auth_token, token)
+
+    def _authorized_member(
+        request: Optional[Request],
+        provided_token: Optional[str],
+        access: Optional[str] = None,
+    ) -> int:
+        token = _resolve_dashboard_token(request, provided_token, access)
+        return _authorize_member_dashboard(auth_token, token)
 
     @app.get("/", response_class=RedirectResponse)
     def root():
@@ -700,8 +936,21 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         return RedirectResponse(url="/terms-of-use", status_code=307)
 
     @app.get("/dashboard/member", response_class=HTMLResponse)
-    def member_dashboard():
-        return HTMLResponse(
+    def member_dashboard(request: Request, access: Optional[str] = None):
+        if access:
+            _authorize_member_dashboard(auth_token, access)
+            response = RedirectResponse(url="/dashboard/member", status_code=307)
+            response.set_cookie(
+                MEMBER_ACCESS_COOKIE,
+                access,
+                httponly=True,
+                samesite="lax",
+                secure=_member_access_cookie_secure(request),
+                path="/",
+            )
+            return response
+
+        response = HTMLResponse(
             build_dashboard_html(
                 APP_NAME,
                 __version__,
@@ -713,17 +962,34 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 fallback_token_storage_keys=("fancyfinance_api_token",),
             )
         )
+        existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
+        if existing_cookie:
+            try:
+                _authorize_member_dashboard(auth_token, existing_cookie)
+            except HTTPException:
+                response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
+        return response
+
+    @app.post("/dashboard/session/clear")
+    def clear_dashboard_session():
+        response = HTMLResponse("")
+        response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
+        return response
 
     @app.get("/dashboard/data")
-    def dashboard_data(x_api_key: Optional[str] = Header(default=None)):
-        member_user_id = _authorize_dashboard_request(auth_token, x_api_key)
+    def dashboard_data(request: Request, x_api_key: Optional[str] = Header(default=None)):
+        member_user_id = _authorized_actor(request, x_api_key)
         if member_user_id is not None:
             return _member_dashboard_payload(engine, member_user_id)
         return _dashboard_payload(engine, auth_token)
 
     @app.get("/dashboard/member-data")
-    def dashboard_member_data(x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
-        user_id = _authorize_member_dashboard(auth_token, x_api_key or access)
+    def dashboard_member_data(
+        request: Request,
+        x_api_key: Optional[str] = Header(default=None),
+        access: Optional[str] = None,
+    ):
+        user_id = _authorized_member(request, x_api_key, access)
         return _member_dashboard_payload(engine, user_id)
 
     @app.get("/dashboard/bootstrap")
@@ -731,8 +997,8 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         return _public_dashboard_payload(engine)
 
     @app.post("/strategy/config")
-    async def strategy_config_save(request: Request, x_api_key: Optional[str] = Header(default=None)):
-        actor_user_id = _authorized_actor(x_api_key)
+    async def strategy_config_save(request: Request, x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
+        actor_user_id = _authorized_actor(request, x_api_key, access)
         setter = getattr(engine, "set_strategy_config", None)
         if not callable(setter):
             raise HTTPException(status_code=503, detail="Strategy configuration is unavailable")
@@ -754,6 +1020,27 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             "ok": True,
             "member_access": actor_user_id is not None,
             "strategy": {"profile": profile},
+        }
+
+    @app.post("/dashboard/member/live-toggle")
+    async def member_live_toggle(request: Request, x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
+        actor_user_id = _authorized_member(request, x_api_key, access)
+        try:
+            raw_payload = await request.json()
+        except Exception:
+            raw_payload = {}
+
+        enabled = True
+        if isinstance(raw_payload, dict) and "enabled" in raw_payload:
+            enabled = _coerce_bool(raw_payload.get("enabled"))
+
+        member_state = _set_member_enabled(engine, actor_user_id, enabled)
+        return {
+            "ok": True,
+            "enabled": bool(member_state.get("effective_enabled")),
+            "member": member_state,
+            "snapshot": _snapshot(engine, user_id=actor_user_id),
+            "runtime": _runtime_summary(engine, user_id=actor_user_id),
         }
 
     @app.get("/health")
@@ -810,6 +1097,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.post("/backtest/run")
     def backtest_run(
+        request: Request,
         symbol: Optional[str] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
@@ -829,8 +1117,9 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         cooldown: Optional[int] = None,
         csv_output: Optional[bool] = None,
         x_api_key: Optional[str] = Header(default=None),
+        access: Optional[str] = None,
     ):
-        actor_user_id = _authorized_actor(x_api_key)
+        actor_user_id = _authorized_actor(request, x_api_key, access)
         getter = getattr(engine, "get_strategy_config", None)
         base_profile = getter(actor_user_id) if callable(getter) else normalize_strategy_profile(engine.config, {})
         try:

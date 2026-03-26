@@ -21,7 +21,7 @@ def build_dashboard_html(
     public_mode_js = "true" if public_mode else "false"
     token_storage_keys_js = json.dumps([token_storage_key, *fallback_token_storage_keys])
     auth_hint = (
-        "Use the Telegram-issued dashboard token to open this read-only member dashboard. Admin controls stay on /dashboard."
+        "Open this dashboard from Telegram. The signed access link binds the page to your Telegram ID and unlocks user-scoped controls."
         if public_mode
         else (
             "Enter your FancyFinance API token to unlock live stats, billing visibility, and engine controls."
@@ -29,16 +29,15 @@ def build_dashboard_html(
             else "API auth is disabled. Live stats and controls are available without a token."
         )
     )
-    auth_title = "Member Access" if public_mode else "Unlock live controls"
+    auth_title = "Member Session" if public_mode else "Unlock live controls"
     brand_title = f"{app_name} Member Dashboard" if public_mode else f"{app_name} Control Center"
     hero_subtitle = (
-        "A read-only live view of FancyFinance performance, runtime health, and recent activity. "
-        "Use the main site as the front door, then keep protected operator controls on /dashboard."
+        "A Telegram-linked operations view for your own FancyFinance account, including live readiness, strategy controls, and session health."
         if public_mode
         else "The same Railway-hosted control plane behind FancyFinance, now styled to match the new public site and built for fast operator decisions."
     )
     auth_form_style = "" if auth_required else "display:none;"
-    controls_style = "display:none;" if public_mode else ""
+    controls_style = ""
     positions_style = ""
     setup_style = "display:none;" if public_mode else ""
     users_style = "display:none;" if public_mode else ""
@@ -46,7 +45,7 @@ def build_dashboard_html(
     members_nav = "" if public_mode else '<a href="#users-panel">Members</a>'
     page_title = f"{app_name} Member Dashboard" if public_mode else f"{app_name} Dashboard"
     footer_note = (
-        "Use /dashboard_api in Telegram any time you need a fresh access token."
+        "Use /dashboard_api in Telegram any time you need a fresh access link."
         if public_mode
         else "Auto-refresh runs every 3 seconds while this tab is visible."
     )
@@ -1125,16 +1124,21 @@ def build_dashboard_html(
             <div class="panel-header">
               <div>
                 <h2 class="panel-title">Live Controls</h2>
-                <div class="panel-subtitle">Direct engine actions protected by the same API token.</div>
+                <div class="panel-subtitle" id="control-subtitle">Direct engine actions protected by the current dashboard session.</div>
               </div>
               <div class="badge subtle" id="mode-badge">Mode: --</div>
             </div>
-            <div class="button-row">
+            <div class="list-grid" id="member-summary-grid" style="display:none;"></div>
+            <div class="button-row" id="admin-controls-row">
               <button class="warning" id="pause-btn">Pause Engine</button>
               <button class="success" id="resume-btn">Resume Engine</button>
               <button class="danger" id="shutdown-btn">Shutdown Engine</button>
             </div>
+            <div class="button-row" id="member-controls-row" style="display:none;">
+              <button class="primary" id="member-live-toggle-btn">Enable Live Trading</button>
+            </div>
             <div class="message" id="control-message"></div>
+            <div class="footer-note" id="member-control-note" style="display:none;"></div>
           </div>
 
           <div class="panel surface" id="runtime-panel">
@@ -1440,6 +1444,7 @@ def build_dashboard_html(
         tokenIndex: 0,
         sessionBaseline: null,
         sessionBaselineKey: "",
+        lastPayload: null,
       };
 
       if (queryToken) {
@@ -1456,9 +1461,16 @@ def build_dashboard_html(
         statusDot: document.getElementById("hero-status-dot"),
         statusText: document.getElementById("hero-status-text"),
         modeBadge: document.getElementById("mode-badge"),
+        controlPanel: document.getElementById("control-panel"),
+        controlSubtitle: document.getElementById("control-subtitle"),
         positionsPanel: document.getElementById("positions-panel"),
         setupPanel: document.getElementById("setup-panel"),
         usersPanel: document.getElementById("users-panel"),
+        adminControlsRow: document.getElementById("admin-controls-row"),
+        memberControlsRow: document.getElementById("member-controls-row"),
+        memberToggleBtn: document.getElementById("member-live-toggle-btn"),
+        memberSummaryGrid: document.getElementById("member-summary-grid"),
+        memberControlNote: document.getElementById("member-control-note"),
       };
 
       els.tokenInput.value = state.token;
@@ -1609,11 +1621,12 @@ def build_dashboard_html(
 
       function headers() {
         const result = {};
-        if (AUTH_REQUIRED) {
-          if (!state.token) {
-            throw new Error("Missing API token");
-          }
+        if (state.token) {
           result["x-api-key"] = state.token;
+          return result;
+        }
+        if (AUTH_REQUIRED && !PUBLIC_MODE) {
+          throw new Error("Missing API token");
         }
         return result;
       }
@@ -1630,15 +1643,20 @@ def build_dashboard_html(
         node.style.display = visible ? "" : "none";
       }
 
-      function applyAccessMode(memberAccess) {
-        const readOnlyMode = PUBLIC_MODE || !!memberAccess;
+      function applyAccessMode(memberAccess, publicBootstrap) {
+        const memberMode = !!memberAccess;
+        const publicMode = !!publicBootstrap;
         setVisible(els.positionsPanel, true);
-        setVisible(els.setupPanel, !readOnlyMode);
-        setVisible(els.usersPanel, !readOnlyMode);
-        setVisible(document.getElementById("control-panel"), !readOnlyMode);
+        setVisible(els.setupPanel, !memberMode && !publicMode);
+        setVisible(els.usersPanel, !memberMode && !publicMode);
+        setVisible(els.controlPanel, !publicMode);
+        setVisible(els.adminControlsRow, !memberMode && !publicMode);
+        setVisible(els.memberControlsRow, memberMode && !publicMode);
+        setVisible(els.memberSummaryGrid, memberMode && !publicMode);
+        setVisible(els.memberControlNote, memberMode && !publicMode);
         const userMetric = document.getElementById("metric-users")?.closest(".metric");
         if (userMetric) {
-          userMetric.style.display = readOnlyMode ? "none" : "";
+          userMetric.style.display = memberMode || publicMode ? "none" : "";
         }
       }
 
@@ -2292,7 +2310,75 @@ def build_dashboard_html(
         `;
       }
 
+      function renderMemberControls(member, snapshot, runtime) {
+        if (!els.memberSummaryGrid || !els.memberToggleBtn || !els.memberControlNote || !els.controlSubtitle) {
+          return;
+        }
+        if (!member) {
+          els.memberSummaryGrid.innerHTML = "";
+          els.memberControlNote.textContent = "";
+          return;
+        }
+
+        const mode = String(member.mode || snapshot?.mode || "").toLowerCase();
+        const isLiveMode = mode === "live";
+        const membershipLabel = `${humanizeMembership(member.membership_tier || "free")} / ${humanizeMembership(member.membership_status || "free")}`;
+        const emailLabel = member.email
+          ? `${member.email}${member.is_verified ? " · verified" : " · pending"}`
+          : (member.is_verified ? "Verified" : "Not linked");
+        const vaultLabel = member.runtime_api_ready
+          ? "Unlocked"
+          : member.vault_configured
+            ? "Stored, locked"
+            : "Not stored";
+        const ownerLabel = member.active_api_user_id === null || member.active_api_user_id === undefined
+          ? "No vault owner"
+          : Number(member.active_api_user_id) === Number(member.telegram_id)
+            ? "You"
+            : `Telegram ${member.active_api_user_id}`;
+        const statusTone = String(member.status_tone || "");
+
+        els.memberSummaryGrid.innerHTML = `
+          <div class="mini-card">
+            <div class="label">Membership</div>
+            <div class="value">${escapeHtml(membershipLabel)}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Email</div>
+            <div class="value ${member.is_verified ? "positive" : "amber"}">${escapeHtml(emailLabel)}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">API Vault</div>
+            <div class="value ${member.runtime_api_ready ? "positive" : member.vault_configured ? "amber" : "negative"}">${escapeHtml(vaultLabel)}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Live Owner</div>
+            <div class="value ${member.owns_runtime_session ? "" : "negative"}">${escapeHtml(ownerLabel)}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Account State</div>
+            <div class="value ${escapeHtml(statusTone)}">${escapeHtml(member.status_label || "--")}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Runtime</div>
+            <div class="value ${runtime?.runtime_api_ready ? "positive" : "amber"}">${runtime?.runtime_api_ready ? "Ready" : "Waiting"}</div>
+          </div>
+        `;
+
+        els.controlSubtitle.textContent = isLiveMode
+          ? "This panel is bound to your Telegram identity and controls your live readiness on the current deployment."
+          : "This panel is bound to your Telegram identity and controls your own simulation session on the current deployment.";
+
+        els.memberToggleBtn.textContent = isLiveMode
+          ? (member.effective_enabled ? "Disable Live Trading" : "Enable Live Trading")
+          : (member.effective_enabled ? "Pause My Simulation" : "Resume My Simulation");
+        els.memberToggleBtn.disabled = !member.can_toggle;
+        els.memberToggleBtn.className = member.effective_enabled ? "warning" : "primary";
+        els.memberControlNote.textContent = member.detail || "";
+      }
+
       function renderData(payload) {
+        state.lastPayload = payload;
         const snapshot = payload.snapshot || {};
         const performance = payload.performance || {};
         const runtime = payload.runtime || {};
@@ -2346,15 +2432,16 @@ def build_dashboard_html(
         els.statusText.textContent = snapshot.running ? (snapshot.paused ? "Running, but paused" : "Engine live") : "Engine stopped";
 
         if (memberAccess) {
-          setMessage(els.controlMessage, "Engine controls stay in Telegram. Strategy and backtesting tools are available here.", false);
+          setMessage(els.controlMessage, (payload.member || {}).detail || "Member session ready.", false);
         } else if (publicBootstrap) {
           setMessage(els.controlMessage, "Showing the live public summary. Unlock the dashboard to view positions, trades, and member detail.", false);
         }
 
-        applyAccessMode(memberAccess || publicBootstrap);
+        applyAccessMode(memberAccess, publicBootstrap);
         renderWallet(portfolio);
         renderSetup(config);
         renderStrategy(payload.strategy || {});
+        renderMemberControls(payload.member || null, snapshot, runtime);
         renderPositions(payload.positions || []);
         renderTrades(payload.recent_trades || []);
         renderActivity(payload.activity || []);
@@ -2385,7 +2472,7 @@ def build_dashboard_html(
       }
 
       async function loadDashboard() {
-        if (AUTH_REQUIRED && !state.token) {
+        if (AUTH_REQUIRED && !state.token && !PUBLIC_MODE) {
           await loadBootstrap(
             PUBLIC_MODE
               ? "Member dashboard locked. Showing the live public summary until you use /dashboard_api in Telegram."
@@ -2418,7 +2505,7 @@ def build_dashboard_html(
           const payload = await response.json();
           setMessage(
             els.authMessage,
-            payload.member_access ? "Read-only member dashboard unlocked." : (AUTH_REQUIRED ? "Dashboard unlocked." : "Dashboard is live.")
+            payload.member_access ? "Member dashboard unlocked for your Telegram-linked account." : (AUTH_REQUIRED ? "Dashboard unlocked." : "Dashboard is live.")
           );
           renderData(payload);
         } catch (error) {
@@ -2428,7 +2515,7 @@ def build_dashboard_html(
 
       async function runControl(action) {
         if (PUBLIC_MODE) {
-          setMessage(els.controlMessage, "Member overview is read-only. Use /dashboard for protected operator controls.", true);
+          setMessage(els.controlMessage, "Member controls use the live toggle below instead of admin engine actions.", true);
           return;
         }
         const requiresConfirm = action === "shutdown";
@@ -2449,6 +2536,30 @@ def build_dashboard_html(
           await loadDashboard();
         } catch (error) {
           setMessage(els.controlMessage, error.message || "Control action failed.", true);
+        }
+      }
+
+      async function runMemberToggle() {
+        const member = state.lastPayload?.member || null;
+        if (!member) {
+          setMessage(els.controlMessage, "Member control state is not loaded yet.", true);
+          return;
+        }
+
+        try {
+          const response = await fetch("/dashboard/member/live-toggle", {
+            method: "POST",
+            headers: { ...headers(), "content-type": "application/json" },
+            body: JSON.stringify({ enabled: !member.effective_enabled }),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.detail || `Toggle failed: ${response.status}`);
+          }
+          setMessage(els.controlMessage, payload.member?.detail || "Member trading state updated.");
+          await loadDashboard();
+        } catch (error) {
+          setMessage(els.controlMessage, error.message || "Could not update trading state.", true);
         }
       }
 
@@ -2475,12 +2586,16 @@ def build_dashboard_html(
             );
             state.tokenIndex = 0;
           }
+          if (PUBLIC_MODE && state.token) {
+            window.location.href = `/dashboard/member?access=${encodeURIComponent(state.token)}`;
+            return;
+          }
           await loadDashboard();
         });
       }
 
       if (clearTokenBtn) {
-        clearTokenBtn.addEventListener("click", () => {
+        clearTokenBtn.addEventListener("click", async () => {
           localStorage.removeItem(TOKEN_KEY);
           state.tokenCandidates = Array.from(
             new Set(TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "").filter(Boolean))
@@ -2488,7 +2603,13 @@ def build_dashboard_html(
           state.tokenIndex = 0;
           state.token = state.tokenCandidates[0] || "";
           els.tokenInput.value = state.token;
+          try {
+            await fetch("/dashboard/session/clear", { method: "POST" });
+          } catch (error) {
+            console.warn("Could not clear dashboard session cookie.", error);
+          }
           setMessage(els.authMessage, "Stored token cleared.");
+          await loadDashboard();
         });
       }
 
@@ -2509,6 +2630,9 @@ def build_dashboard_html(
       }
       if (shutdownBtn) {
         shutdownBtn.addEventListener("click", () => runControl("shutdown"));
+      }
+      if (els.memberToggleBtn) {
+        els.memberToggleBtn.addEventListener("click", () => runMemberToggle());
       }
 
       loadDashboard();

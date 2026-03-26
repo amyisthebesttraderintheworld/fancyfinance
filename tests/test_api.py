@@ -47,6 +47,26 @@ def _build_engine(sample_config):
             }
         ],
     }
+    db.get_user.return_value = {
+        "telegram_id": 12345,
+        "username": "amy",
+        "first_name": "Amy",
+        "email": "amy@example.com",
+        "is_verified": True,
+    }
+    db.get_membership_summary.return_value = {
+        "tier": "pro",
+        "status": "active",
+        "source": "stripe",
+        "can_live": True,
+        "can_simulation": True,
+    }
+    db.get_user_api_key_status.return_value = {
+        "configured": True,
+        "zero_knowledge": True,
+    }
+    db.get_user_member_state.return_value = {"live_enabled": False}
+    db.store_user_member_state = MagicMock()
     db.url = "https://example.supabase.co"
     db.key = "service-role"
     db.client = object()
@@ -86,6 +106,8 @@ def _build_engine(sample_config):
     engine.command_queue = SimpleNamespace(qsize=lambda: 3)
     engine.safety_paused_until = 0
     engine._websocket = object()
+    engine.active_api_user_id = 12345
+    engine._runtime_api_ready = lambda: True
     engine.db = db
     engine.stop = MagicMock()
     return engine
@@ -169,6 +191,26 @@ def _build_user_scoped_engine(sample_config):
     db = MagicMock()
     db.get_recent_trades.return_value = []
     db.get_user_summary.return_value = {"total": 2, "verified": 2, "unverified": 0, "with_api_keys": 0, "recent": []}
+    db.get_user.side_effect = lambda user_id: {
+        "telegram_id": user_id,
+        "username": "user",
+        "first_name": "User",
+        "email": "user@example.com",
+        "is_verified": True,
+    }
+    db.get_membership_summary.side_effect = lambda user_id, username="", first_name="": {
+        "tier": "pro",
+        "status": "active",
+        "source": "stripe",
+        "can_live": True,
+        "can_simulation": True,
+    }
+    db.get_user_api_key_status.side_effect = lambda user_id: {
+        "configured": True,
+        "zero_knowledge": True,
+    }
+    db.get_user_member_state.side_effect = lambda user_id: {"live_enabled": not sessions[user_id].is_paused}
+    db.store_user_member_state = MagicMock()
     db.url = "https://example.supabase.co"
     db.key = "service-role"
     db.client = object()
@@ -337,7 +379,7 @@ def test_member_dashboard_page_renders(sample_config):
 
     assert response.status_code == 200
     assert "FancyFinance Member Dashboard" in response.text
-    assert "Telegram-issued dashboard token" in response.text
+    assert "signed access link binds the page to your Telegram ID" in response.text
 
 
 def test_member_dashboard_page_uses_api_token_fallback_and_shows_positions(sample_config):
@@ -350,6 +392,7 @@ def test_member_dashboard_page_uses_api_token_fallback_and_shows_positions(sampl
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token", "fancyfinance_api_token"];' in response.text
     assert 'id="positions-panel" style=""' in response.text
     assert 'id="setup-panel" style="display:none;"' in response.text
+    assert 'id="member-live-toggle-btn"' in response.text
 
 
 def test_dashboard_redirects_member_access_links_to_member_route(sample_config):
@@ -361,6 +404,18 @@ def test_dashboard_redirects_member_access_links_to_member_route(sample_config):
 
     assert response.status_code == 307
     assert response.headers["location"] == f"/dashboard/member?access={token}"
+
+
+def test_member_dashboard_query_token_sets_cookie_and_redirects_clean(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard/member", params={"access": token}, follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/dashboard/member"
+    assert f"{api.MEMBER_ACCESS_COOKIE}=" in response.headers["set-cookie"]
 
 
 def test_dashboard_page_uses_member_token_fallback(sample_config):
@@ -417,6 +472,24 @@ def test_member_dashboard_data_returns_read_only_payload(sample_config):
     assert payload["positions"][0]["entry_time"] == 1711320000000
     assert payload["positions"][0]["mark_price"] is None
     assert payload["activity"][0]["source"] == "trade"
+    assert payload["member"]["telegram_id"] == 12345
+    assert payload["member"]["can_live"] is True
+
+
+def test_member_dashboard_data_accepts_cookie_session(sample_config):
+    app = create_app(_build_user_scoped_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    priming = client.get("/dashboard/member", params={"access": token}, follow_redirects=False)
+    assert priming.status_code == 307
+
+    response = client.get("/dashboard/member-data")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user_id"] == 12345
+    assert payload["member"]["telegram_id"] == 12345
 
 
 def test_member_dashboard_data_returns_user_scoped_positions_and_trades(sample_config):
@@ -467,6 +540,45 @@ def test_member_dashboard_data_uses_latest_market_price_for_live_upnl(sample_con
     assert payload["portfolio"]["session_delta"] == 1115.0
     assert payload["portfolio"]["marked_positions"] == 1
     assert payload["portfolio"]["winning_positions"] == 1
+
+
+def test_member_live_toggle_updates_user_scoped_session(sample_config):
+    engine = _build_user_scoped_engine(sample_config)
+    app = create_app(engine, auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    client.get("/dashboard/member", params={"access": token}, follow_redirects=False)
+
+    disable_response = client.post("/dashboard/member/live-toggle", json={"enabled": False})
+
+    assert disable_response.status_code == 200
+    assert engine.get_user_session(12345).is_paused is True
+    assert disable_response.json()["member"]["effective_enabled"] is False
+
+    enable_response = client.post("/dashboard/member/live-toggle", json={"enabled": True})
+
+    assert enable_response.status_code == 200
+    assert engine.get_user_session(12345).is_paused is False
+    assert enable_response.json()["member"]["effective_enabled"] is True
+    engine.db.store_user_member_state.assert_called()
+
+
+def test_member_live_toggle_resumes_live_engine_for_matching_runtime_owner(sample_config):
+    engine = _build_engine(sample_config)
+    engine.config["mode"] = "live"
+    engine.is_paused = True
+    app = create_app(engine, auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    client.get("/dashboard/member", params={"access": token}, follow_redirects=False)
+
+    response = client.post("/dashboard/member/live-toggle", json={"enabled": True})
+
+    assert response.status_code == 200
+    assert engine.is_paused is False
+    assert response.json()["member"]["effective_enabled"] is True
 
 
 def test_backtest_run_endpoint_returns_report(sample_config, monkeypatch):
