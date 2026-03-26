@@ -1,1 +1,0 @@
-{"enabled": true, "direction": "BOTH", "min_score": 120, "min_score_gap": 30, "timeframe": "4H", "min_volume": 1000000, "workers": 100, "rate_limit_rps": 50.0, "interval": 300, "timestamp": "2026-03-23T20:23:59.945060"}
