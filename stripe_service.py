@@ -156,11 +156,25 @@ class StripeService:
         except (TypeError, ValueError, OSError):
             return None
 
+    def _extract_customer_email(self, obj: Dict[str, Any]) -> str:
+        customer_details = obj.get("customer_details") or {}
+        metadata = obj.get("metadata") or {}
+        for candidate in (
+            obj.get("customer_email"),
+            customer_details.get("email"),
+            metadata.get("email"),
+        ):
+            email = str(candidate or "").strip().lower()
+            if email:
+                return email
+        return ""
+
     def process_webhook(self, *, payload: bytes, signature_header: str, db: SupabaseManager) -> Dict[str, Any]:
         self._verify_signature(payload, signature_header)
         event = json.loads(payload.decode("utf-8"))
         event_type = event.get("type") or ""
         obj = ((event.get("data") or {}).get("object") or {})
+        customer_email = self._extract_customer_email(obj)
 
         handled = False
         target_user = None
@@ -184,6 +198,18 @@ class StripeService:
                         period_end=None,
                     )
                 handled = True
+            elif obj.get("mode") == "subscription":
+                target_user = db.find_user_by_email(customer_email)
+                if target_user and obj.get("payment_status") in {"paid", "no_payment_required"}:
+                    initial_status = "trialing" if obj.get("payment_status") == "no_payment_required" and self.trial_days > 0 else "active"
+                    db.activate_paid_membership_from_stripe(
+                        target_user["telegram_id"],
+                        customer_id=obj.get("customer"),
+                        subscription_id=obj.get("subscription"),
+                        subscription_status=initial_status,
+                        period_end=None,
+                    )
+                    handled = True
 
         elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
             customer_id = obj.get("customer")
@@ -198,6 +224,8 @@ class StripeService:
                 target_user = db.find_user_by_stripe_subscription_id(subscription_id)
             if not target_user and customer_id:
                 target_user = db.find_user_by_stripe_customer_id(customer_id)
+            if not target_user and customer_email:
+                target_user = db.find_user_by_email(customer_email)
 
             if target_user:
                 period_end = self._period_end_from_unix(obj.get("current_period_end"))
@@ -228,6 +256,7 @@ class StripeService:
             target_user = (
                 db.find_user_by_stripe_subscription_id(subscription_id)
                 or db.find_user_by_stripe_customer_id(customer_id)
+                or db.find_user_by_email(customer_email)
             )
             if target_user:
                 db.sync_stripe_customer(
@@ -249,6 +278,7 @@ class StripeService:
             target_user = (
                 db.find_user_by_stripe_subscription_id(subscription_id)
                 or db.find_user_by_stripe_customer_id(customer_id)
+                or db.find_user_by_email(customer_email)
             )
             if target_user:
                 line_items = ((obj.get("lines") or {}).get("data") or [])
@@ -270,6 +300,7 @@ class StripeService:
             target_user = (
                 db.find_user_by_stripe_subscription_id(subscription_id)
                 or db.find_user_by_stripe_customer_id(customer_id)
+                or db.find_user_by_email(customer_email)
             )
             if target_user:
                 db.sync_stripe_customer(

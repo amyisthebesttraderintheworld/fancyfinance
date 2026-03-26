@@ -861,6 +861,29 @@ class SupabaseManager:
             self.logger.error(f"Failed to find user by Stripe subscription {subscription_id}: {exc}")
             return None
 
+    def find_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        normalized_email = str(email or "").strip().lower()
+        if not normalized_email:
+            return None
+
+        for user in self._users.values():
+            if str(user.get("email") or "").strip().lower() == normalized_email:
+                return self._normalize_user_record(user)
+
+        if not self.client:
+            return None
+
+        try:
+            response = self.client.table("users").select("*").eq("email", normalized_email).limit(1).execute()
+            if not response.data:
+                return None
+            user = self._normalize_user_record(response.data[0])
+            self._users[user["telegram_id"]] = user
+            return user
+        except Exception as exc:
+            self.logger.error(f"Failed to find user by email {normalized_email}: {exc}")
+            return None
+
     def sync_stripe_customer(
         self,
         telegram_id: int,

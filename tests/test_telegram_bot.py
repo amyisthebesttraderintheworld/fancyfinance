@@ -341,28 +341,23 @@ async def test_menu_button_handler_routes_settings(mock_update, mock_context):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_command_returns_checkout_url(mock_update, mock_context, mock_config):
+async def test_subscribe_command_returns_subscription_page_url(mock_update, mock_context, mock_config):
     telegram_bot.config = {
         **mock_config,
         "stripe": {
-            "secret_key": "sk_test_123",
-            "price_id": "price_123",
+            "display_price": "$6.99/month",
             "trial_days": 7,
-            "success_url": "https://example.com/success",
-            "cancel_url": "https://example.com/cancel",
+            "subscribe_url": "https://fancy-bot-front.lovable.app/",
         },
     }
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345, "email": "user@example.com"}):
-        with patch("telegram_bot.StripeService") as mock_stripe:
-            mock_stripe.return_value.is_checkout_configured.return_value = True
-            mock_stripe.return_value.create_checkout_session.return_value = {"url": "https://checkout.stripe.com/pay/cs_test"}
-
-            await subscribe_command(mock_update, mock_context)
+        await subscribe_command(mock_update, mock_context)
 
     mock_update.message.reply_text.assert_called()
-    assert "checkout.stripe.com" in mock_update.message.reply_text.call_args[0][0]
+    assert "fancy-bot-front.lovable.app" in mock_update.message.reply_text.call_args[0][0]
     assert "Trial Pro" in mock_update.message.reply_text.call_args[0][0]
+    assert "same email address you verified in Telegram" in mock_update.message.reply_text.call_args[0][0]
 
 
 @pytest.mark.asyncio

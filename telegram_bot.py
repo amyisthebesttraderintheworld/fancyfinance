@@ -299,6 +299,21 @@ def _dashboard_base_url() -> str:
     return ""
 
 
+def _subscription_page_url() -> str:
+    stripe_cfg = (config or {}).get("stripe") or {}
+    marketing_cfg = (config or {}).get("marketing") or {}
+    for candidate in (
+        stripe_cfg.get("subscribe_url"),
+        stripe_cfg.get("checkout_landing_url"),
+        marketing_cfg.get("subscribe_url"),
+        "https://fancy-bot-front.lovable.app/",
+    ):
+        url = str(candidate or "").strip()
+        if url:
+            return url
+    return "https://fancy-bot-front.lovable.app/"
+
+
 def _default_backtest_candles() -> int:
     return min(ALLOWED_REMOTE_CANDLE_COUNTS)
 
@@ -829,16 +844,8 @@ async def rotate_dashboard_key_command(update: Update, context: ContextTypes.DEF
 
 
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    stripe_service = _stripe_service()
     display_price = _display_price()
     trial_days = _trial_days()
-    if not stripe_service.is_checkout_configured():
-        await _reply(
-            update,
-            "❌ Stripe checkout is not configured yet. Ask the admin to set the Stripe Railway variables.",
-            parse_mode="Markdown",
-        )
-        return
 
     user = db.get_or_create_user(
         update.effective_user.id,
@@ -867,32 +874,17 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    try:
-        session = await asyncio.to_thread(stripe_service.create_checkout_session, user)
-    except Exception as exc:
-        logger.error(f"Failed to create Stripe checkout session: {exc}")
-        await _reply(
-            update,
-            "❌ Could not create a payment session right now. Please try again shortly.",
-            parse_mode="Markdown",
-        )
-        return
-
-    checkout_url = session.get("url")
-    if not checkout_url:
-        await _reply(update, "❌ Stripe did not return a checkout URL.")
-        return
-
     subscribe_parts = [f"💳 *Upgrade to Pro ({display_price})*\n\n"]
     if trial_days > 0:
         subscribe_parts.append(
-            f"Your checkout starts with a *{trial_days}-day Trial Pro* period before billing begins.\n\n"
+            f"Your subscription starts with a *{trial_days}-day Trial Pro* period before billing begins.\n\n"
         )
     subscribe_parts.extend(
         [
-            "Use the secure Stripe checkout link below to activate your membership:\n",
-            f"{checkout_url}\n\n",
-            "After checkout succeeds, your Trial Pro or Pro access should activate automatically.",
+            "Open the subscription page below to activate your membership:\n",
+            f"{_subscription_page_url()}\n\n",
+            "Use the same email address you verified in Telegram so FancyFinance can match your Stripe subscription automatically.\n\n",
+            "After checkout succeeds there, your Trial Pro or Pro access should activate automatically.",
         ]
     )
     subscribe_message = "".join(subscribe_parts)
@@ -1324,7 +1316,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/rotate_dashboard_key - Mint a fresh member dashboard token\n"
         "/backtest - Run a free Phemex backtest on one market or the scanner universe\n"
         "/set_config - Save a strategy profile for dashboard, sim, and live\n"
-        f"/subscribe - Start the {trial_days}-day Trial Pro / Pro checkout\n"
+        f"/subscribe - Open the {trial_days}-day Trial Pro / Pro subscription page\n"
         "/manage_subscription - Open billing portal\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
         "/unlock_api - Unlock your vault for the current bot session\n"
@@ -1373,7 +1365,7 @@ async def set_commands(application: Application):
         BotCommand("rotate_dashboard_key", "Refresh your member dashboard token"),
         BotCommand("backtest", "Run a free market or universe backtest"),
         BotCommand("set_config", "Save your strategy profile"),
-        BotCommand("subscribe", "Start Trial Pro / Stripe checkout"),
+        BotCommand("subscribe", "Open the subscription page"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
         BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
         BotCommand("status", "Check bot status"),

@@ -122,6 +122,20 @@ def test_zero_knowledge_vault_round_trip(monkeypatch):
     }
 
 
+def test_find_user_by_email_matches_case_insensitively(monkeypatch):
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+
+    db = SupabaseManager()
+    user = db.get_or_create_user(12345, "tester", "Test")
+    user["email"] = "user@example.com"
+
+    matched = db.find_user_by_email("USER@EXAMPLE.COM")
+
+    assert matched is not None
+    assert matched["telegram_id"] == 12345
+
+
 def test_zero_knowledge_vault_rejects_wrong_passphrase(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
