@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import time as time_module
 from copy import deepcopy
 from datetime import datetime, time, timedelta
 from typing import Any, Optional
@@ -14,6 +15,7 @@ from strategy_profile import ALLOWED_BACKTEST_CANDLES, normalize_strategy_profil
 
 logger = get_logger("BacktestService")
 ALLOWED_REMOTE_CANDLE_COUNTS = set(ALLOWED_BACKTEST_CANDLES)
+RECENT_FETCH_RETRY_DELAYS_SECONDS = (0.75, 1.5, 3.0)
 
 
 class BacktestServiceError(Exception):
@@ -253,7 +255,30 @@ def _fetch_remote_recent_dataset_with_client(
         )
     exchange_symbol = _resolve_ccxt_symbol(client, symbol)
 
-    rows = client.fetch_ohlcv(exchange_symbol, timeframe=timeframe, limit=candles)
+    last_error: Optional[Exception] = None
+    rows: list[list[Any]] = []
+    for attempt, delay_seconds in enumerate((0.0, *RECENT_FETCH_RETRY_DELAYS_SECONDS), start=1):
+        if delay_seconds > 0:
+            time_module.sleep(delay_seconds)
+        try:
+            rows = client.fetch_ohlcv(exchange_symbol, timeframe=timeframe, limit=candles)
+            last_error = None
+            break
+        except Exception as exc:
+            last_error = exc
+            if "too many requests" not in str(exc).lower() and "39995" not in str(exc):
+                raise
+            logger.warning(
+                "Rate-limited fetching recent candles for {} on {} (attempt {}/{}). Retrying...",
+                symbol,
+                timeframe,
+                attempt,
+                len(RECENT_FETCH_RETRY_DELAYS_SECONDS) + 1,
+            )
+    if last_error is not None:
+        raise BacktestServiceError(
+            f"Phemex rate-limited `{symbol}` on `{timeframe}` while fetching `{candles}` candles. Please try again in a moment."
+        ) from last_error
     if not rows:
         return pd.DataFrame()
 
@@ -436,8 +461,18 @@ def run_backtest_recent_universe(
     config = deepcopy(base_config or {})
     normalized_profile = _apply_strategy_profile(config, strategy_profile)
     symbols = _scanner_picked_symbols(config)
+    symbol_source = "scanner_picks"
+    scope_label = "scanner universe"
     if not symbols:
-        raise BacktestServiceError("The scanner did not pick any assets for a universe backtest right now.")
+        symbols = _configured_symbols(config)
+        if not symbols:
+            raise BacktestServiceError("The scanner did not pick any assets for a universe backtest right now.")
+        symbol_source = "configured_fallback"
+        scope_label = "configured fallback universe"
+        logger.info(
+            "Scanner returned no assets for a universe backtest. Falling back to configured symbols: {}",
+            symbols,
+        )
 
     resolved_timeframe = timeframe or config.get("strategy", {}).get("timeframe") or "1m"
     config["strategy"]["timeframe"] = resolved_timeframe
@@ -455,7 +490,7 @@ def run_backtest_recent_universe(
                 )
             per_symbol.append(_run_backtester(config, symbol, resolved_timeframe, frame))
         except Exception as exc:
-            logger.warning("Skipping recent universe backtest for %s: %s", symbol, exc)
+            logger.warning("Skipping recent universe backtest for {}: {}", symbol, exc)
             failures.append({"symbol": symbol, "reason": str(exc)})
 
     if not per_symbol:
@@ -500,8 +535,8 @@ def run_backtest_recent_universe(
     payload = {
         "symbol": "SCANNER_UNIVERSE",
         "scope": "universe",
-        "scope_label": "scanner universe",
-        "symbol_source": "scanner_picks",
+        "scope_label": scope_label,
+        "symbol_source": symbol_source,
         "timeframe": resolved_timeframe,
         "start_date": start_date,
         "end_date": end_date,

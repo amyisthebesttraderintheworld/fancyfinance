@@ -127,6 +127,37 @@ def test_run_backtest_recent_universe_uses_scanner_picks(sample_config, monkeypa
     assert result["successful_symbols"] == 1
 
 
+def test_run_backtest_recent_universe_falls_back_to_configured_symbols(sample_config, monkeypatch):
+    dates = pd.date_range("2026-03-24", periods=500, freq="1min")
+    frame = pd.DataFrame(
+        {
+            "timestamp": [int(ts.timestamp() * 1000) for ts in dates],
+            "open": [1000 + i for i in range(500)],
+            "high": [1005 + i for i in range(500)],
+            "low": [995 + i for i in range(500)],
+            "close": [1000 + i for i in range(500)],
+            "volume": [1000] * 500,
+        },
+        index=dates,
+    )
+
+    sample_config["symbols"] = ["BTCUSD", "ETHUSD"]
+    monkeypatch.setattr(backtest_service, "_scanner_picked_symbols", lambda config: [])
+    monkeypatch.setattr(backtest_service, "_create_exchange_client", lambda *args, **kwargs: object())
+    monkeypatch.setattr(backtest_service, "_fetch_remote_recent_dataset_with_client", lambda *args, **kwargs: frame)
+
+    result = backtest_service.run_backtest_recent_universe(
+        sample_config,
+        timeframe="1m",
+        candles=500,
+    )
+
+    assert result["symbols"] == ["BTCUSD", "ETHUSD"]
+    assert result["successful_symbols"] == 2
+    assert result["symbol_source"] == "configured_fallback"
+    assert result["scope_label"] == "configured fallback universe"
+
+
 def test_run_backtest_recent_rejects_invalid_candle_count(sample_config):
     with pytest.raises(backtest_service.BacktestServiceError):
         backtest_service.run_backtest_recent(
@@ -135,6 +166,29 @@ def test_run_backtest_recent_rejects_invalid_candle_count(sample_config):
             timeframe="1m",
             candles=750,
         )
+
+
+def test_fetch_remote_recent_dataset_with_client_retries_rate_limit(monkeypatch):
+    class FakeClient:
+        markets = {"BTC/USDT:USDT": {"id": "BTCUSDT"}}
+
+        def fetch_ohlcv(self, symbol, timeframe=None, limit=None):
+            if not hasattr(self, "calls"):
+                self.calls = 0
+            self.calls += 1
+            if self.calls < 3:
+                raise Exception('phemex {"code": "39995","msg": "Too many requests."}')
+            return [
+                [1711320000000, 100.0, 101.0, 99.0, 100.5, 1000.0],
+                [1711320060000, 100.5, 101.5, 100.0, 101.0, 1000.0],
+            ]
+
+    monkeypatch.setattr(backtest_service.time_module, "sleep", lambda *_args, **_kwargs: None)
+
+    frame = backtest_service._fetch_remote_recent_dataset_with_client(FakeClient(), "BTCUSDT", "1m", 500)
+
+    assert not frame.empty
+    assert len(frame) == 2
 
 
 def test_format_backtest_summary_contains_key_metrics():
