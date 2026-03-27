@@ -104,20 +104,43 @@ class StripeService:
         *,
         customer_id: str,
         return_url: Optional[str] = None,
+        flow_type: Optional[str] = None,
+        subscription_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not self.is_portal_configured():
             raise ValueError("Stripe billing portal is not fully configured")
         if not customer_id:
             raise ValueError("Stripe customer ID is required")
 
+        resolved_return_url = return_url or self.portal_return_url
+        payload: Dict[str, Any] = {
+            "customer": customer_id,
+            "return_url": resolved_return_url,
+        }
+
+        normalized_flow = str(flow_type or "").strip().lower()
+        if normalized_flow:
+            if normalized_flow == "payment_method_update":
+                payload["flow_data[type]"] = "payment_method_update"
+            elif normalized_flow == "subscription_cancel":
+                if not subscription_id:
+                    raise ValueError("Stripe subscription ID is required for cancellation")
+                payload["flow_data[type]"] = "subscription_cancel"
+                payload["flow_data[subscription_cancel][subscription]"] = subscription_id
+            else:
+                raise ValueError("Unsupported Stripe billing portal flow")
+
+            payload["flow_data[after_completion][type]"] = "redirect"
+            payload["flow_data[after_completion][redirect][return_url]"] = resolved_return_url
+
         session = self._post(
             "/billing_portal/sessions",
-            {
-                "customer": customer_id,
-                "return_url": return_url or self.portal_return_url,
-            },
+            payload,
         )
-        self.logger.info(f"Created Stripe billing portal session for customer {customer_id}.")
+        if normalized_flow:
+            self.logger.info(f"Created Stripe billing portal `{normalized_flow}` session for customer {customer_id}.")
+        else:
+            self.logger.info(f"Created Stripe billing portal session for customer {customer_id}.")
         return session
 
     def _verify_signature(self, payload: bytes, signature_header: str):

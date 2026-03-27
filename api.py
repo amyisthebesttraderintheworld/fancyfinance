@@ -14,7 +14,7 @@ from urllib.parse import quote
 import requests
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from backtest_service import ALLOWED_REMOTE_CANDLE_COUNTS, BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
@@ -130,6 +130,26 @@ def _member_access_cookie_secure(request: Optional[Request]) -> bool:
     if request is None:
         return False
     return request.url.scheme == "https"
+
+
+def _apply_no_store(
+    response,
+    *,
+    private: bool = False,
+    vary_cookie: bool = False,
+):
+    directives = ["no-store", "max-age=0", "must-revalidate"]
+    if private:
+        directives.insert(0, "private")
+    response.headers["Cache-Control"] = ", ".join(directives)
+    response.headers["Pragma"] = "no-cache"
+    if vary_cookie:
+        existing_vary = str(response.headers.get("Vary") or "").strip()
+        vary_values = [value.strip() for value in existing_vary.split(",") if value.strip()]
+        if "Cookie" not in vary_values:
+            vary_values.append("Cookie")
+        response.headers["Vary"] = ", ".join(vary_values)
+    return response
 
 
 def _first_existing_path(*candidates: Path) -> Optional[Path]:
@@ -613,6 +633,7 @@ def _runtime_summary(engine, user_id: Optional[int] = None):
 
 def _member_profile(engine, user_id: int) -> Dict[str, Any]:
     db = getattr(engine, "db", None)
+    stripe_service = StripeService(getattr(engine, "config", {}))
     user: Dict[str, Any] = {}
     user_getter = getattr(db, "get_user", None)
     if callable(user_getter):
@@ -664,12 +685,18 @@ def _member_profile(engine, user_id: int) -> Dict[str, Any]:
     desired_enabled = bool(stored_state.get("live_enabled", effective_enabled))
     is_verified = bool(user.get("is_verified"))
     email = user.get("email") or user.get("pending_email")
+    membership_expires_at = user.get("membership_expires_at")
+    trial_started_at = user.get("trial_started_at")
+    stripe_customer_id = str(user.get("stripe_customer_id") or "").strip()
+    stripe_subscription_id = str(user.get("stripe_subscription_id") or "").strip()
+    stripe_subscription_status = str(user.get("stripe_subscription_status") or "").strip()
     owns_runtime_session = active_api_user_id in {None, user_id}
     can_live = bool(membership.get("can_live"))
     can_simulation = bool(membership.get("can_simulation"))
     vault_configured = bool(vault.get("configured"))
     runtime_api_ready = bool(runtime.get("runtime_api_ready"))
     pause_remaining = int(runtime.get("safety_pause_remaining_seconds") or 0)
+    billing_portal_ready = bool(stripe_customer_id and stripe_service.is_portal_configured())
 
     status_label = "Locked"
     status_tone = "negative"
@@ -733,6 +760,8 @@ def _member_profile(engine, user_id: int) -> Dict[str, Any]:
         "membership_tier": membership.get("tier", "free"),
         "membership_status": membership.get("status", "free"),
         "membership_source": membership.get("source", "manual"),
+        "membership_expires_at": membership_expires_at,
+        "trial_started_at": trial_started_at,
         "can_live": can_live,
         "can_simulation": can_simulation,
         "vault_configured": vault_configured,
@@ -743,6 +772,10 @@ def _member_profile(engine, user_id: int) -> Dict[str, Any]:
         "live_enabled": desired_enabled,
         "effective_enabled": effective_enabled,
         "can_toggle": can_toggle,
+        "billing_portal_ready": billing_portal_ready,
+        "billing_customer_on_file": bool(stripe_customer_id),
+        "billing_subscription_on_file": bool(stripe_subscription_id),
+        "stripe_subscription_status": stripe_subscription_status,
         "status_label": status_label,
         "status_tone": status_tone,
         "detail": detail,
@@ -961,13 +994,18 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard(request: Request, access: Optional[str] = None):
         if access:
-            return RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307)
+            return _apply_no_store(
+                RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307),
+                private=True,
+                vary_cookie=True,
+            )
         response = HTMLResponse(
             build_dashboard_html(
                 APP_NAME,
                 __version__,
                 auth_required=True,
                 public_mode=True,
+                member_session_mode=False,
                 data_endpoint="/dashboard/member-data",
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
@@ -984,14 +1022,18 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 _authorize_member_dashboard(auth_token, existing_cookie)
             except HTTPException:
                 response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
-        return response
+        return _apply_no_store(response, vary_cookie=True)
 
     @app.get("/dashboard/login/telegram", response_class=RedirectResponse)
     def dashboard_login_via_telegram(request: Request):
         if not auth_token or not telegram_login.get("bot_token"):
-            return RedirectResponse(
-                url=f"/dashboard?login_error={quote('Telegram dashboard login is not configured yet.', safe='')}",
-                status_code=307,
+            return _apply_no_store(
+                RedirectResponse(
+                    url=f"/dashboard?login_error={quote('Telegram dashboard login is not configured yet.', safe='')}",
+                    status_code=307,
+                ),
+                private=True,
+                vary_cookie=True,
             )
 
         try:
@@ -1001,9 +1043,13 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             )
         except DashboardAccessError as exc:
             logger.warning(f"Rejected Telegram dashboard login: {exc}")
-            return RedirectResponse(
-                url=f"/dashboard?login_error={quote(str(exc), safe='')}",
-                status_code=307,
+            return _apply_no_store(
+                RedirectResponse(
+                    url=f"/dashboard?login_error={quote(str(exc), safe='')}",
+                    status_code=307,
+                ),
+                private=True,
+                vary_cookie=True,
             )
 
         user_id = int(telegram_user["id"])
@@ -1025,7 +1071,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             user_id,
             ttl_seconds=DEFAULT_TOKEN_TTL_SECONDS,
         )
-        response = RedirectResponse(url="/dashboard", status_code=307)
+        response = RedirectResponse(url="/dashboard/member", status_code=307)
         response.set_cookie(
             MEMBER_ACCESS_COOKIE,
             member_token,
@@ -1034,7 +1080,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             secure=_member_access_cookie_secure(request),
             path="/",
         )
-        return response
+        return _apply_no_store(response, private=True, vary_cookie=True)
 
     @app.get("/dashboard/admin", response_class=HTMLResponse)
     def dashboard_admin():
@@ -1096,7 +1142,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 secure=_member_access_cookie_secure(request),
                 path="/",
             )
-            return response
+            return _apply_no_store(response, private=True, vary_cookie=True)
 
         response = HTMLResponse(
             build_dashboard_html(
@@ -1104,6 +1150,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 __version__,
                 auth_required=True,
                 public_mode=True,
+                member_session_mode=True,
                 data_endpoint="/dashboard/member-data",
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
@@ -1120,20 +1167,109 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 _authorize_member_dashboard(auth_token, existing_cookie)
             except HTTPException:
                 response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
-        return response
+        return _apply_no_store(response, private=True, vary_cookie=True)
+
+    @app.get("/account", response_class=RedirectResponse)
+    def member_account(access: Optional[str] = None):
+        target = "/dashboard/member#account-panel"
+        if access:
+            target = f"/dashboard/member?access={quote(access, safe='')}#account-panel"
+        return _apply_no_store(RedirectResponse(url=target, status_code=307), private=True, vary_cookie=True)
+
+    @app.post("/account/portal-session")
+    async def member_account_portal_session(
+        request: Request,
+        x_api_key: Optional[str] = Header(default=None),
+        access: Optional[str] = None,
+    ):
+        user_id = _authorized_member(request, x_api_key, access)
+        if not stripe_service.is_portal_configured():
+            raise HTTPException(status_code=503, detail="Stripe billing portal is not fully configured")
+
+        try:
+            raw_payload = await request.json()
+        except Exception:
+            raw_payload = {}
+
+        flow = "portal"
+        if isinstance(raw_payload, dict):
+            flow = str(raw_payload.get("flow") or "portal").strip().lower()
+
+        db = getattr(engine, "db", None)
+        user = None
+        get_user = getattr(db, "get_user", None)
+        if callable(get_user):
+            user = get_user(user_id)
+        if not isinstance(user, dict):
+            raise HTTPException(status_code=404, detail="Could not load your account profile")
+
+        stripe_customer_id = str(user.get("stripe_customer_id") or "").strip()
+        stripe_subscription_id = str(user.get("stripe_subscription_id") or "").strip()
+        if not stripe_customer_id:
+            raise HTTPException(status_code=404, detail="No Stripe billing account is linked to this member yet")
+
+        portal_kwargs: Dict[str, Any] = {}
+        if flow in {"portal", "receipts", "billing"}:
+            normalized_flow = "portal"
+        elif flow in {"payment", "payment_method", "payment_method_update"}:
+            normalized_flow = "payment_method_update"
+            portal_kwargs["flow_type"] = normalized_flow
+        elif flow in {"cancel", "cancel_membership", "subscription_cancel"}:
+            if not stripe_subscription_id:
+                raise HTTPException(status_code=404, detail="No Stripe subscription is linked to this member yet")
+            normalized_flow = "subscription_cancel"
+            portal_kwargs["flow_type"] = normalized_flow
+            portal_kwargs["subscription_id"] = stripe_subscription_id
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported billing portal action")
+
+        base_url = str(request.base_url).rstrip("/")
+        return_url = f"{base_url}/account"
+        try:
+            session = await asyncio.to_thread(
+                stripe_service.create_customer_portal_session,
+                customer_id=stripe_customer_id,
+                return_url=return_url,
+                **portal_kwargs,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error(f"Failed to create member billing portal session for {user_id}: {exc}")
+            raise HTTPException(status_code=502, detail="Could not open the billing portal right now") from exc
+
+        portal_url = str(session.get("url") or "").strip()
+        if not portal_url:
+            raise HTTPException(status_code=502, detail="Stripe did not return a billing portal URL")
+
+        return _apply_no_store(
+            JSONResponse(
+                {
+                    "ok": True,
+                    "flow": normalized_flow,
+                    "url": portal_url,
+                }
+            ),
+            private=True,
+            vary_cookie=True,
+        )
 
     @app.post("/dashboard/session/clear")
     def clear_dashboard_session():
         response = HTMLResponse("")
         response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
-        return response
+        return _apply_no_store(response, private=True, vary_cookie=True)
 
     @app.get("/dashboard/data")
     def dashboard_data(request: Request, x_api_key: Optional[str] = Header(default=None)):
         member_user_id = _authorized_actor(request, x_api_key)
         if member_user_id is not None:
-            return _member_dashboard_payload(engine, member_user_id)
-        return _dashboard_payload(engine, auth_token)
+            return _apply_no_store(
+                JSONResponse(_member_dashboard_payload(engine, member_user_id)),
+                private=True,
+                vary_cookie=True,
+            )
+        return _apply_no_store(JSONResponse(_dashboard_payload(engine, auth_token)), private=True, vary_cookie=True)
 
     @app.get("/dashboard/member-data")
     def dashboard_member_data(
@@ -1142,11 +1278,15 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         access: Optional[str] = None,
     ):
         user_id = _authorized_member(request, x_api_key, access)
-        return _member_dashboard_payload(engine, user_id)
+        return _apply_no_store(
+            JSONResponse(_member_dashboard_payload(engine, user_id)),
+            private=True,
+            vary_cookie=True,
+        )
 
     @app.get("/dashboard/bootstrap")
     def dashboard_bootstrap():
-        return _public_dashboard_payload(engine)
+        return _apply_no_store(JSONResponse(_public_dashboard_payload(engine)), vary_cookie=True)
 
     @app.post("/strategy/config")
     async def strategy_config_save(request: Request, x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):

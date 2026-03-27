@@ -191,3 +191,66 @@ def test_create_checkout_session_includes_trial_for_new_customer(monkeypatch):
     assert session["url"].startswith("https://checkout.stripe.com/")
     assert captured_payload["endpoint"] == "/checkout/sessions"
     assert captured_payload["data"]["subscription_data[trial_period_days]"] == 7
+
+
+def test_create_customer_portal_session_supports_payment_method_updates(monkeypatch):
+    config = {
+        "stripe": {
+            "secret_key": "sk_test_123",
+            "portal_return_url": "https://example.com/account",
+        }
+    }
+    service = StripeService(config)
+
+    captured_payload = {}
+
+    def fake_post(endpoint, data):
+        captured_payload["endpoint"] = endpoint
+        captured_payload["data"] = data
+        return {"url": "https://billing.stripe.com/session/test"}
+
+    monkeypatch.setattr(service, "_post", fake_post)
+
+    session = service.create_customer_portal_session(
+        customer_id="cus_123",
+        flow_type="payment_method_update",
+    )
+
+    assert session["url"].startswith("https://billing.stripe.com/")
+    assert captured_payload["endpoint"] == "/billing_portal/sessions"
+    assert captured_payload["data"]["customer"] == "cus_123"
+    assert captured_payload["data"]["return_url"] == "https://example.com/account"
+    assert captured_payload["data"]["flow_data[type]"] == "payment_method_update"
+    assert captured_payload["data"]["flow_data[after_completion][type]"] == "redirect"
+    assert captured_payload["data"]["flow_data[after_completion][redirect][return_url]"] == "https://example.com/account"
+
+
+def test_create_customer_portal_session_supports_subscription_cancel(monkeypatch):
+    config = {
+        "stripe": {
+            "secret_key": "sk_test_123",
+            "portal_return_url": "https://example.com/account",
+        }
+    }
+    service = StripeService(config)
+
+    captured_payload = {}
+
+    def fake_post(endpoint, data):
+        captured_payload["endpoint"] = endpoint
+        captured_payload["data"] = data
+        return {"url": "https://billing.stripe.com/session/test"}
+
+    monkeypatch.setattr(service, "_post", fake_post)
+
+    session = service.create_customer_portal_session(
+        customer_id="cus_123",
+        flow_type="subscription_cancel",
+        subscription_id="sub_123",
+    )
+
+    assert session["url"].startswith("https://billing.stripe.com/")
+    assert captured_payload["endpoint"] == "/billing_portal/sessions"
+    assert captured_payload["data"]["customer"] == "cus_123"
+    assert captured_payload["data"]["flow_data[type]"] == "subscription_cancel"
+    assert captured_payload["data"]["flow_data[subscription_cancel][subscription]"] == "sub_123"

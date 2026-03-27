@@ -458,6 +458,7 @@ def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sampl
 
     assert response.status_code == 200
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
+    assert 'const MEMBER_SESSION_MODE = true;' in response.text
     assert 'const PERSIST_TOKEN = false;' in response.text
     assert 'const TELEGRAM_LOGIN_ENABLED = true;' in response.text
     assert 'const TELEGRAM_BOT_USERNAME = "FancyFinanceBot";' in response.text
@@ -501,6 +502,7 @@ def test_dashboard_page_uses_member_token_fallback(sample_config):
     assert response.status_code == 200
     assert 'const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";' in response.text
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
+    assert 'const MEMBER_SESSION_MODE = false;' in response.text
     assert 'const PERSIST_TOKEN = false;' in response.text
     assert 'id="telegram-login-widget"' in response.text
     assert "your subscription checkout completed" in response.text
@@ -518,9 +520,20 @@ def test_dashboard_telegram_login_sets_member_cookie(sample_config):
     )
 
     assert response.status_code == 307
-    assert response.headers["location"] == "/dashboard"
+    assert response.headers["location"] == "/dashboard/member"
     assert f"{api.MEMBER_ACCESS_COOKIE}=" in response.headers["set-cookie"]
     engine.db.get_or_create_user.assert_called_with(12345, "amy", "Amy")
+
+
+def test_member_dashboard_response_is_private_no_store(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/member")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store, max-age=0, must-revalidate"
+    assert response.headers["vary"] == "Cookie"
 
 
 def test_dashboard_telegram_login_rejects_invalid_signature(sample_config):
@@ -580,6 +593,8 @@ def test_member_dashboard_data_returns_read_only_payload(sample_config):
     assert payload["activity"][0]["source"] == "trade"
     assert payload["member"]["telegram_id"] == 12345
     assert payload["member"]["can_live"] is True
+    assert response.headers["cache-control"] == "private, no-store, max-age=0, must-revalidate"
+    assert response.headers["vary"] == "Cookie"
 
 
 def test_member_dashboard_data_accepts_cookie_session(sample_config):

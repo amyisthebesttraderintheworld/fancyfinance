@@ -1379,6 +1379,7 @@
     <script>
       const AUTH_REQUIRED = __AUTH_REQUIRED_JS__;
       const PUBLIC_MODE = __PUBLIC_MODE_JS__;
+      const MEMBER_SESSION_MODE = __MEMBER_SESSION_MODE_JS__;
       const PERSIST_TOKEN = __PERSIST_TOKEN_JS__;
       const DATA_ENDPOINT = "__DATA_ENDPOINT__";
       const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";
@@ -2557,6 +2558,14 @@
         }
       }
 
+      async function refreshDashboard() {
+        if (PUBLIC_MODE && !MEMBER_SESSION_MODE) {
+          await loadBootstrap();
+          return;
+        }
+        await loadDashboard();
+      }
+
       async function runControl(action) {
         if (PUBLIC_MODE) {
           setMessage(els.controlMessage, "Member controls use the live toggle below instead of admin engine actions.", true);
@@ -2663,7 +2672,7 @@
             console.warn("Could not clear dashboard session cookie.", error);
           }
           setMessage(els.authMessage, PUBLIC_MODE ? "Signed out of the dashboard session." : "Stored admin token cleared.");
-          await loadDashboard();
+          await refreshDashboard();
         });
       }
 
@@ -2678,15 +2687,15 @@
             console.warn("Could not clear dashboard session cookie.", error);
           }
           setMessage(els.authMessage, "Signed out of the dashboard session.");
-          await loadDashboard();
+          await refreshDashboard();
         });
       }
 
       if (refreshBtn) {
-        refreshBtn.addEventListener("click", loadDashboard);
+        refreshBtn.addEventListener("click", refreshDashboard);
       }
       if (memberRefreshBtn) {
-        memberRefreshBtn.addEventListener("click", loadDashboard);
+        memberRefreshBtn.addEventListener("click", refreshDashboard);
       }
       if (saveStrategyBtn) {
         saveStrategyBtn.addEventListener("click", () => saveStrategyConfig());
@@ -2707,10 +2716,10 @@
         els.memberToggleBtn.addEventListener("click", () => runMemberToggle());
       }
 
-      loadDashboard();
+      refreshDashboard();
       window.setInterval(() => {
         if (document.visibilityState === "visible") {
-          loadDashboard();
+          refreshDashboard();
         }
       }, 3000);
     </script>

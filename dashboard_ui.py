@@ -12,6 +12,7 @@ def build_dashboard_html(
     auth_required: bool,
     *,
     public_mode: bool = False,
+    member_session_mode: bool = False,
     data_endpoint: str = "/dashboard/data",
     token_storage_key: str = "fancyfinance_dashboard_token",
     query_token_param: str = "",
@@ -24,6 +25,7 @@ def build_dashboard_html(
 ) -> str:
     auth_required_js = "true" if auth_required else "false"
     public_mode_js = "true" if public_mode else "false"
+    member_session_mode_js = "true" if member_session_mode else "false"
     persist_token_js = "true" if persist_token else "false"
     token_storage_keys_js = json.dumps([token_storage_key, *fallback_token_storage_keys])
     telegram_login_enabled_js = "true" if telegram_login_enabled else "false"
@@ -129,6 +131,7 @@ def build_dashboard_html(
         .replace("__FOOTER_NOTE__", footer_note)
         .replace("__AUTH_REQUIRED_JS__", auth_required_js)
         .replace("__PUBLIC_MODE_JS__", public_mode_js)
+        .replace("__MEMBER_SESSION_MODE_JS__", member_session_mode_js)
         .replace("__PERSIST_TOKEN_JS__", persist_token_js)
         .replace("__DATA_ENDPOINT__", data_endpoint)
         .replace("__TOKEN_STORAGE_KEY__", token_storage_key)
