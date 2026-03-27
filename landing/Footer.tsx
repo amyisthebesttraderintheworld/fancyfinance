@@ -21,10 +21,10 @@ const Footer = () => (
           <a href={DASHBOARD_URL} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             Dashboard
           </a>
-          <a href="/privacy-policy.html" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <a href="/privacy-policy" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             Privacy Policy
           </a>
-          <a href="/terms-of-use.html" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <a href="/terms-of-use" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             Terms of Use
           </a>
         </div>
