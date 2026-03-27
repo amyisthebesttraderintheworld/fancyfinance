@@ -106,7 +106,7 @@ class Simulator(BaseEngine):
         self.default_strategy_profile = normalize_strategy_profile(config)
         self.market_scan_settings = resolve_scan_settings(config, self.default_strategy_profile)
 
-        self._user_scoped_simulation = str(config.get("mode") or "").strip().lower() == "simulation"
+        self._user_scoped_simulation = str(config.get("mode") or "").strip().lower() in {"simulation", "live"}
         self._user_sessions: dict[int, SimulationSession] = {}
         self._global_session = self._build_session(user_id=None)
         self._latest_market_prices: dict[str, tuple[int, float]] = {}
