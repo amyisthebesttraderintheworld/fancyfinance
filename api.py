@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import os
 import threading
@@ -12,8 +13,10 @@ from urllib.parse import quote
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from backtest_service import ALLOWED_REMOTE_CANDLE_COUNTS, BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
+from common import get_logger
 from dashboard_access import DashboardAccessError, verify_member_dashboard_token
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
@@ -23,10 +26,13 @@ from strategy_profile import normalize_strategy_profile
 
 DASHBOARD_ASSETS_DIR = Path(__file__).resolve().parent / "dashboard_assets"
 DASHBOARD_LOGO_PATH = DASHBOARD_ASSETS_DIR / "logo.png"
-LEGAL_PAGES_DIR = Path(__file__).resolve().parent / "legal"
-PRIVACY_POLICY_PATH = LEGAL_PAGES_DIR / "privacy_policy.html"
-TERMS_OF_USE_PATH = LEGAL_PAGES_DIR / "terms_of_use.html"
+LANDING_DIR = Path(__file__).resolve().parent / "landing"
+LANDING_PUBLIC_DIR = LANDING_DIR / "public"
+LANDING_DIST_DIR = LANDING_DIR / "dist"
+PRIVACY_POLICY_PATH = LANDING_DIST_DIR / "privacy-policy.html"
+TERMS_OF_USE_PATH = LANDING_DIST_DIR / "terms-of-use.html"
 MEMBER_ACCESS_COOKIE = "fancyfinance_member_access"
+logger = get_logger("API")
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
@@ -78,6 +84,13 @@ def _member_access_cookie_secure(request: Optional[Request]) -> bool:
     if request is None:
         return False
     return request.url.scheme == "https"
+
+
+def _first_existing_path(*candidates: Path) -> Optional[Path]:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -614,7 +627,7 @@ def _member_profile(engine, user_id: int) -> Dict[str, Any]:
 
     status_label = "Locked"
     status_tone = "negative"
-    detail = "Use /dashboard_api in Telegram again if this session expires."
+    detail = "Use /dashboard_login in Telegram again if this session expires."
     can_toggle = False
 
     if mode == "live":
@@ -873,6 +886,7 @@ def _public_dashboard_payload(engine):
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
     stripe_service = StripeService(engine.config)
+    app.mount("/assets", StaticFiles(directory=str(LANDING_DIST_DIR / "assets"), check_dir=False), name="landing-assets")
 
     def _authorized_actor(
         request: Optional[Request],
@@ -890,20 +904,45 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         token = _resolve_dashboard_token(request, provided_token, access)
         return _authorize_member_dashboard(auth_token, token)
 
-    @app.get("/", response_class=RedirectResponse)
+    @app.get("/", response_class=FileResponse)
     def root():
-        return RedirectResponse(url="/dashboard", status_code=307)
+        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
+        if landing_index is None:
+            raise HTTPException(status_code=503, detail="Landing page is not built")
+        return FileResponse(landing_index, media_type="text/html")
 
     @app.get("/dashboard", response_class=HTMLResponse)
-    def dashboard(access: Optional[str] = None):
+    def dashboard(request: Request, access: Optional[str] = None):
         if access:
             return RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307)
+        response = HTMLResponse(
+            build_dashboard_html(
+                APP_NAME,
+                __version__,
+                auth_required=True,
+                public_mode=True,
+                data_endpoint="/dashboard/member-data",
+                token_storage_key="fancyfinance_member_dashboard_token",
+                query_token_param="access",
+                persist_token=False,
+            )
+        )
+        existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
+        if existing_cookie:
+            try:
+                _authorize_member_dashboard(auth_token, existing_cookie)
+            except HTTPException:
+                response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
+        return response
+
+    @app.get("/dashboard/admin", response_class=HTMLResponse)
+    def dashboard_admin():
         return HTMLResponse(
             build_dashboard_html(
                 APP_NAME,
                 __version__,
                 auth_required=bool(auth_token),
-                fallback_token_storage_keys=("fancyfinance_member_dashboard_token",),
+                token_storage_key="fancyfinance_admin_dashboard_token",
             )
         )
 
@@ -921,15 +960,23 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/privacy-policy", response_class=HTMLResponse)
     def privacy_policy():
-        if not PRIVACY_POLICY_PATH.exists():
+        privacy_policy_path = _first_existing_path(
+            PRIVACY_POLICY_PATH,
+            LANDING_PUBLIC_DIR / "privacy-policy.html",
+        )
+        if privacy_policy_path is None:
             raise HTTPException(status_code=404, detail="Privacy policy not found")
-        return FileResponse(PRIVACY_POLICY_PATH, media_type="text/html")
+        return FileResponse(privacy_policy_path, media_type="text/html")
 
     @app.get("/terms-of-use", response_class=HTMLResponse)
     def terms_of_use():
-        if not TERMS_OF_USE_PATH.exists():
+        terms_path = _first_existing_path(
+            TERMS_OF_USE_PATH,
+            LANDING_PUBLIC_DIR / "terms-of-use.html",
+        )
+        if terms_path is None:
             raise HTTPException(status_code=404, detail="Terms of use not found")
-        return FileResponse(TERMS_OF_USE_PATH, media_type="text/html")
+        return FileResponse(terms_path, media_type="text/html")
 
     @app.get("/terms-of-service", response_class=RedirectResponse)
     def terms_of_service_alias():
@@ -959,7 +1006,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 data_endpoint="/dashboard/member-data",
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
-                fallback_token_storage_keys=("fancyfinance_api_token",),
+                persist_token=False,
             )
         )
         existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
@@ -1047,30 +1094,57 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     def health():
         return {"status": "ok", **_snapshot(engine)}
 
-    @app.get("/billing/success", response_class=HTMLResponse)
-    def billing_success():
-        return HTMLResponse(
-            """
-            <html><body style="font-family: sans-serif; padding: 32px; background: #0f172a; color: white;">
-            <h1>Checkout Completed</h1>
-            <p>Your Stripe checkout completed successfully.</p>
-            <p>If this was your first upgrade, your 7-day Trial Pro access should activate automatically before full Pro billing begins.</p>
-            <p>Return to Telegram and use <strong>/profile</strong> or <strong>/plans</strong> to confirm your current access.</p>
-            </body></html>
-            """
+    @app.get("/robots.txt")
+    def robots():
+        robots_path = _first_existing_path(
+            LANDING_DIST_DIR / "robots.txt",
+            LANDING_PUBLIC_DIR / "robots.txt",
         )
+        if robots_path is None:
+            raise HTTPException(status_code=404, detail="robots.txt not found")
+        return FileResponse(robots_path, media_type="text/plain")
 
-    @app.get("/billing/cancel", response_class=HTMLResponse)
+    @app.get("/billing/success", response_class=RedirectResponse)
+    def billing_success():
+        return RedirectResponse(url="/dashboard?subscribed=1", status_code=307)
+
+    @app.get("/billing/cancel", response_class=RedirectResponse)
     def billing_cancel():
-        return HTMLResponse(
-            """
-            <html><body style="font-family: sans-serif; padding: 32px; background: #0f172a; color: white;">
-            <h1>Checkout Canceled</h1>
-            <p>No payment was completed.</p>
-            <p>You can return to Telegram and run <strong>/subscribe</strong> whenever you're ready.</p>
-            </body></html>
-            """
-        )
+        return RedirectResponse(url="/#plans", status_code=307)
+
+    @app.post("/billing/checkout-link")
+    async def billing_checkout_link(request: Request):
+        try:
+            raw_payload = await request.json()
+        except Exception:
+            raw_payload = {}
+
+        email = ""
+        if isinstance(raw_payload, dict):
+            email = str(raw_payload.get("email") or "").strip().lower()
+
+        user_payload: Dict[str, Any] = {}
+        if email:
+            user_payload["email"] = email
+
+        base_url = str(request.base_url).rstrip("/")
+        try:
+            session = await asyncio.to_thread(
+                stripe_service.create_checkout_session,
+                user_payload,
+                success_url=f"{base_url}/billing/success",
+                cancel_url=f"{base_url}/billing/cancel",
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error(f"Failed to create public checkout session: {exc}")
+            raise HTTPException(status_code=502, detail="Could not create checkout session") from exc
+
+        checkout_url = str(session.get("url") or "").strip()
+        if not checkout_url:
+            raise HTTPException(status_code=502, detail="Stripe did not return a checkout URL")
+        return {"url": checkout_url}
 
     @app.post("/billing/stripe/webhook")
     async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Header(default=None, alias="stripe-signature")):
@@ -1086,7 +1160,11 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 db=db,
             )
         except ValueError as exc:
+            logger.warning(f"Stripe webhook rejected: {exc}")
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error(f"Stripe webhook failed unexpectedly: {exc}")
+            raise
 
     @app.get("/stats")
     def stats(x_api_key: Optional[str] = Header(default=None)):

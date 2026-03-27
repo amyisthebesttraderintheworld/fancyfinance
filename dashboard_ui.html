@@ -488,6 +488,10 @@
         color: #ff9d9d;
       }
 
+      .message.success {
+        color: #8dffc0;
+      }
+
       .content-grid {
         display: grid;
         grid-template-columns: 1.16fr 0.84fr;
@@ -1053,11 +1057,11 @@
             <p class="panel-subtitle">__AUTH_HINT__</p>
           </div>
           <div style="__AUTH_FORM_STYLE__">
-          <label class="field-label" for="api-token">API Token</label>
-          <input id="api-token" type="password" placeholder="Paste FANCYFINANCE_API_TOKEN" />
+          <label class="field-label" for="api-token">__AUTH_LABEL__</label>
+          <input id="api-token" type="password" placeholder="__AUTH_PLACEHOLDER__" />
           <div class="button-row">
-            <button class="primary" id="save-token-btn">Unlock Dashboard</button>
-            <button class="secondary" id="clear-token-btn">Clear Token</button>
+            <button class="primary" id="save-token-btn">__AUTH_PRIMARY_BUTTON__</button>
+            <button class="secondary" id="clear-token-btn">__AUTH_CLEAR_BUTTON__</button>
             <button class="secondary" id="refresh-btn">Refresh Now</button>
           </div>
           </div>
@@ -1370,19 +1374,25 @@
     <script>
       const AUTH_REQUIRED = __AUTH_REQUIRED_JS__;
       const PUBLIC_MODE = __PUBLIC_MODE_JS__;
+      const PERSIST_TOKEN = __PERSIST_TOKEN_JS__;
       const DATA_ENDPOINT = "__DATA_ENDPOINT__";
       const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";
       const TOKEN_KEY = "__TOKEN_STORAGE_KEY__";
       const TOKEN_KEYS = __TOKEN_STORAGE_KEYS__;
       const QUERY_TOKEN_PARAM = "__QUERY_TOKEN_PARAM__";
+      const pageParams = new URLSearchParams(window.location.search);
       const queryToken = QUERY_TOKEN_PARAM
-        ? (new URLSearchParams(window.location.search).get(QUERY_TOKEN_PARAM) || "")
+        ? (pageParams.get(QUERY_TOKEN_PARAM) || "")
         : "";
+      const SUBSCRIPTION_SUCCESS = pageParams.get("subscribed") === "1";
+      const storedTokenCandidates = PERSIST_TOKEN
+        ? TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "")
+        : [];
       const tokenCandidates = Array.from(
         new Set(
           [
             queryToken,
-            ...TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : ""),
+            ...storedTokenCandidates,
           ].filter(Boolean)
         )
       );
@@ -1395,8 +1405,15 @@
         lastPayload: null,
       };
 
-      if (queryToken) {
+      if (queryToken && PERSIST_TOKEN) {
         localStorage.setItem(TOKEN_KEY, queryToken);
+      }
+
+      if (SUBSCRIPTION_SUCCESS) {
+        pageParams.delete("subscribed");
+        const nextQuery = pageParams.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash || ""}`;
+        window.history.replaceState({}, "", nextUrl);
       }
 
       const els = {
@@ -1582,6 +1599,17 @@
       function setMessage(node, text, isError = false) {
         node.textContent = text;
         node.className = isError ? "message error" : "message";
+      }
+
+      function setSuccessMessage(node, text) {
+        node.textContent = text;
+        node.className = "message success";
+      }
+
+      function subscriptionSuccessMessage(signedIn = false) {
+        return signedIn
+          ? "Congratulations, your subscription checkout completed and your member dashboard is ready."
+          : "Congratulations, your subscription checkout completed. Trial Pro or Pro access is activating now. If your dashboard still shows Free, wait a few seconds and refresh.";
       }
 
       function setVisible(node, visible) {
@@ -2406,11 +2434,15 @@
             throw new Error(`Public bootstrap failed: ${response.status}`);
           }
           const payload = await response.json();
-          setMessage(
-            els.authMessage,
-            message || "Showing the live public summary. Add a valid dashboard token or API key for protected detail.",
-            false
-          );
+          if (SUBSCRIPTION_SUCCESS) {
+            setSuccessMessage(els.authMessage, subscriptionSuccessMessage(false));
+          } else {
+            setMessage(
+              els.authMessage,
+              message || "Showing the live public summary. Sign in with a valid dashboard login for protected detail.",
+              false
+            );
+          }
           renderData(payload);
           return true;
         } catch (error) {
@@ -2423,8 +2455,8 @@
         if (AUTH_REQUIRED && !state.token && !PUBLIC_MODE) {
           await loadBootstrap(
             PUBLIC_MODE
-              ? "Member dashboard locked. Showing the live public summary until you use /dashboard_api in Telegram."
-              : "Dashboard locked. Showing the live public summary until you add a valid API token."
+              ? "Member dashboard locked. Showing the live public summary until you use /dashboard_login in Telegram."
+              : "Admin dashboard locked. Showing the live public summary until you add a valid admin token."
           );
           return;
         }
@@ -2442,7 +2474,11 @@
               await loadDashboard();
               return;
             }
-            await loadBootstrap("Dashboard locked. Showing the live public summary until a valid dashboard token or API key is provided.");
+            await loadBootstrap(
+              PUBLIC_MODE
+                ? "Dashboard login required. Showing the live public summary until you sign in from Telegram."
+                : "Admin dashboard locked. Showing the live public summary until a valid admin token is provided."
+            );
             return;
           }
 
@@ -2451,10 +2487,16 @@
           }
 
           const payload = await response.json();
-          setMessage(
-            els.authMessage,
-            payload.member_access ? "Member dashboard unlocked for your Telegram-linked account." : (AUTH_REQUIRED ? "Dashboard unlocked." : "Dashboard is live.")
-          );
+          if (SUBSCRIPTION_SUCCESS) {
+            setSuccessMessage(els.authMessage, subscriptionSuccessMessage(!!payload.member_access));
+          } else {
+            setMessage(
+              els.authMessage,
+              payload.member_access
+                ? "Signed in to your Telegram-linked dashboard session."
+                : (AUTH_REQUIRED ? "Admin dashboard unlocked." : "Dashboard is live.")
+            );
+          }
           renderData(payload);
         } catch (error) {
           setMessage(els.authMessage, error.message || "Could not load dashboard.", true);
@@ -2523,11 +2565,11 @@
       if (saveTokenBtn) {
         saveTokenBtn.addEventListener("click", async () => {
           state.token = els.tokenInput.value.trim();
-          if (state.token) {
+          if (state.token && PERSIST_TOKEN) {
             localStorage.setItem(TOKEN_KEY, state.token);
             state.tokenCandidates = Array.from(new Set([state.token, ...state.tokenCandidates].filter(Boolean)));
             state.tokenIndex = 0;
-          } else {
+          } else if (PERSIST_TOKEN) {
             localStorage.removeItem(TOKEN_KEY);
             state.tokenCandidates = Array.from(
               new Set(TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "").filter(Boolean))
@@ -2544,19 +2586,25 @@
 
       if (clearTokenBtn) {
         clearTokenBtn.addEventListener("click", async () => {
-          localStorage.removeItem(TOKEN_KEY);
-          state.tokenCandidates = Array.from(
-            new Set(TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "").filter(Boolean))
-          );
-          state.tokenIndex = 0;
-          state.token = state.tokenCandidates[0] || "";
+          if (PERSIST_TOKEN) {
+            localStorage.removeItem(TOKEN_KEY);
+            state.tokenCandidates = Array.from(
+              new Set(TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "").filter(Boolean))
+            );
+            state.tokenIndex = 0;
+            state.token = state.tokenCandidates[0] || "";
+          } else {
+            state.tokenCandidates = [];
+            state.tokenIndex = 0;
+            state.token = "";
+          }
           els.tokenInput.value = state.token;
           try {
             await fetch("/dashboard/session/clear", { method: "POST" });
           } catch (error) {
             console.warn("Could not clear dashboard session cookie.", error);
           }
-          setMessage(els.authMessage, "Stored token cleared.");
+          setMessage(els.authMessage, PUBLIC_MODE ? "Signed out of the dashboard session." : "Stored admin token cleared.");
           await loadDashboard();
         });
       }

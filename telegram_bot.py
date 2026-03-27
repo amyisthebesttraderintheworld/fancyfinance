@@ -341,16 +341,18 @@ def _dashboard_base_url() -> str:
 def _subscription_page_url() -> str:
     stripe_cfg = (bot_context.config or {}).get("stripe") or {}
     marketing_cfg = (bot_context.config or {}).get("marketing") or {}
+    legacy_host_markers = ("fancy-bot-front.lovable.app",)
     for candidate in (
         stripe_cfg.get("subscribe_url"),
         stripe_cfg.get("checkout_landing_url"),
         marketing_cfg.get("subscribe_url"),
-        "https://fancy-bot-front.lovable.app/",
+        _dashboard_base_url(),
+        "https://fancyfinance-production.up.railway.app/",
     ):
         url = str(candidate or "").strip()
-        if url:
+        if url and not any(marker in url for marker in legacy_host_markers):
             return url
-    return "https://fancy-bot-front.lovable.app/"
+    return "https://fancyfinance-production.up.railway.app/"
 
 
 def _default_backtest_candles() -> int:
@@ -825,7 +827,7 @@ async def start_trial_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"*Membership:* {membership_status}\n"
         f"*Access:* {access}\n\n"
         "Next steps:\n"
-        "1. Use `/dashboard_api` to open your member dashboard\n"
+        "1. Use `/dashboard_login` to open your member dashboard\n"
         "2. Verify your email with `/verify_email`\n"
         "3. Store your exchange keys with `/setup_api <api_key> <api_secret> <passphrase>`",
         parse_mode="Markdown",
@@ -857,25 +859,33 @@ async def dashboard_api_command(update: Update, context: ContextTypes.DEFAULT_TY
         ttl_seconds=DEFAULT_TOKEN_TTL_SECONDS,
     )
     base_url = _dashboard_base_url()
-    dashboard_link = f"{base_url}/dashboard/member?access={quote(token)}" if base_url else ""
+    dashboard_link = f"{base_url}/dashboard?access={quote(token)}" if base_url else ""
     message_parts = [
-        "🧭 *Member Dashboard Access*\n\n",
-        "Paste this read-only dashboard token into the website dashboard client:\n\n",
-        f"`{token}`\n\n",
+        "🧭 *Member Dashboard Login*\n\n",
     ]
     if dashboard_link:
         message_parts.extend(
             [
-                "Hosted member dashboard link:\n",
+                "Open your personal dashboard login link:\n",
                 f"{dashboard_link}\n\n",
             ]
         )
+    message_parts.extend(
+        [
+            "If you need to paste it manually, this signed session token logs you into your Telegram-linked dashboard:\n\n",
+            f"`{token}`\n\n",
+        ]
+    )
     message_parts.append(
-        "Run `/dashboard_api` or `/rotate_dashboard_key` any time you need a fresh token."
+        "Run `/dashboard_login` or `/rotate_dashboard_key` any time you need a fresh login link."
     )
     message = "".join(message_parts)
 
     await _reply(update, message, parse_mode="Markdown")
+
+
+async def dashboard_login_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await dashboard_api_command(update, context)
 
 
 async def rotate_dashboard_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1357,8 +1367,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/plans - Compare free vs paid access\n"
         "/subscription - View your current membership\n"
         f"/start_trial - Start your {trial_days}-day Trial Pro\n"
-        "/dashboard_api - Get your gated member dashboard token and link\n"
-        "/rotate_dashboard_key - Mint a fresh member dashboard token\n"
+        "/dashboard_login - Get your member dashboard login link\n"
+        "/dashboard_api - Legacy alias for dashboard login\n"
+        "/rotate_dashboard_key - Mint a fresh member dashboard login link\n"
         "/backtest - Run a free Phemex backtest on one market or the scanner universe\n"
         "/set_config - Save a strategy profile for dashboard, sim, and live\n"
         f"/subscribe - Open the {trial_days}-day Trial Pro / Pro subscription page\n"
@@ -1415,8 +1426,9 @@ async def set_commands(application: Application):
         BotCommand("plans", "See free vs paid access"),
         BotCommand("subscription", "View your membership"),
         BotCommand("start_trial", "Start your Trial Pro"),
-        BotCommand("dashboard_api", "Get your member dashboard token"),
-        BotCommand("rotate_dashboard_key", "Refresh your member dashboard token"),
+        BotCommand("dashboard_login", "Open your member dashboard"),
+        BotCommand("dashboard_api", "Legacy dashboard login alias"),
+        BotCommand("rotate_dashboard_key", "Refresh your dashboard login link"),
         BotCommand("backtest", "Run a free market or universe backtest"),
         BotCommand("set_config", "Save your strategy profile"),
         BotCommand("subscribe", "Open the subscription page"),
@@ -1586,6 +1598,7 @@ def run_bot(engine, command_queue):
     application.add_handler(CommandHandler("plans", plans_command))
     application.add_handler(CommandHandler("subscription", subscription_command))
     application.add_handler(CommandHandler("start_trial", start_trial_command))
+    application.add_handler(CommandHandler("dashboard_login", dashboard_login_command))
     application.add_handler(CommandHandler("dashboard_api", dashboard_api_command))
     application.add_handler(CommandHandler("rotate_dashboard_key", rotate_dashboard_key_command))
     application.add_handler(CommandHandler("backtest", backtest_command))

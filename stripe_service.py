@@ -58,12 +58,12 @@ class StripeService:
         success_url: Optional[str] = None,
         cancel_url: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if not self.is_checkout_configured():
+        session_success_url = str(success_url or self.success_url).strip()
+        session_cancel_url = str(cancel_url or self.cancel_url).strip()
+        if not self.secret_key or not self.price_id or not session_success_url or not session_cancel_url:
             raise ValueError("Stripe checkout is not fully configured")
 
-        telegram_id = str(user["telegram_id"])
-        session_success_url = success_url or self.success_url
-        session_cancel_url = cancel_url or self.cancel_url
+        telegram_id = str(user.get("telegram_id") or "").strip()
         if "{CHECKOUT_SESSION_ID}" not in session_success_url:
             separator = "&" if "?" in session_success_url else "?"
             session_success_url = f"{session_success_url}{separator}session_id={{CHECKOUT_SESSION_ID}}"
@@ -75,15 +75,16 @@ class StripeService:
             "line_items[0][price]": self.price_id,
             "line_items[0][quantity]": 1,
             "allow_promotion_codes": "true",
-            "client_reference_id": telegram_id,
             "metadata[app]": APP_NAME,
-            "metadata[telegram_id]": telegram_id,
-            "metadata[username]": str(user.get("username") or ""),
-            "metadata[first_name]": str(user.get("first_name") or ""),
-            "subscription_data[metadata][telegram_id]": telegram_id,
-            "subscription_data[metadata][username]": str(user.get("username") or ""),
-            "subscription_data[metadata][first_name]": str(user.get("first_name") or ""),
         }
+        if telegram_id:
+            payload["client_reference_id"] = telegram_id
+            payload["metadata[telegram_id]"] = telegram_id
+            payload["metadata[username]"] = str(user.get("username") or "")
+            payload["metadata[first_name]"] = str(user.get("first_name") or "")
+            payload["subscription_data[metadata][telegram_id]"] = telegram_id
+            payload["subscription_data[metadata][username]"] = str(user.get("username") or "")
+            payload["subscription_data[metadata][first_name]"] = str(user.get("first_name") or "")
 
         if user.get("stripe_customer_id"):
             payload["customer"] = user["stripe_customer_id"]
@@ -94,7 +95,8 @@ class StripeService:
             payload["subscription_data[trial_period_days]"] = self.trial_days
 
         session = self._post("/checkout/sessions", payload)
-        self.logger.info(f"Created Stripe Checkout Session for Telegram user {telegram_id}.")
+        actor_label = telegram_id or (str(user.get("email") or "").strip().lower() or "anonymous user")
+        self.logger.info(f"Created Stripe Checkout Session for {actor_label}.")
         return session
 
     def create_customer_portal_session(

@@ -1,0 +1,16 @@
+.git
+.pytest_cache
+.venv
+.venv-verify
+__pycache__
+*.pyc
+*.pyd
+*.pyo
+*.log
+*.zip
+*.docx
+htmlcov
+TemporaryRef
+fangblenny_bot - Copy
+landing/node_modules
+landing/dist

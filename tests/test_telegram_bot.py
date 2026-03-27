@@ -344,6 +344,10 @@ async def test_menu_button_handler_routes_settings(mock_update, mock_context):
 async def test_subscribe_command_returns_subscription_page_url(mock_update, mock_context, mock_config):
     telegram_bot.config = {
         **mock_config,
+        "api": {
+            **mock_config["api"],
+            "base_url": "https://fancyfinance-production.up.railway.app",
+        },
         "stripe": {
             "display_price": "$6.99/month",
             "trial_days": 7,
@@ -355,7 +359,7 @@ async def test_subscribe_command_returns_subscription_page_url(mock_update, mock
         await subscribe_command(mock_update, mock_context)
 
     mock_update.message.reply_text.assert_called()
-    assert "fancy-bot-front.lovable.app" in mock_update.message.reply_text.call_args[0][0]
+    assert "https://fancyfinance-production.up.railway.app" in mock_update.message.reply_text.call_args[0][0]
     assert "Trial Pro" in mock_update.message.reply_text.call_args[0][0]
     assert "same email address you verified in Telegram" in mock_update.message.reply_text.call_args[0][0]
 
@@ -685,7 +689,7 @@ async def test_start_trial_command_unlocks_trial_pro(mock_update, mock_context, 
     mock_update.message.reply_text.assert_called_once()
     message = mock_update.message.reply_text.call_args[0][0]
     assert "Trial Pro unlocked" in message
-    assert "/dashboard_api" in message
+    assert "/dashboard_login" in message
 
 
 @pytest.mark.asyncio
@@ -710,8 +714,8 @@ async def test_dashboard_api_command_returns_member_link(mock_update, mock_conte
     mock_update.message.reply_text.assert_called_once()
     message = mock_update.message.reply_text.call_args[0][0]
     assert "`signed-token`" in message
-    assert "/dashboard/member?access=signed-token" in message
-    assert "/rotate_dashboard_key" in message
+    assert "/dashboard?access=signed-token" in message
+    assert "/dashboard_login" in message
 
 
 @pytest.mark.asyncio

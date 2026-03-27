@@ -1,28 +1,31 @@
-# Use official Python 3.11 slim image
+FROM node:20-slim AS landing-build
+
+WORKDIR /app/landing
+
+COPY landing/package*.json ./
+RUN npm ci --no-fund --no-audit
+
+COPY landing/ ./
+RUN npm run build
+
+
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies (needed for some pandas/numpy builds)
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
 COPY . .
+COPY --from=landing-build /app/landing/dist /app/landing/dist
 
-# Set environment variable for log output
 ENV PYTHONUNBUFFERED=1
 
-# Expose the FastAPI control plane
 EXPOSE 8000
 
-# Create a data directory for CSVs or local storage (if needed)
 RUN mkdir -p data
 
-# Execute the bot
 CMD ["python", "main.py"]

@@ -14,3 +14,5 @@ backtest_equity.png
 bot_settings.json
 fangblenny_bot - Copy/
 htmlcov/
+landing/dist/
+landing/node_modules/

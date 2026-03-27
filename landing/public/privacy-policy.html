@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fancy Finance Privacy Policy</title>
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071410;
+      --panel: rgba(9, 24, 19, 0.92);
+      --panel-strong: rgba(12, 31, 24, 0.98);
+      --line: rgba(122, 255, 183, 0.18);
+      --text: #effff5;
+      --muted: #abd0bf;
+      --accent: #7cffb7;
+      --accent-strong: #d9ff75;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(124, 255, 183, 0.15), transparent 32%),
+        radial-gradient(circle at top right, rgba(217, 255, 117, 0.12), transparent 24%),
+        linear-gradient(180deg, #06110d 0%, #081712 100%);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    .shell {
+      width: min(1080px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 64px;
+    }
+
+    .hero,
+    .section,
+    .toc {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero {
+      padding: 28px;
+      margin-bottom: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .brand img {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    .eyebrow {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 14px;
+      line-height: 1.15;
+    }
+
+    h1 {
+      font-size: clamp(34px, 6vw, 58px);
+      margin-top: 16px;
+    }
+
+    h2 {
+      font-size: clamp(24px, 3.5vw, 34px);
+    }
+
+    h3 {
+      font-size: 18px;
+      color: var(--accent-strong);
+    }
+
+    p, li {
+      color: var(--muted);
+      margin: 0 0 14px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 18px 0 0;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(124, 255, 183, 0.08);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .toc {
+      padding: 24px 28px;
+      margin-bottom: 22px;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px 22px;
+      margin-top: 14px;
+    }
+
+    .toc a {
+      text-decoration: none;
+      color: var(--muted);
+    }
+
+    .toc a:hover {
+      color: var(--accent);
+    }
+
+    .section {
+      padding: 28px;
+      margin-bottom: 18px;
+    }
+
+    ul {
+      margin: 0 0 12px 20px;
+      padding: 0;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .summary-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+    }
+
+    .footer {
+      text-align: center;
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="brand">
+        <img src="/dashboard/assets/logo.png" alt="Fancy Finance logo" />
+        <div>
+          <div class="eyebrow">Fancy Finance Legal</div>
+          <h1>Privacy Policy</h1>
+          <p>This notice explains how Fancy Finance collects, uses, stores, and shares personal information when you use our products and services.</p>
+        </div>
+      </div>
+      <div class="meta">
+        <span class="pill">Last updated: March 25, 2026</span>
+        <span class="pill">Public URL: /privacy-policy</span>
+        <span class="pill">Contact: financingcanfunk@gmail.com</span>
+      </div>
+    </section>
+
+    <section class="toc">
+      <h2>Summary of Key Points</h2>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <h3>What we collect</h3>
+          <p>We collect information you provide directly, including account information, email addresses, and payment-related details handled through Stripe.</p>
+        </div>
+        <div class="summary-card">
+          <h3>How we use it</h3>
+          <p>We use personal information to run the service, secure accounts, communicate with you, improve the product, and comply with legal obligations.</p>
+        </div>
+        <div class="summary-card">
+          <h3>AI and service providers</h3>
+          <p>Fancy Finance may use third-party providers, including AI providers, to power parts of the service and related automation.</p>
+        </div>
+        <div class="summary-card">
+          <h3>Your rights</h3>
+          <p>Depending on your location, you may request access, correction, deletion, or other privacy-related actions.</p>
+        </div>
+      </div>
+
+      <h2 style="margin-top: 28px;">Table of Contents</h2>
+      <div class="toc-grid">
+        <a href="#collect">1. What Information Do We Collect?</a>
+        <a href="#process">2. How Do We Process Your Information?</a>
+        <a href="#share">3. When and With Whom Do We Share It?</a>
+        <a href="#ai">4. Do We Offer AI-Based Products?</a>
+        <a href="#retain">5. How Long Do We Keep Information?</a>
+        <a href="#security">6. How Do We Keep Information Safe?</a>
+        <a href="#minors">7. Do We Collect Information from Minors?</a>
+        <a href="#rights">8. What Are Your Privacy Rights?</a>
+        <a href="#dnt">9. Controls for Do-Not-Track Features</a>
+        <a href="#us-rights">10. US Resident Privacy Rights</a>
+        <a href="#updates">11. Updates to This Notice</a>
+        <a href="#contact">12. Contact Us</a>
+        <a href="#data-requests">13. Review, Update, or Delete Your Data</a>
+      </div>
+    </section>
+
+    <section class="section" id="collect">
+      <h2>1. What Information Do We Collect?</h2>
+      <p>We collect personal information that you voluntarily provide when you register for our services, connect with us through the Telegram bot, subscribe to a paid plan, request support, or otherwise communicate with Fancy Finance.</p>
+      <ul>
+        <li>Names and usernames</li>
+        <li>Email addresses and pending verification details</li>
+        <li>Account status and subscription information</li>
+        <li>Payment-related details processed by Stripe</li>
+        <li>Trading-related service settings and usage data necessary to provide the service</li>
+      </ul>
+      <p>We do not intentionally process sensitive personal information through the ordinary operation of the service. Payment information is handled by Stripe and governed by Stripe's own privacy practices at <a href="https://stripe.com/privacy" target="_blank" rel="noreferrer">stripe.com/privacy</a>.</p>
+    </section>
+
+    <section class="section" id="process">
+      <h2>2. How Do We Process Your Information?</h2>
+      <p>We process information to provide, operate, improve, and secure Fancy Finance. That includes account creation and authentication, subscription and billing flows, customer support, fraud prevention, product improvement, and legal compliance.</p>
+      <ul>
+        <li>To create and maintain your account</li>
+        <li>To run automation, notifications, dashboards, and related product features</li>
+        <li>To communicate important service and billing information</li>
+        <li>To monitor abuse, misuse, or unauthorized access</li>
+        <li>To improve product quality and understand usage patterns</li>
+      </ul>
+    </section>
+
+    <section class="section" id="share">
+      <h2>3. When and With Whom Do We Share Your Personal Information?</h2>
+      <p>We may share information with service providers that help us operate Fancy Finance, including hosting, payments, communications, analytics, authentication, and automation services. We may also share information when required by law or when necessary to protect rights, safety, or the integrity of the platform.</p>
+      <p>We may also disclose or transfer information in connection with a merger, financing, acquisition, asset sale, or similar business transaction.</p>
+    </section>
+
+    <section class="section" id="ai">
+      <h2>4. Do We Offer Artificial Intelligence-Based Products?</h2>
+      <p>Yes. Fancy Finance may use artificial intelligence, machine learning, and related automation tools as part of its services. These tools may support research, automation, bots, monitoring, and service features described across the platform.</p>
+      <p>Where AI features are enabled, your inputs, outputs, and related information may be processed by third-party AI service providers to deliver those features.</p>
+    </section>
+
+    <section class="section" id="retain">
+      <h2>5. How Long Do We Keep Your Information?</h2>
+      <p>We keep personal information only for as long as necessary to provide the service, meet legal or accounting requirements, resolve disputes, enforce our agreements, and maintain legitimate business records. When information is no longer needed, we delete, anonymize, or securely isolate it.</p>
+    </section>
+
+    <section class="section" id="security">
+      <h2>6. How Do We Keep Your Information Safe?</h2>
+      <p>We use reasonable technical and organizational safeguards designed to protect personal information. That said, no system can guarantee complete security, and any transmission of information over the internet carries some inherent risk.</p>
+    </section>
+
+    <section class="section" id="minors">
+      <h2>7. Do We Collect Information from Minors?</h2>
+      <p>Fancy Finance is not directed to children under 18, and we do not knowingly collect personal information from anyone under 18 years of age. If you believe a minor has provided us with personal information, contact us so we can review and address the issue.</p>
+    </section>
+
+    <section class="section" id="rights">
+      <h2>8. What Are Your Privacy Rights?</h2>
+      <p>Depending on where you live, you may have rights to access, correct, delete, or limit the processing of your personal information, and to withdraw consent where consent is the basis for processing.</p>
+      <p>You may contact us at <a href="mailto:financingcanfunk@gmail.com">financingcanfunk@gmail.com</a> to exercise privacy rights or ask questions about how your information is handled.</p>
+    </section>
+
+    <section class="section" id="dnt">
+      <h2>9. Controls for Do-Not-Track Features</h2>
+      <p>Many browsers offer a Do-Not-Track setting, but there is no uniform industry standard for interpreting those signals. At this time, Fancy Finance does not respond to browser Do-Not-Track signals in a separate or specialized way.</p>
+    </section>
+
+    <section class="section" id="us-rights">
+      <h2>10. Do United States Residents Have Specific Privacy Rights?</h2>
+      <p>Residents of certain US states may have rights to request access to, correction of, or deletion of personal information, as well as the right to appeal a denied request. If you submit such a request, we may verify your identity before taking action.</p>
+      <p>If we deny a privacy request or appeal, you may have the right to escalate the matter with your applicable state attorney general or other regulator.</p>
+    </section>
+
+    <section class="section" id="updates">
+      <h2>11. Do We Make Updates to This Notice?</h2>
+      <p>Yes. We may update this Privacy Policy from time to time to reflect legal, operational, or product changes. When we do, we will update the "Last updated" date at the top of this page.</p>
+    </section>
+
+    <section class="section" id="contact">
+      <h2>12. How Can You Contact Us About This Notice?</h2>
+      <p>If you have questions or comments about this Privacy Policy, you can contact Fancy Finance at:</p>
+      <p>
+        Fancy Finance<br />
+        461 Hines Blvd, Unit 101<br />
+        Chillicothe, OH 45601<br />
+        United States<br />
+        Email: <a href="mailto:financingcanfunk@gmail.com">financingcanfunk@gmail.com</a>
+      </p>
+    </section>
+
+    <section class="section" id="data-requests">
+      <h2>13. How Can You Review, Update, or Delete the Data We Collect from You?</h2>
+      <p>You may request access to, correction of, or deletion of personal information we hold about you by contacting us at <a href="mailto:financingcanfunk@gmail.com">financingcanfunk@gmail.com</a>. We will review the request and respond in accordance with applicable law.</p>
+    </section>
+
+    <div class="footer">
+      Fancy Finance public legal page served by Railway.
+    </div>
+  </main>
+</body>
+</html>

@@ -244,12 +244,27 @@ def test_dashboard_page_renders(sample_config):
     response = client.get("/dashboard")
 
     assert response.status_code == 200
-    assert "FancyFinance Control Center" in response.text
+    assert "FancyFinance Member Dashboard" in response.text
     assert '/dashboard/assets/logo.png' in response.text
     assert '/favicon.ico' in response.text
     assert '/privacy-policy' in response.text
     assert '/terms-of-use' in response.text
-    assert 'fancyfinance_api_token' in response.text
+    assert 'fancyfinance_member_dashboard_token' in response.text
+    assert 'const PERSIST_TOKEN = false;' in response.text
+    assert '<option value="500">500</option>' in response.text
+    assert '<option value="1000">1000</option>' in response.text
+
+
+def test_dashboard_admin_page_renders(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard/admin")
+
+    assert response.status_code == 200
+    assert "FancyFinance Control Center" in response.text
+    assert 'fancyfinance_admin_dashboard_token' in response.text
+    assert 'const PERSIST_TOKEN = true;' in response.text
     assert '<option value="500">500</option>' in response.text
     assert '<option value="1000">1000</option>' in response.text
 
@@ -306,6 +321,31 @@ def test_terms_of_service_alias_redirects(sample_config):
 
     assert response.status_code == 307
     assert response.headers["location"] == "/terms-of-use"
+
+
+def test_root_route_serves_built_landing_index(sample_config, monkeypatch, tmp_path):
+    dist_dir = tmp_path / "landing-dist"
+    dist_dir.mkdir()
+    (dist_dir / "index.html").write_text("<!doctype html><html><body>FancyFinance Landing</body></html>")
+    monkeypatch.setattr(api, "LANDING_DIST_DIR", dist_dir)
+
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "FancyFinance Landing" in response.text
+
+
+def test_billing_success_redirects_to_dashboard_with_subscription_flag(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/billing/success", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/dashboard?subscribed=1"
 
 
 def test_dashboard_data_requires_auth(sample_config):
@@ -379,17 +419,18 @@ def test_member_dashboard_page_renders(sample_config):
 
     assert response.status_code == 200
     assert "FancyFinance Member Dashboard" in response.text
-    assert "signed access link binds the page to your Telegram ID" in response.text
+    assert "dashboard login link is bound to your Telegram ID" in response.text
 
 
-def test_member_dashboard_page_uses_api_token_fallback_and_shows_positions(sample_config):
+def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
 
     response = client.get("/dashboard/member")
 
     assert response.status_code == 200
-    assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token", "fancyfinance_api_token"];' in response.text
+    assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
+    assert 'const PERSIST_TOKEN = false;' in response.text
     assert 'id="positions-panel" style=""' in response.text
     assert 'id="setup-panel" style="display:none;"' in response.text
     assert 'id="member-live-toggle-btn"' in response.text
@@ -426,7 +467,9 @@ def test_dashboard_page_uses_member_token_fallback(sample_config):
 
     assert response.status_code == 200
     assert 'const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";' in response.text
-    assert 'const TOKEN_KEYS = ["fancyfinance_api_token", "fancyfinance_member_dashboard_token"];' in response.text
+    assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
+    assert 'const PERSIST_TOKEN = false;' in response.text
+    assert "your subscription checkout completed" in response.text
 
 
 def test_dashboard_bootstrap_returns_public_summary(sample_config):
