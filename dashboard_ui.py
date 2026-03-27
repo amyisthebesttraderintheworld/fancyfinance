@@ -23,7 +23,7 @@ def build_dashboard_html(
     persist_token_js = "true" if persist_token else "false"
     token_storage_keys_js = json.dumps([token_storage_key, *fallback_token_storage_keys])
     auth_hint = (
-        "Sign in from Telegram. Your dashboard login link is bound to your Telegram ID and opens your user-scoped session."
+        "Sign in from Telegram. Your dashboard login link opens a user-scoped session, so the member dashboard no longer needs a pasted API key."
         if public_mode
         else (
             "Enter the admin dashboard token to unlock live stats, billing visibility, and engine controls."
@@ -38,15 +38,33 @@ def build_dashboard_html(
         if public_mode
         else "The same Railway-hosted control plane behind FancyFinance, now styled to match the new public site and built for fast operator decisions."
     )
-    auth_label = "Login Link or Token" if public_mode else "Admin Token"
-    auth_placeholder = (
-        "Paste your Telegram dashboard login link or signed session token"
-        if public_mode
-        else "Paste the FancyFinance admin dashboard token"
-    )
-    auth_primary_button = "Sign In" if public_mode else "Unlock Dashboard"
     auth_clear_button = "Log Out" if public_mode else "Clear Token"
-    auth_form_style = "" if auth_required else "display:none;"
+    if public_mode:
+        auth_controls_html = """
+          <div class="button-row">
+            <a class="link-btn primary" href="https://t.me/FancyFinanceBot" target="_blank" rel="noreferrer">Open Telegram</a>
+            <button class="secondary" id="member-logout-btn">Log Out</button>
+            <button class="secondary" id="member-refresh-btn">Refresh Now</button>
+          </div>
+        """
+    elif auth_required:
+        auth_controls_html = """
+          <div>
+            <label class="field-label" for="api-token">Admin Token</label>
+            <input id="api-token" type="password" placeholder="Paste the FancyFinance admin dashboard token" />
+            <div class="button-row">
+              <button class="primary" id="save-token-btn">Unlock Dashboard</button>
+              <button class="secondary" id="clear-token-btn">Clear Token</button>
+              <button class="secondary" id="refresh-btn">Refresh Now</button>
+            </div>
+          </div>
+        """
+    else:
+        auth_controls_html = """
+          <div class="button-row">
+            <button class="secondary" id="refresh-btn">Refresh Now</button>
+          </div>
+        """
     controls_style = ""
     positions_style = ""
     setup_style = "display:none;" if public_mode else ""
@@ -75,11 +93,8 @@ def build_dashboard_html(
         .replace("__HERO_SUBTITLE__", hero_subtitle)
         .replace("__AUTH_TITLE__", auth_title)
         .replace("__AUTH_HINT__", auth_hint)
-        .replace("__AUTH_LABEL__", auth_label)
-        .replace("__AUTH_PLACEHOLDER__", auth_placeholder)
-        .replace("__AUTH_PRIMARY_BUTTON__", auth_primary_button)
         .replace("__AUTH_CLEAR_BUTTON__", auth_clear_button)
-        .replace("__AUTH_FORM_STYLE__", auth_form_style)
+        .replace("__AUTH_CONTROLS__", auth_controls_html)
         .replace("__CONTROL_PANEL_STYLE__", controls_style)
         .replace("__POSITIONS_PANEL_STYLE__", positions_style)
         .replace("__SETUP_PANEL_STYLE__", setup_style)

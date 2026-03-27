@@ -1056,15 +1056,7 @@
             <h2 class="panel-title" style="margin-top: 14px;">__AUTH_TITLE__</h2>
             <p class="panel-subtitle">__AUTH_HINT__</p>
           </div>
-          <div style="__AUTH_FORM_STYLE__">
-          <label class="field-label" for="api-token">__AUTH_LABEL__</label>
-          <input id="api-token" type="password" placeholder="__AUTH_PLACEHOLDER__" />
-          <div class="button-row">
-            <button class="primary" id="save-token-btn">__AUTH_PRIMARY_BUTTON__</button>
-            <button class="secondary" id="clear-token-btn">__AUTH_CLEAR_BUTTON__</button>
-            <button class="secondary" id="refresh-btn">Refresh Now</button>
-          </div>
-          </div>
+          __AUTH_CONTROLS__
           <div class="message" id="auth-message"></div>
           <div class="footer-note">__FOOTER_NOTE__</div>
         </aside>
@@ -1438,7 +1430,9 @@
         memberControlNote: document.getElementById("member-control-note"),
       };
 
-      els.tokenInput.value = state.token;
+      if (els.tokenInput) {
+        els.tokenInput.value = state.token;
+      }
 
       function escapeHtml(value) {
         return String(value ?? "")
@@ -1585,6 +1579,9 @@
       }
 
       function headers() {
+        if (PUBLIC_MODE) {
+          return {};
+        }
         const result = {};
         if (state.token) {
           result["x-api-key"] = state.token;
@@ -2470,7 +2467,9 @@
 
           if (response.status === 401) {
             if (advanceTokenCandidate()) {
-              els.tokenInput.value = state.token;
+              if (els.tokenInput) {
+                els.tokenInput.value = state.token;
+              }
               await loadDashboard();
               return;
             }
@@ -2555,7 +2554,9 @@
 
       const saveTokenBtn = document.getElementById("save-token-btn");
       const clearTokenBtn = document.getElementById("clear-token-btn");
+      const memberLogoutBtn = document.getElementById("member-logout-btn");
       const refreshBtn = document.getElementById("refresh-btn");
+      const memberRefreshBtn = document.getElementById("member-refresh-btn");
       const saveStrategyBtn = document.getElementById("save-strategy-btn");
       const runBacktestBtn = document.getElementById("run-backtest-btn");
       const pauseBtn = document.getElementById("pause-btn");
@@ -2598,7 +2599,9 @@
             state.tokenIndex = 0;
             state.token = "";
           }
-          els.tokenInput.value = state.token;
+          if (els.tokenInput) {
+            els.tokenInput.value = state.token;
+          }
           try {
             await fetch("/dashboard/session/clear", { method: "POST" });
           } catch (error) {
@@ -2609,8 +2612,26 @@
         });
       }
 
+      if (memberLogoutBtn) {
+        memberLogoutBtn.addEventListener("click", async () => {
+          state.tokenCandidates = [];
+          state.tokenIndex = 0;
+          state.token = "";
+          try {
+            await fetch("/dashboard/session/clear", { method: "POST" });
+          } catch (error) {
+            console.warn("Could not clear dashboard session cookie.", error);
+          }
+          setMessage(els.authMessage, "Signed out of the dashboard session.");
+          await loadDashboard();
+        });
+      }
+
       if (refreshBtn) {
         refreshBtn.addEventListener("click", loadDashboard);
+      }
+      if (memberRefreshBtn) {
+        memberRefreshBtn.addEventListener("click", loadDashboard);
       }
       if (saveStrategyBtn) {
         saveStrategyBtn.addEventListener("click", () => saveStrategyConfig());

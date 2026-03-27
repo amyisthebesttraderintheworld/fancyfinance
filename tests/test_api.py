@@ -419,7 +419,8 @@ def test_member_dashboard_page_renders(sample_config):
 
     assert response.status_code == 200
     assert "FancyFinance Member Dashboard" in response.text
-    assert "dashboard login link is bound to your Telegram ID" in response.text
+    assert "opens a user-scoped session" in response.text
+    assert "Open Telegram" in response.text
 
 
 def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sample_config):
@@ -431,6 +432,8 @@ def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sampl
     assert response.status_code == 200
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
     assert 'const PERSIST_TOKEN = false;' in response.text
+    assert 'id="api-token"' not in response.text
+    assert "Login Link or Token" not in response.text
     assert 'id="positions-panel" style=""' in response.text
     assert 'id="setup-panel" style="display:none;"' in response.text
     assert 'id="member-live-toggle-btn"' in response.text
