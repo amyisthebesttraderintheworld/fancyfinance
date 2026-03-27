@@ -2351,6 +2351,7 @@
           return;
         }
 
+
         const mode = String(member.mode || snapshot?.mode || "").toLowerCase();
         const isLiveMode = mode === "live";
         const membershipLabel = `${humanizeMembership(member.membership_tier || "free")} / ${humanizeMembership(member.membership_status || "free")}`;
@@ -2369,10 +2370,25 @@
             : `Telegram ${member.active_api_user_id}`;
         const statusTone = String(member.status_tone || "");
 
+        // Subscription details
+        const plan = humanizeMembership(member.membership_tier || "free");
+        const status = humanizeMembership(member.membership_status || "free");
+        const expires = member.membership_expires_at ? formatTimestamp(member.membership_expires_at) : "--";
+        const trialStarted = member.trial_started_at ? formatTimestamp(member.trial_started_at) : null;
+        const renewalLabel = (status === "Active" || status === "Trial Pro") && expires !== "--" ? `Renews/cancels: ${expires}` : (expires !== "--" ? `Expired: ${expires}` : "");
+
         els.memberSummaryGrid.innerHTML = `
           <div class="mini-card">
-            <div class="label">Membership</div>
-            <div class="value">${escapeHtml(membershipLabel)}</div>
+            <div class="label">Plan</div>
+            <div class="value">${escapeHtml(plan)}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Status</div>
+            <div class="value">${escapeHtml(status)}</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Renewal</div>
+            <div class="value">${escapeHtml(renewalLabel)}</div>
           </div>
           <div class="mini-card">
             <div class="label">Email</div>
@@ -2729,7 +2745,7 @@
       if (els.manageSubBtn) {
         els.manageSubBtn.addEventListener("click", async () => {
           try {
-            const response = await fetch("/dashboard/member/billing-portal", {
+            const response = await fetch("/account/portal-session", {
               method: "POST",
               headers: headers(),
             });
@@ -2738,7 +2754,7 @@
               throw new Error(payload.detail || `Portal failed: ${response.status}`);
             }
             if (payload.url) {
-              window.open(payload.url, "_blank");
+              window.location.href = payload.url;
             } else {
               throw new Error("Stripe did not return a portal URL.");
             }
