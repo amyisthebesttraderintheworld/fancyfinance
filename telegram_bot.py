@@ -673,9 +673,15 @@ async def confirm_email_command(update: Update, context: ContextTypes.DEFAULT_TY
         await _reply(update, "🔑 Use: `/confirm_email 123456`", parse_mode="Markdown")
         return
 
-    if db.confirm_email_verification(update.effective_user.id, context.args[0]):
+    user_id = update.effective_user.id
+    if db.confirm_email_verification(user_id, context.args[0]):
+        # Check if there's an existing Stripe subscription for this email
+        user = db.get_user(user_id)
+        if user and user.get("email"):
+            _stripe_service().sync_user_membership_by_email(db, user_id, user["email"])
+
         membership = db.get_membership_summary(
-            update.effective_user.id,
+            user_id,
             update.effective_user.username or "",
             update.effective_user.first_name or "",
         )

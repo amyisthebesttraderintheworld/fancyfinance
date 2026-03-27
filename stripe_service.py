@@ -51,6 +51,60 @@ class StripeService:
         response.raise_for_status()
         return response.json()
 
+    def _get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        response = requests.get(
+            f"{self.api_base_url}{endpoint}",
+            params=params,
+            auth=(self.secret_key, ""),
+            timeout=self.timeout_seconds,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def sync_user_membership_by_email(self, db: SupabaseManager, telegram_id: int, email: str) -> bool:
+        """
+        Queries Stripe for an active subscription associated with the given email
+        and updates the user's membership status in the database if found.
+        """
+        if not self.secret_key or not email:
+            return False
+
+        try:
+            # 1. Find customer by email
+            customers = self._get("/customers", {"email": email.strip().lower(), "limit": 1})
+            if not customers.get("data"):
+                return False
+
+            customer = customers["data"][0]
+            customer_id = customer["id"]
+
+            # 2. Find active subscriptions for this customer
+            subscriptions = self._get("/subscriptions", {"customer": customer_id, "status": "all", "limit": 10})
+
+            active_sub = None
+            for sub in subscriptions.get("data", []):
+                if sub.get("status") in ACTIVE_STRIPE_STATUSES:
+                    active_sub = sub
+                    break
+
+            if active_sub:
+                period_end = self._period_end_from_unix(active_sub.get("current_period_end"))
+                db.activate_paid_membership_from_stripe(
+                    telegram_id,
+                    customer_id=customer_id,
+                    subscription_id=active_sub["id"],
+                    subscription_status=active_sub["status"],
+                    period_end=period_end,
+                )
+                self.logger.info(f"Synchronized membership from Stripe for {email} (User {telegram_id}).")
+                return True
+            else:
+                db.sync_stripe_customer(telegram_id, customer_id=customer_id)
+                return False
+        except Exception as exc:
+            self.logger.error(f"Failed to sync membership for {email}: {exc}")
+            return False
+
     def create_checkout_session(
         self,
         user: Dict[str, Any],

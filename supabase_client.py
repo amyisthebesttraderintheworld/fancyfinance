@@ -738,9 +738,12 @@ class SupabaseManager:
 
         tier = self._normalize_membership_tier(user.get("membership_tier"))
         status = self._membership_status(user)
+        is_verified = bool(user.get("is_verified"))
         if self._is_complimentary_pro(telegram_id):
             status = "active"
-        paid_access = tier in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP} and status in {"trial_pro", "active"}
+            is_verified = True
+
+        paid_access = is_verified and tier in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP} and status in {"trial_pro", "active"}
         return {
             "tier": tier,
             "status": status,
@@ -748,6 +751,7 @@ class SupabaseManager:
             "can_backtest": True,
             "can_simulation": paid_access,
             "can_live": paid_access,
+            "is_verified": is_verified,
             "source": "complimentary" if self._is_complimentary_pro(telegram_id) else user.get("membership_source", "manual"),
         }
 
