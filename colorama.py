@@ -5,6 +5,7 @@ class _EmptyPalette:
 
 Fore = _EmptyPalette()
 Style = _EmptyPalette()
+Back = _EmptyPalette()
 
 
 def init(*_args, **_kwargs):

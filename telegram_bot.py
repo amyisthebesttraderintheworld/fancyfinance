@@ -454,7 +454,8 @@ def _paid_upgrade_message(summary: dict | None) -> str:
         f"Simulation and live trading are only available on the paid plan.\n{trial_note}\n\n"
         f"*Current plan:* {tier}\n"
         f"*Membership status:* {status_label}\n\n"
-        "Backtesting remains free. Use `/subscribe` to start the upgrade flow."
+        "✨ *Activation Step:* Even if you have subscribed, you must verify your email with `/verify_email` to activate your account features.\n\n"
+        f"Visit the subscription page to upgrade:\n{_subscription_page_url()}"
     )
 
 
@@ -737,10 +738,12 @@ async def signup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(
             update,
             f"✅ *Signup successful!* Welcome to {APP_NAME}, {user.first_name}.\n\n"
-            "Next steps:\n"
+            "🚀 *Activate your account in 3 steps:*\n"
             "1. Accept the risk disclosure with `/start`\n"
-            "2. Verify your email with `/verify_email`\n"
-            "3. Use `/start_trial` or `/plans` if you want simulation or live access",
+            "2. Link and verify your email with `/verify_email` (*Critical for activation*)\n"
+            "3. Subscribe at our landing page for Pro features:\n"
+            f"{_subscription_page_url()}\n\n"
+            "Once verified and paid, your simulation and live access will activate immediately.",
             parse_mode="Markdown",
         )
         return
@@ -773,8 +776,10 @@ async def plans_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Your current plan:* {plan_name}\n"
         f"*Membership status:* {membership_status}\n"
         f"*Current access:* {access}\n\n"
+        f"✨ *Activate Account:* Even after subscribing, you must verify your email with `/verify_email` to unlock live access.\n\n"
+        f"Subscribe and manage your plan on our landing page:\n{_subscription_page_url()}\n\n"
         "Use `/backtest` to run a scanner-wide backtest, `/backtest BTCUSD 1m 500` for one market, "
-        "`/start_trial` to unlock Trial Pro instantly, or `/manage_subscription` if you already have a paid plan."
+        "or `/manage_subscription` if you already have a paid plan."
     )
     await _reply(update, text, parse_mode="Markdown")
 
@@ -942,6 +947,8 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             "Open the subscription page below to activate your membership:\n",
             f"{_subscription_page_url()}\n\n",
+            "✨ *CRITICAL ACTIVATION STEP:*\n",
+            "Even if you pay, you must verify your email with `/verify_email` in this bot to link your account and unlock simulation/live trading.\n\n",
             "Use the same email address you verified in Telegram so FancyFinance can match your Stripe subscription automatically.\n\n",
             "After checkout succeeds there, your Trial Pro or Pro access should activate automatically.",
         ]
@@ -1368,37 +1375,28 @@ async def kb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    trial_days = _trial_days()
     text = (
         "Available Commands:\n"
         "/start - Show legal notice or main menu\n"
         "/signup - Create your user profile\n"
         "/profile - View verification status\n"
         "/plans - Compare free vs paid access\n"
-        "/subscription - View your current membership\n"
-        f"/start_trial - Start your {trial_days}-day Trial Pro\n"
-        "/dashboard_login - Get your member dashboard login link\n"
-        "/dashboard_api - Legacy alias for dashboard login\n"
-        "/rotate_dashboard_key - Mint a fresh member dashboard login link\n"
-        "/backtest - Run a free Phemex backtest on one market or the scanner universe\n"
-        "/set_config - Save a strategy profile for dashboard, sim, and live\n"
-        f"/subscribe - Open the {trial_days}-day Trial Pro / Pro subscription page\n"
+        "/verify_email - Start email verification (*Critical for activation*)\n"
+        "/confirm_email - Complete email verification\n"
+        "/subscribe - Open the Pro subscription page\n"
         "/manage_subscription - Open billing portal\n"
+        "/dashboard_login - Get your member dashboard login link\n"
         "/setup_api - Store exchange API keys in the zero-knowledge vault\n"
         "/unlock_api - Unlock your vault for the current bot session\n"
-        "/verify_email - Start email verification\n"
-        "/confirm_email - Complete email verification\n"
+        "/backtest - Run a free Phemex backtest\n"
         "/status - Check bot status\n"
         "/positions - List open positions\n"
         "/pause - Pause trading\n"
         "/resume - Resume trading\n"
-        "/reset - Reset simulation\n"
-        "/set_balance <amount> - Set simulation balance\n"
         "/shutdown - Stop the engine\n"
-        "/grant_pro <telegram_id> [YYYY-MM-DD] - Admin only\n"
-        "/revoke_pro <telegram_id> - Admin only\n"
+        "\n✨ *Account Activation:* You MUST verify your email with `/verify_email` even after subscribing to unlock Pro features."
     )
-    await _reply(update, text)
+    await _reply(update, text, parse_mode="Markdown")
 
 
 async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1434,22 +1432,17 @@ async def set_commands(application: Application):
         BotCommand("signup", "Create your profile"),
         BotCommand("profile", "View verification status"),
         BotCommand("plans", "See free vs paid access"),
-        BotCommand("subscription", "View your membership"),
-        BotCommand("start_trial", "Start your Trial Pro"),
-        BotCommand("dashboard_login", "Open your member dashboard"),
-        BotCommand("dashboard_api", "Legacy dashboard login alias"),
-        BotCommand("rotate_dashboard_key", "Refresh your dashboard login link"),
-        BotCommand("backtest", "Run a free market or universe backtest"),
-        BotCommand("set_config", "Save your strategy profile"),
+        BotCommand("verify_email", "Link and activate email"),
+        BotCommand("confirm_email", "Verify with 6-digit code"),
         BotCommand("subscribe", "Open the subscription page"),
         BotCommand("manage_subscription", "Open Stripe billing portal"),
-        BotCommand("unlock_api", "Unlock your zero-knowledge API vault"),
+        BotCommand("dashboard_login", "Open your member dashboard"),
+        BotCommand("setup_api", "Store exchange API keys"),
+        BotCommand("unlock_api", "Unlock zero-knowledge vault"),
+        BotCommand("backtest", "Run a free market backtest"),
         BotCommand("status", "Check bot status"),
         BotCommand("positions", "Show open positions"),
-        BotCommand("verify_email", "Link your email address"),
-        BotCommand("confirm_email", "Verify email with 6-digit code"),
         BotCommand("help", "List commands"),
-        BotCommand("kb", "View knowledge base"),
         BotCommand("pause", "Pause new trades"),
         BotCommand("resume", "Resume trading"),
         BotCommand("shutdown", "Stop the bot"),

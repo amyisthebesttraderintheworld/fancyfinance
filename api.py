@@ -1335,6 +1335,42 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             "runtime": _runtime_summary(engine, user_id=actor_user_id),
         }
 
+    @app.post("/dashboard/member/billing-portal")
+    async def member_dashboard_billing_portal(
+        request: Request,
+        x_api_key: Optional[str] = Header(default=None),
+        access: Optional[str] = None,
+    ):
+        user_id = _authorized_member(request, x_api_key, access)
+        if not stripe_service.is_portal_configured():
+            raise HTTPException(status_code=503, detail="Stripe billing portal is not fully configured")
+
+        db = getattr(engine, "db", None)
+        user = None
+        get_user = getattr(db, "get_user", None)
+        if callable(get_user):
+            user = get_user(user_id)
+        if not isinstance(user, dict):
+            raise HTTPException(status_code=404, detail="Could not load your account profile")
+
+        stripe_customer_id = str(user.get("stripe_customer_id") or "").strip()
+        if not stripe_customer_id:
+            raise HTTPException(status_code=404, detail="No Stripe billing account is linked to this member yet")
+
+        base_url = str(request.base_url).rstrip("/")
+        return_url = f"{base_url}/dashboard/member"
+        try:
+            session = await asyncio.to_thread(
+                stripe_service.create_customer_portal_session,
+                customer_id=stripe_customer_id,
+                return_url=return_url,
+            )
+        except Exception as exc:
+            logger.error(f"Failed to create member billing portal session for {user_id}: {exc}")
+            raise HTTPException(status_code=502, detail="Could not open the billing portal right now") from exc
+
+        return {"url": session.get("url")}
+
     @app.get("/health")
     def health():
         return {"status": "ok", **_snapshot(engine)}

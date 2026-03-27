@@ -265,23 +265,20 @@ class PhemexClient:
     @retry(times=3)
     def _request(self, method: str, endpoint: str, params: dict = None):
         expiry = int(time.time() + 60)
+        method = method.upper()
+        query_string = ""
+        payload = ""
 
-        if method.upper() in {"GET", "DELETE"}:
-            query_string = ""
+        if method in {"GET", "DELETE"}:
             if params:
-                # Sort params to maintain deterministic signing and URL encoding
+                # Sort params to maintain deterministic signing and URL encoding.
                 query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items()) if v is not None])
             payload = query_string
-        elif method.upper() == "POST":
-            # POST must sign endpoint + body + expiry (not query string) and send JSON body.
+        elif method == "POST":
+            # Sign and send the exact same JSON payload to avoid signature/body mismatches.
             payload = json.dumps(params or {}, separators=(",", ":"), sort_keys=True)
-            query_string = ""
-        else:
-            query_string = ""
-            payload = ""
 
         signature = self._generate_signature(endpoint, payload, expiry)
-
         headers = {
             "x-phemex-access-token": self.api_key,
             "x-phemex-request-expiry": str(expiry),
@@ -296,9 +293,9 @@ class PhemexClient:
         try:
             if method.upper() == "GET":
                 response = requests.get(url, headers=headers, timeout=15)
-            elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=params or {}, timeout=15)
-            elif method.upper() == "DELETE":
+            elif method == "POST":
+                response = requests.post(url, headers=headers, data=payload, timeout=15)
+            elif method == "DELETE":
                 response = requests.delete(url, headers=headers, timeout=15)
             else:
                 raise ValueError(f"Unsupported method {method}")

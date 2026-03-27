@@ -1094,6 +1094,12 @@
             <div class="button-row" id="member-controls-row" style="display:none;">
               <button class="primary" id="member-live-toggle-btn">Enable Live Trading</button>
             </div>
+            <div id="subscription-management" style="display:none; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border);">
+              <h3 class="panel-subtitle" style="color: var(--foreground); font-weight: 600; margin-bottom: 12px;">Subscription Management</h3>
+              <div class="button-row">
+                <button class="secondary" id="manage-sub-btn">Manage Billing & Cancel</button>
+              </div>
+            </div>
             <div class="message" id="control-message"></div>
             <div class="footer-note" id="member-control-note" style="display:none;"></div>
           </div>
@@ -1449,6 +1455,8 @@
         memberToggleBtn: document.getElementById("member-live-toggle-btn"),
         memberSummaryGrid: document.getElementById("member-summary-grid"),
         memberControlNote: document.getElementById("member-control-note"),
+        subscriptionManagement: document.getElementById("subscription-management"),
+        manageSubBtn: document.getElementById("manage-sub-btn"),
       };
 
       if (els.tokenInput) {
@@ -2400,6 +2408,11 @@
         els.memberToggleBtn.disabled = !member.can_toggle;
         els.memberToggleBtn.className = member.effective_enabled ? "warning" : "primary";
         els.memberControlNote.textContent = member.detail || "";
+
+        if (els.subscriptionManagement) {
+          const isPro = ["pro", "trial_pro"].includes(String(member.membership_tier || "").toLowerCase());
+          els.subscriptionManagement.style.display = isPro ? "" : "none";
+        }
       }
 
       function renderData(payload) {
@@ -2714,6 +2727,27 @@
       }
       if (els.memberToggleBtn) {
         els.memberToggleBtn.addEventListener("click", () => runMemberToggle());
+      }
+      if (els.manageSubBtn) {
+        els.manageSubBtn.addEventListener("click", async () => {
+          try {
+            const response = await fetch("/dashboard/member/billing-portal", {
+              method: "POST",
+              headers: headers(),
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+              throw new Error(payload.detail || `Portal failed: ${response.status}`);
+            }
+            if (payload.url) {
+              window.open(payload.url, "_blank");
+            } else {
+              throw new Error("Stripe did not return a portal URL.");
+            }
+          } catch (error) {
+            setMessage(els.controlMessage, error.message || "Could not open billing portal.", true);
+          }
+        });
       }
 
       refreshDashboard();

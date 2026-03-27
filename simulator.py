@@ -944,6 +944,22 @@ class Simulator(BaseEngine):
                     if not self.is_running or session.is_paused:
                         continue
 
+                    # Periodic membership check: enforcement during runtime.
+                    if session.user_id:
+                        mode = str(self.config.get("mode") or "simulation").strip().lower()
+                        if not self.db.user_can_access_mode(session.user_id, mode):
+                            self.logger.warning(
+                                f"User {session.user_id} does not have active paid access for {mode}. Pausing session."
+                            )
+                            session.is_paused = True
+                            self.notifier.send_message(
+                                "🔒 *Membership Expired or Unverified*\n\n"
+                                f"Your active {mode} session has been paused because a paid membership is required.\n\n"
+                                "Please verify your email or subscribe to continue.",
+                                user_id=str(session.user_id),
+                            )
+                            continue
+
                     plans = await asyncio.to_thread(self._scan_market_candidates, session)
                     for plan in plans:
                         if not self.is_running or session.is_paused:
