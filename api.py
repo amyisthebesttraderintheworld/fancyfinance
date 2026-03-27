@@ -6,10 +6,12 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
+import requests
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -17,7 +19,13 @@ from fastapi.staticfiles import StaticFiles
 
 from backtest_service import ALLOWED_REMOTE_CANDLE_COUNTS, BacktestServiceError, run_backtest, run_backtest_recent, run_backtest_recent_universe
 from common import get_logger
-from dashboard_access import DashboardAccessError, verify_member_dashboard_token
+from dashboard_access import (
+    DEFAULT_TOKEN_TTL_SECONDS,
+    DashboardAccessError,
+    generate_member_dashboard_token,
+    verify_member_dashboard_token,
+    verify_telegram_login_payload,
+)
 from dashboard_ui import build_dashboard_html
 from fancyfinance import APP_NAME, __version__
 from stripe_service import StripeService
@@ -33,6 +41,44 @@ PRIVACY_POLICY_PATH = LANDING_DIST_DIR / "privacy-policy.html"
 TERMS_OF_USE_PATH = LANDING_DIST_DIR / "terms-of-use.html"
 MEMBER_ACCESS_COOKIE = "fancyfinance_member_access"
 logger = get_logger("API")
+
+
+@lru_cache(maxsize=8)
+def _telegram_bot_username_from_token(bot_token: str) -> str:
+    normalized_token = str(bot_token or "").strip()
+    if not normalized_token:
+        return ""
+
+    try:
+        response = requests.get(
+            f"https://api.telegram.org/bot{normalized_token}/getMe",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        logger.warning(f"Could not resolve Telegram bot username for dashboard login: {exc}")
+        return ""
+
+    result = payload.get("result") or {}
+    return str(result.get("username") or "").strip()
+
+
+def _telegram_login_context(config: Dict[str, Any], auth_token: Optional[str]) -> Dict[str, Any]:
+    telegram_config = (config or {}).get("telegram", {})
+    bot_token = str(telegram_config.get("bot_token") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    bot_username = str(telegram_config.get("bot_username") or os.getenv("TELEGRAM_BOT_USERNAME") or "").strip()
+    if not bot_username and bot_token:
+        bot_username = _telegram_bot_username_from_token(bot_token)
+
+    enabled = bool(auth_token and bot_token and bot_username)
+    return {
+        "enabled": enabled,
+        "bot_token": bot_token,
+        "bot_username": bot_username,
+        "bot_url": f"https://t.me/{bot_username}" if bot_username else "https://t.me",
+        "auth_url": "/dashboard/login/telegram",
+    }
 
 
 def _authorize(expected_token: Optional[str], provided_token: Optional[str]):
@@ -886,6 +932,7 @@ def _public_dashboard_payload(engine):
 def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     app = FastAPI(title=f"{APP_NAME} API", version=__version__)
     stripe_service = StripeService(engine.config)
+    telegram_login = _telegram_login_context(engine.config, auth_token)
     app.mount("/assets", StaticFiles(directory=str(LANDING_DIST_DIR / "assets"), check_dir=False), name="landing-assets")
 
     def _authorized_actor(
@@ -925,6 +972,10 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
                 persist_token=False,
+                telegram_login_enabled=bool(telegram_login["enabled"]),
+                telegram_login_bot_username=str(telegram_login["bot_username"]),
+                telegram_login_url=str(telegram_login["auth_url"]),
+                telegram_bot_url=str(telegram_login["bot_url"]),
             )
         )
         existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
@@ -933,6 +984,56 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 _authorize_member_dashboard(auth_token, existing_cookie)
             except HTTPException:
                 response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
+        return response
+
+    @app.get("/dashboard/login/telegram", response_class=RedirectResponse)
+    def dashboard_login_via_telegram(request: Request):
+        if not auth_token or not telegram_login.get("bot_token"):
+            return RedirectResponse(
+                url=f"/dashboard?login_error={quote('Telegram dashboard login is not configured yet.', safe='')}",
+                status_code=307,
+            )
+
+        try:
+            telegram_user = verify_telegram_login_payload(
+                str(telegram_login["bot_token"]),
+                dict(request.query_params),
+            )
+        except DashboardAccessError as exc:
+            logger.warning(f"Rejected Telegram dashboard login: {exc}")
+            return RedirectResponse(
+                url=f"/dashboard?login_error={quote(str(exc), safe='')}",
+                status_code=307,
+            )
+
+        user_id = int(telegram_user["id"])
+        db = getattr(engine, "db", None)
+        get_or_create_user = getattr(db, "get_or_create_user", None)
+        if callable(get_or_create_user):
+            try:
+                _invoke_with_supported_kwargs(
+                    get_or_create_user,
+                    user_id,
+                    str(telegram_user.get("username") or ""),
+                    str(telegram_user.get("first_name") or ""),
+                )
+            except Exception as exc:
+                logger.warning(f"Failed to sync Telegram dashboard login for {user_id}: {exc}")
+
+        member_token = generate_member_dashboard_token(
+            auth_token,
+            user_id,
+            ttl_seconds=DEFAULT_TOKEN_TTL_SECONDS,
+        )
+        response = RedirectResponse(url="/dashboard", status_code=307)
+        response.set_cookie(
+            MEMBER_ACCESS_COOKIE,
+            member_token,
+            httponly=True,
+            samesite="lax",
+            secure=_member_access_cookie_secure(request),
+            path="/",
+        )
         return response
 
     @app.get("/dashboard/admin", response_class=HTMLResponse)
@@ -1007,6 +1108,10 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
                 persist_token=False,
+                telegram_login_enabled=bool(telegram_login["enabled"]),
+                telegram_login_bot_username=str(telegram_login["bot_username"]),
+                telegram_login_url=str(telegram_login["auth_url"]),
+                telegram_bot_url=str(telegram_login["bot_url"]),
             )
         )
         existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)

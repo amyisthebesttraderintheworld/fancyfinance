@@ -60,7 +60,10 @@ bot_context: BotContext = BotContext()
 cmd_queue = None
 config = None
 active_engine = None
-db = None
+settings_mgr = SettingsManager()
+db = SupabaseManager(mode="simulation")
+bot_context.settings_mgr = settings_mgr
+bot_context.db = db
 
 logger = get_logger("TelegramBot")
 _conflict_logged = False
@@ -171,7 +174,8 @@ def _record_user_agreement(user_id) -> bool:
     # Persist agreement in Supabase (primary), fallback to local settings manager.
     if bot_context.db and hasattr(bot_context.db, "set_user_agreement"):
         try:
-            return bool(bot_context.db.set_user_agreement(user_id, True))
+            if bot_context.db.set_user_agreement(user_id, True):
+                return True
         except Exception:
             pass
 
@@ -1564,11 +1568,12 @@ def run_bot(engine, command_queue):
     bot_context.command_cooldowns.clear()
 
     # Maintain lightweight module-level aliases for existing code paths.
-    global cmd_queue, config, active_engine, db, _conflict_logged, _ownership_recovery_logged, _polling_started_at_monotonic
+    global cmd_queue, config, active_engine, db, settings_mgr, _conflict_logged, _ownership_recovery_logged, _polling_started_at_monotonic
     cmd_queue = bot_context.command_queue
     config = bot_context.config
     active_engine = bot_context.active_engine
     db = bot_context.db
+    settings_mgr = bot_context.settings_mgr
     _conflict_logged = False
     _ownership_recovery_logged = False
     _polling_started_at_monotonic = 0.0

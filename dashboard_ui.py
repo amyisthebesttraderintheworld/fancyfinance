@@ -17,13 +17,20 @@ def build_dashboard_html(
     query_token_param: str = "",
     fallback_token_storage_keys: tuple[str, ...] = (),
     persist_token: bool = True,
+    telegram_login_enabled: bool = False,
+    telegram_login_bot_username: str = "",
+    telegram_login_url: str = "",
+    telegram_bot_url: str = "https://t.me",
 ) -> str:
     auth_required_js = "true" if auth_required else "false"
     public_mode_js = "true" if public_mode else "false"
     persist_token_js = "true" if persist_token else "false"
     token_storage_keys_js = json.dumps([token_storage_key, *fallback_token_storage_keys])
+    telegram_login_enabled_js = "true" if telegram_login_enabled else "false"
+    telegram_bot_username_js = json.dumps(telegram_login_bot_username or "")
+    telegram_login_url_js = json.dumps(telegram_login_url or "")
     auth_hint = (
-        "Sign in from Telegram. Your dashboard login link opens a user-scoped session, so the member dashboard no longer needs a pasted API key."
+        "Log in with Telegram to open your own dashboard session. If Telegram web login is unavailable, you can still use /dashboard_login in the bot as a fallback."
         if public_mode
         else (
             "Enter the admin dashboard token to unlock live stats, billing visibility, and engine controls."
@@ -40,13 +47,31 @@ def build_dashboard_html(
     )
     auth_clear_button = "Log Out" if public_mode else "Clear Token"
     if public_mode:
+        telegram_login_intro = (
+            "Use the Telegram button below to sign into your personal dashboard."
+            if telegram_login_enabled
+            else "Telegram web login is not configured yet. Open the bot and use /dashboard_login as a temporary fallback."
+        )
+        telegram_widget_style = "" if telegram_login_enabled else "display:none;"
+        telegram_fallback_style = "display:none;" if telegram_login_enabled else ""
         auth_controls_html = """
+          <div class="telegram-login-block" id="telegram-login-block">
+            <div class="panel-subtitle">{telegram_login_intro}</div>
+            <div class="telegram-login-widget" id="telegram-login-widget" style="{telegram_widget_style}"></div>
+            <div id="telegram-login-fallback" style="{telegram_fallback_style}">
+              <a class="link-btn primary" href="{telegram_bot_url}" target="_blank" rel="noreferrer">Open Telegram Bot</a>
+            </div>
+          </div>
           <div class="button-row">
-            <a class="link-btn primary" href="https://t.me/FancyFinanceBot" target="_blank" rel="noreferrer">Open Telegram</a>
             <button class="secondary" id="member-logout-btn">Log Out</button>
             <button class="secondary" id="member-refresh-btn">Refresh Now</button>
           </div>
-        """
+        """.format(
+            telegram_login_intro=telegram_login_intro,
+            telegram_widget_style=telegram_widget_style,
+            telegram_fallback_style=telegram_fallback_style,
+            telegram_bot_url=telegram_bot_url,
+        )
     elif auth_required:
         auth_controls_html = """
           <div>
@@ -73,7 +98,7 @@ def build_dashboard_html(
     members_nav = "" if public_mode else '<a href="#users-panel">Members</a>'
     page_title = f"{app_name} Member Dashboard" if public_mode else f"{app_name} Dashboard"
     footer_note = (
-        "Use /dashboard_login in Telegram any time you need a fresh login link."
+        "Log in with Telegram below. If the web login ever misbehaves, use /dashboard_login in Telegram for a direct fallback link."
         if public_mode
         else "Auto-refresh runs every 3 seconds while this tab is visible."
     )
@@ -109,5 +134,8 @@ def build_dashboard_html(
         .replace("__TOKEN_STORAGE_KEY__", token_storage_key)
         .replace("__TOKEN_STORAGE_KEYS__", token_storage_keys_js)
         .replace("__QUERY_TOKEN_PARAM__", query_token_param)
+        .replace("__TELEGRAM_LOGIN_ENABLED_JS__", telegram_login_enabled_js)
+        .replace("__TELEGRAM_BOT_USERNAME_JS__", telegram_bot_username_js)
+        .replace("__TELEGRAM_LOGIN_URL_JS__", telegram_login_url_js)
         .replace("__PUBLIC_SITE__", PUBLIC_SITE_URL)
     )

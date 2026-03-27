@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -111,6 +114,30 @@ def _build_engine(sample_config):
     engine.db = db
     engine.stop = MagicMock()
     return engine
+
+
+def _build_telegram_login_query(bot_token: str, **overrides):
+    payload = {
+        "id": 12345,
+        "first_name": "Amy",
+        "username": "amy",
+        "auth_date": int(time.time()),
+    }
+    payload.update(overrides)
+    data_check_string = "\n".join(
+        f"{key}={value}"
+        for key, value in sorted(
+            ((key, str(value)) for key, value in payload.items() if value is not None and value != ""),
+            key=lambda item: item[0],
+        )
+    )
+    secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
+    payload["hash"] = hmac.new(
+        secret_key,
+        data_check_string.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return payload
 
 
 def _build_user_scoped_engine(sample_config):
@@ -419,8 +446,8 @@ def test_member_dashboard_page_renders(sample_config):
 
     assert response.status_code == 200
     assert "FancyFinance Member Dashboard" in response.text
-    assert "opens a user-scoped session" in response.text
-    assert "Open Telegram" in response.text
+    assert "Log in with Telegram" in response.text
+    assert 'id="telegram-login-widget"' in response.text
 
 
 def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sample_config):
@@ -432,6 +459,9 @@ def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sampl
     assert response.status_code == 200
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
     assert 'const PERSIST_TOKEN = false;' in response.text
+    assert 'const TELEGRAM_LOGIN_ENABLED = true;' in response.text
+    assert 'const TELEGRAM_BOT_USERNAME = "FancyFinanceBot";' in response.text
+    assert 'const TELEGRAM_LOGIN_URL = "/dashboard/login/telegram";' in response.text
     assert 'id="api-token"' not in response.text
     assert "Login Link or Token" not in response.text
     assert 'id="positions-panel" style=""' in response.text
@@ -472,7 +502,37 @@ def test_dashboard_page_uses_member_token_fallback(sample_config):
     assert 'const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";' in response.text
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
     assert 'const PERSIST_TOKEN = false;' in response.text
+    assert 'id="telegram-login-widget"' in response.text
     assert "your subscription checkout completed" in response.text
+
+
+def test_dashboard_telegram_login_sets_member_cookie(sample_config):
+    engine = _build_engine(sample_config)
+    app = create_app(engine, auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get(
+        "/dashboard/login/telegram",
+        params=_build_telegram_login_query(sample_config["telegram"]["bot_token"]),
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/dashboard"
+    assert f"{api.MEMBER_ACCESS_COOKIE}=" in response.headers["set-cookie"]
+    engine.db.get_or_create_user.assert_called_with(12345, "amy", "Amy")
+
+
+def test_dashboard_telegram_login_rejects_invalid_signature(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    params = _build_telegram_login_query(sample_config["telegram"]["bot_token"])
+    params["hash"] = "invalid"
+
+    response = client.get("/dashboard/login/telegram", params=params, follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"].startswith("/dashboard?login_error=")
 
 
 def test_dashboard_bootstrap_returns_public_summary(sample_config):

@@ -5,11 +5,12 @@ import hashlib
 import hmac
 import json
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 
 SCOPE_MEMBER_DASHBOARD = "member_dashboard"
 DEFAULT_TOKEN_TTL_SECONDS = 24 * 60 * 60
+DEFAULT_TELEGRAM_AUTH_MAX_AGE_SECONDS = 10 * 60
 
 
 class DashboardAccessError(ValueError):
@@ -66,3 +67,69 @@ def verify_member_dashboard_token(secret: str, token: str) -> Dict[str, Any]:
         raise DashboardAccessError("Dashboard access token expired.")
 
     return payload
+
+
+def verify_telegram_login_payload(
+    bot_token: str,
+    payload: Mapping[str, Any],
+    *,
+    max_age_seconds: int = DEFAULT_TELEGRAM_AUTH_MAX_AGE_SECONDS,
+) -> Dict[str, Any]:
+    if not bot_token:
+        raise DashboardAccessError("Telegram bot token is required.")
+
+    raw_hash = str(payload.get("hash") or "").strip()
+    if not raw_hash:
+        raise DashboardAccessError("Missing Telegram login hash.")
+
+    items: list[tuple[str, str]] = []
+    for key, value in payload.items():
+        if key in {"hash", "next"}:
+            continue
+        text = str(value or "").strip()
+        if not text:
+            continue
+        items.append((str(key), text))
+
+    if not items:
+        raise DashboardAccessError("Telegram login payload is empty.")
+
+    data_check_string = "\n".join(
+        f"{key}={value}"
+        for key, value in sorted(items, key=lambda item: item[0])
+    )
+    secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
+    expected_hash = hmac.new(
+        secret_key,
+        data_check_string.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_hash, raw_hash):
+        raise DashboardAccessError("Invalid Telegram login signature.")
+
+    try:
+        telegram_user_id = int(str(payload.get("id") or "").strip())
+    except (TypeError, ValueError) as exc:
+        raise DashboardAccessError("Telegram login payload is missing a valid user ID.") from exc
+
+    try:
+        auth_date = int(str(payload.get("auth_date") or "").strip())
+    except (TypeError, ValueError) as exc:
+        raise DashboardAccessError("Telegram login payload is missing a valid auth date.") from exc
+
+    now = int(time.time())
+    if auth_date > now + 60:
+        raise DashboardAccessError("Telegram login timestamp is in the future.")
+    if now - auth_date > max(int(max_age_seconds), 60):
+        raise DashboardAccessError("Telegram login payload expired.")
+
+    return {
+        "id": telegram_user_id,
+        "auth_date": auth_date,
+        "first_name": str(payload.get("first_name") or "").strip(),
+        "last_name": str(payload.get("last_name") or "").strip(),
+        "username": str(payload.get("username") or "").strip(),
+        "photo_url": str(payload.get("photo_url") or "").strip(),
+        "lang": str(payload.get("lang") or "").strip(),
+    }

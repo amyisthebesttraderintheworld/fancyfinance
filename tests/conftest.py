@@ -54,6 +54,7 @@ def sample_config():
         },
         'telegram': {
             'bot_token': '12345:token',
+            'bot_username': 'FancyFinanceBot',
             'personal_mode': True,
             'admin_chat_ids': [12345],
             'enable_notifications': False

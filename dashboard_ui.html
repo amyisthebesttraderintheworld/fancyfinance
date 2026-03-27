@@ -441,6 +441,19 @@
         gap: 10px;
       }
 
+      .telegram-login-block {
+        display: grid;
+        gap: 12px;
+      }
+
+      .telegram-login-widget {
+        min-height: 44px;
+      }
+
+      .telegram-login-widget iframe {
+        max-width: 100%;
+      }
+
       button {
         appearance: none;
         border: none;
@@ -1372,11 +1385,15 @@
       const TOKEN_KEY = "__TOKEN_STORAGE_KEY__";
       const TOKEN_KEYS = __TOKEN_STORAGE_KEYS__;
       const QUERY_TOKEN_PARAM = "__QUERY_TOKEN_PARAM__";
+      const TELEGRAM_LOGIN_ENABLED = __TELEGRAM_LOGIN_ENABLED_JS__;
+      const TELEGRAM_BOT_USERNAME = __TELEGRAM_BOT_USERNAME_JS__;
+      const TELEGRAM_LOGIN_URL = __TELEGRAM_LOGIN_URL_JS__;
       const pageParams = new URLSearchParams(window.location.search);
       const queryToken = QUERY_TOKEN_PARAM
         ? (pageParams.get(QUERY_TOKEN_PARAM) || "")
         : "";
       const SUBSCRIPTION_SUCCESS = pageParams.get("subscribed") === "1";
+      const LOGIN_ERROR = pageParams.get("login_error") || "";
       const storedTokenCandidates = PERSIST_TOKEN
         ? TOKEN_KEYS.map((key) => key ? (localStorage.getItem(key) || "") : "")
         : [];
@@ -1401,8 +1418,9 @@
         localStorage.setItem(TOKEN_KEY, queryToken);
       }
 
-      if (SUBSCRIPTION_SUCCESS) {
+      if (SUBSCRIPTION_SUCCESS || LOGIN_ERROR) {
         pageParams.delete("subscribed");
+        pageParams.delete("login_error");
         const nextQuery = pageParams.toString();
         const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash || ""}`;
         window.history.replaceState({}, "", nextUrl);
@@ -1410,6 +1428,8 @@
 
       const els = {
         tokenInput: document.getElementById("api-token"),
+        telegramLoginBlock: document.getElementById("telegram-login-block"),
+        telegramLoginWidget: document.getElementById("telegram-login-widget"),
         authMessage: document.getElementById("auth-message"),
         controlMessage: document.getElementById("control-message"),
         strategyMessage: document.getElementById("strategy-message"),
@@ -1432,6 +1452,37 @@
 
       if (els.tokenInput) {
         els.tokenInput.value = state.token;
+      }
+
+      function renderTelegramLoginWidget() {
+        if (!PUBLIC_MODE || !TELEGRAM_LOGIN_ENABLED || !TELEGRAM_BOT_USERNAME || !TELEGRAM_LOGIN_URL) {
+          return;
+        }
+        if (!els.telegramLoginWidget || els.telegramLoginWidget.dataset.rendered === "true") {
+          return;
+        }
+
+        els.telegramLoginWidget.innerHTML = "";
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute("data-telegram-login", TELEGRAM_BOT_USERNAME);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-radius", "12");
+        script.setAttribute("data-userpic", "false");
+        script.setAttribute("data-auth-url", TELEGRAM_LOGIN_URL);
+        els.telegramLoginWidget.appendChild(script);
+        els.telegramLoginWidget.dataset.rendered = "true";
+      }
+
+      function setTelegramLoginVisibility(visible) {
+        if (!PUBLIC_MODE || !els.telegramLoginBlock) {
+          return;
+        }
+        els.telegramLoginBlock.style.display = visible ? "" : "none";
+        if (visible) {
+          renderTelegramLoginWidget();
+        }
       }
 
       function escapeHtml(value) {
@@ -2409,6 +2460,7 @@
         } else if (publicBootstrap) {
           setMessage(els.controlMessage, "Showing the live public summary. Unlock the dashboard to view positions, trades, and member detail.", false);
         }
+        setTelegramLoginVisibility(!memberAccess);
 
         applyAccessMode(memberAccess, publicBootstrap);
         renderWallet(portfolio);
@@ -2431,12 +2483,15 @@
             throw new Error(`Public bootstrap failed: ${response.status}`);
           }
           const payload = await response.json();
-          if (SUBSCRIPTION_SUCCESS) {
+          setTelegramLoginVisibility(true);
+          if (LOGIN_ERROR) {
+            setMessage(els.authMessage, LOGIN_ERROR, true);
+          } else if (SUBSCRIPTION_SUCCESS) {
             setSuccessMessage(els.authMessage, subscriptionSuccessMessage(false));
           } else {
             setMessage(
               els.authMessage,
-              message || "Showing the live public summary. Sign in with a valid dashboard login for protected detail.",
+              message || "Showing the live public summary. Log in with Telegram below for protected detail.",
               false
             );
           }
