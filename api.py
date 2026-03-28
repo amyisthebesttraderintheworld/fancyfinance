@@ -26,7 +26,7 @@ from dashboard_access import (
     verify_member_dashboard_token,
     verify_telegram_login_payload,
 )
-from dashboard_ui import build_dashboard_html
+from dashboard_ui import build_dashboard_html, build_login_html
 from fancyfinance import APP_NAME, __version__
 from stripe_service import StripeService
 from strategy_profile import normalize_strategy_profile
@@ -992,13 +992,45 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="Landing page is not built")
         return FileResponse(landing_index, media_type="text/html")
 
+    @app.get("/dashboard/login", response_class=HTMLResponse)
+    def dashboard_login(request: Request, login_error: Optional[str] = None):
+        # If already logged in, redirect to dashboard
+        token = _resolve_dashboard_token(request)
+        if token:
+            try:
+                _authorize_dashboard_request(auth_token, token)
+                return RedirectResponse(url="/dashboard", status_code=307)
+            except HTTPException:
+                pass
+
+        return HTMLResponse(
+            build_login_html(
+                APP_NAME,
+                telegram_login_enabled=bool(telegram_login["enabled"]),
+                telegram_login_bot_username=str(telegram_login["bot_username"]),
+                telegram_login_url=str(telegram_login["auth_url"]),
+                redirect_to="/dashboard",
+            )
+        )
+
     @app.get("/dashboard", response_class=HTMLResponse)
-    def dashboard(request: Request):
-        # Redirect to /dashboard/member if ?access=... is present (test expects 307)
-        access_token = request.query_params.get("access")
-        if access_token:
-            return RedirectResponse(url="/dashboard/member?access=" + quote(access_token), status_code=307)
-        # Always show login page with Telegram login
+    def dashboard(request: Request, access: Optional[str] = None):
+        if access:
+            return _apply_no_store(
+                RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307),
+                private=True,
+                vary_cookie=True,
+            )
+
+        token = _resolve_dashboard_token(request)
+        if not token:
+            return RedirectResponse(url="/dashboard/login")
+
+        try:
+            _authorize_dashboard_request(auth_token, token)
+        except HTTPException:
+            return RedirectResponse(url="/dashboard/login")
+
         response = HTMLResponse(
             build_dashboard_html(
                 APP_NAME,
@@ -1023,7 +1055,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         if not auth_token or not telegram_login.get("bot_token"):
             return _apply_no_store(
                 RedirectResponse(
-                    url=f"/dashboard?login_error={quote('Telegram dashboard login is not configured yet.', safe='')}",
+                    url=f"/dashboard/login?login_error={quote('Telegram dashboard login is not configured yet.', safe='')}",
                     status_code=307,
                 ),
                 private=True,
@@ -1039,7 +1071,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             logger.warning(f"Rejected Telegram dashboard login: {exc}")
             return _apply_no_store(
                 RedirectResponse(
-                    url=f"/dashboard?login_error={quote(str(exc), safe='')}",
+                    url=f"/dashboard/login?login_error={quote(str(exc), safe='')}",
                     status_code=307,
                 ),
                 private=True,
@@ -1126,17 +1158,31 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     @app.get("/dashboard/member", response_class=HTMLResponse)
     def member_dashboard(request: Request, access: Optional[str] = None):
         if access:
-            _authorize_member_dashboard(auth_token, access)
-            response = RedirectResponse(url="/dashboard/member", status_code=307)
-            response.set_cookie(
-                MEMBER_ACCESS_COOKIE,
-                access,
-                httponly=True,
-                samesite="lax",
-                secure=_member_access_cookie_secure(request),
-                path="/",
-            )
-            return _apply_no_store(response, private=True, vary_cookie=True)
+            try:
+                _authorize_member_dashboard(auth_token, access)
+                response = RedirectResponse(url="/dashboard/member", status_code=307)
+                response.set_cookie(
+                    MEMBER_ACCESS_COOKIE,
+                    access,
+                    httponly=True,
+                    samesite="lax",
+                    secure=_member_access_cookie_secure(request),
+                    path="/",
+                )
+                return _apply_no_store(response, private=True, vary_cookie=True)
+            except HTTPException:
+                return RedirectResponse(url=f"/dashboard/login?login_error={quote('Invalid or expired access token.')}")
+
+        token = _resolve_dashboard_token(request)
+        if not token:
+            return RedirectResponse(url="/dashboard/login")
+
+        try:
+            _authorize_member_dashboard(auth_token, token)
+        except HTTPException:
+            response = RedirectResponse(url="/dashboard/login")
+            response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
+            return response
 
         response = HTMLResponse(
             build_dashboard_html(
@@ -1155,12 +1201,6 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 telegram_bot_url=str(telegram_login["bot_url"]),
             )
         )
-        existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
-        if existing_cookie:
-            try:
-                _authorize_member_dashboard(auth_token, existing_cookie)
-            except HTTPException:
-                response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
         return _apply_no_store(response, private=True, vary_cookie=True)
 
     @app.get("/account", response_class=RedirectResponse)

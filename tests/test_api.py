@@ -268,8 +268,9 @@ def _build_user_scoped_engine(sample_config):
 def test_dashboard_page_renders(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
 
-    response = client.get("/dashboard")
+    response = client.get("/dashboard", cookies={api.MEMBER_ACCESS_COOKIE: token})
 
     assert response.status_code == 200
     assert "FancyFinance Member Dashboard" in response.text
@@ -283,11 +284,21 @@ def test_dashboard_page_renders(sample_config):
     assert '<option value="1000">1000</option>' in response.text
 
 
+def test_dashboard_page_redirects_when_unauthorized(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+
+    response = client.get("/dashboard", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/dashboard/login"
+
+
 def test_dashboard_admin_page_renders(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
 
-    response = client.get("/dashboard/admin")
+    response = client.get("/dashboard/admin", cookies={api.MEMBER_ACCESS_COOKIE: "secret-token"})
 
     assert response.status_code == 200
     assert "FancyFinance Control Center" in response.text
@@ -441,8 +452,9 @@ def test_dashboard_data_accepts_member_token_for_read_only_payload(sample_config
 def test_member_dashboard_page_renders(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
 
-    response = client.get("/dashboard/member")
+    response = client.get("/dashboard/member", cookies={api.MEMBER_ACCESS_COOKIE: token})
 
     assert response.status_code == 200
     assert "FancyFinance Member Dashboard" in response.text
@@ -450,11 +462,22 @@ def test_member_dashboard_page_renders(sample_config):
     assert 'id="telegram-login-widget"' in response.text
 
 
-def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sample_config):
+def test_member_dashboard_page_redirects_when_unauthorized(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
 
-    response = client.get("/dashboard/member")
+    response = client.get("/dashboard/member", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/dashboard/login"
+
+
+def test_member_dashboard_page_uses_session_only_login_and_shows_positions(sample_config):
+    app = create_app(_build_engine(sample_config), auth_token="secret-token")
+    client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
+
+    response = client.get("/dashboard/member", cookies={api.MEMBER_ACCESS_COOKIE: token})
 
     assert response.status_code == 200
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
@@ -496,11 +519,11 @@ def test_member_dashboard_query_token_sets_cookie_and_redirects_clean(sample_con
 def test_dashboard_page_uses_member_token_fallback(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
 
-    response = client.get("/dashboard")
+    response = client.get("/dashboard", cookies={api.MEMBER_ACCESS_COOKIE: token})
 
     assert response.status_code == 200
-    assert 'const BOOTSTRAP_ENDPOINT = "/dashboard/bootstrap";' in response.text
     assert 'const TOKEN_KEYS = ["fancyfinance_member_dashboard_token"];' in response.text
     assert 'const MEMBER_SESSION_MODE = false;' in response.text
     assert 'const PERSIST_TOKEN = false;' in response.text
@@ -528,8 +551,9 @@ def test_dashboard_telegram_login_sets_member_cookie(sample_config):
 def test_member_dashboard_response_is_private_no_store(sample_config):
     app = create_app(_build_engine(sample_config), auth_token="secret-token")
     client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
 
-    response = client.get("/dashboard/member")
+    response = client.get("/dashboard/member", cookies={api.MEMBER_ACCESS_COOKIE: token})
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "private, no-store, max-age=0, must-revalidate"
@@ -545,7 +569,7 @@ def test_dashboard_telegram_login_rejects_invalid_signature(sample_config):
     response = client.get("/dashboard/login/telegram", params=params, follow_redirects=False)
 
     assert response.status_code == 307
-    assert response.headers["location"].startswith("/dashboard?login_error=")
+    assert response.headers["location"].startswith("/dashboard/login?login_error=")
 
 
 def test_dashboard_bootstrap_returns_public_summary(sample_config):

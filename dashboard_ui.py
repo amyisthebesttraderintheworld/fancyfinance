@@ -124,3 +124,30 @@ def build_dashboard_html(
         .replace("__TELEGRAM_LOGIN_URL_JS__", telegram_login_url_js)
         .replace("__PUBLIC_SITE__", PUBLIC_SITE_URL)
     )
+
+
+def build_login_html(
+    app_name: str,
+    *,
+    telegram_login_enabled: bool = False,
+    telegram_login_bot_username: str = "",
+    telegram_login_url: str = "",
+    redirect_to: str = "/dashboard",
+) -> str:
+    template_path = pathlib.Path(__file__).parent / "dashboard_login.html"
+    if not template_path.exists():
+        raise FileNotFoundError(f"Login template not found at {template_path}")
+
+    template = template_path.read_text()
+    telegram_login_enabled_js = "true" if telegram_login_enabled else "false"
+    telegram_bot_username_js = json.dumps(telegram_login_bot_username or "")
+    telegram_login_url_js = json.dumps(telegram_login_url or "")
+
+    return (
+        template
+        .replace("__APP_NAME__", app_name)
+        .replace("__TELEGRAM_LOGIN_ENABLED_JS__", telegram_login_enabled_js)
+        .replace("__TELEGRAM_BOT_USERNAME_JS__", telegram_bot_username_js)
+        .replace("__TELEGRAM_LOGIN_URL_JS__", telegram_login_url_js)
+        .replace("__REDIRECT_TO__", redirect_to)
+    )

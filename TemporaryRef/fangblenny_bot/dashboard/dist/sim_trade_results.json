@@ -1,0 +1,13 @@
+[
+  {
+    "symbol": "XPLUSDT",
+    "direction": "LONG",
+    "entry": 0.1022,
+    "exit": 0.10045,
+    "pnl": -5.137,
+    "hold_time_s": 1439,
+    "score": 141,
+    "reason": "stop",
+    "timestamp": "2026-03-19T08:52:28.508983"
+  }
+]
