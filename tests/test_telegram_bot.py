@@ -24,6 +24,12 @@ from telegram_bot import (
 )
 import telegram_bot # to get global variables if needed
 
+@pytest.fixture(autouse=True)
+def clear_cooldowns():
+    telegram_bot.bot_context.command_cooldowns.clear()
+    yield
+    telegram_bot.bot_context.command_cooldowns.clear()
+
 @pytest.fixture
 def mock_update():
     update = MagicMock()
@@ -560,7 +566,7 @@ async def test_backtest_command_supports_flag_profile(mock_update, mock_context,
         "cooldown": 0,
         "csv": False,
     }
-    monkeypatch.setattr(telegram_bot, "active_engine", active_engine)
+    monkeypatch.setattr(telegram_bot.bot_context, "active_engine", active_engine)
     mock_context.args = [
         "--timeframe", "15m",
         "--candles", "1000",
@@ -631,7 +637,7 @@ async def test_set_config_command_updates_active_engine_profile(mock_update, moc
         "cooldown": 2,
         "csv": True,
     }
-    monkeypatch.setattr(telegram_bot, "active_engine", active_engine)
+    monkeypatch.setattr(telegram_bot.bot_context, "active_engine", active_engine)
     mock_context.args = [
         "--timeframe", "15m",
         "--candles", "1000",
@@ -702,11 +708,6 @@ async def test_dashboard_api_command_returns_member_link(mock_update, mock_conte
             "base_url": "https://fancyfinance-production.up.railway.app",
         },
     }
-
-@pytest.mark.asyncio
-async def test_dashboard_api_command_returns_member_link(mock_update, mock_context, mock_config):
-    telegram_bot.bot_context.config = mock_config
-    telegram_bot.bot_context.config["api"]["auth_token"] = "dummy"
     with patch.object(
         telegram_bot.db,
         "get_membership_summary",
@@ -719,6 +720,7 @@ async def test_dashboard_api_command_returns_member_link(mock_update, mock_conte
     message = mock_update.message.reply_text.call_args[0][0]
     assert "`signed-token`" in message
     assert "/dashboard?access=signed-token" in message
+    assert "https://fancyfinance-production.up.railway.app" in message
     assert "/dashboard_login" in message
 
 

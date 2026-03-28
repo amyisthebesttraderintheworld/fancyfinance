@@ -365,9 +365,9 @@ class StripeService:
                 if line_items:
                     period_end = self._period_end_from_unix((((line_items[0] or {}).get("period") or {}).get("end")))
 
-                subscription_status = str(obj.get("status") or "active").strip().lower()
-                if subscription_status not in {"active", "trialing"}:
-                    # invoice.paid often implies active, but preserve known status when provided.
+                subscription_status = str(obj.get("status") or "").strip().lower()
+                if subscription_status not in ACTIVE_STRIPE_STATUSES:
+                    # Default to active if status is missing or non-active but invoice is paid
                     subscription_status = "active"
 
                 db.activate_paid_membership_from_stripe(

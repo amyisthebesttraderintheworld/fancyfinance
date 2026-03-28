@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login - __APP_NAME__</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --background: hsl(220 20% 4%);
+        --background-soft: hsl(220 20% 6%);
+        --foreground: hsl(210 20% 92%);
+        --muted-foreground: hsl(215 12% 58%);
+        --card: hsl(220 18% 7%);
+        --card-soft: hsl(220 16% 10%);
+        --border: hsl(220 14% 14%);
+        --primary: hsl(145 60% 48%);
+        --gradient-hero: radial-gradient(circle at top center, rgba(47, 208, 111, 0.08), transparent 42%), linear-gradient(180deg, hsl(220 20% 6%) 0%, hsl(220 20% 4%) 100%);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--foreground);
+        font-family: "Inter", sans-serif;
+        background: var(--gradient-hero);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .login-card {
+        width: 100%;
+        max-width: 440px;
+        padding: 40px;
+        border-radius: 24px;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, rgba(16, 22, 20, 0.94), rgba(10, 14, 13, 0.98));
+        box-shadow: 0 18px 48px -20px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(18px);
+        text-align: center;
+      }
+
+      .logo-wrap { margin-bottom: 32px; }
+      .brand-logo { height: 64px; width: auto; }
+
+      h1 {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 28px;
+        margin: 0 0 8px;
+        letter-spacing: -0.02em;
+      }
+
+      .subtitle {
+        color: var(--muted-foreground);
+        font-size: 15px;
+        line-height: 1.5;
+        margin-bottom: 32px;
+      }
+
+      .auth-section {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .field-group {
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .field-label {
+        color: var(--muted-foreground);
+        font-size: 13px;
+        font-weight: 600;
+        padding-left: 4px;
+      }
+
+      input {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(12, 17, 15, 0.96);
+        color: var(--foreground);
+        padding: 14px 16px;
+        font-size: 15px;
+        outline: none;
+      }
+
+      input:focus {
+        border-color: rgba(47, 208, 111, 0.45);
+        box-shadow: 0 0 0 4px rgba(47, 208, 111, 0.12);
+      }
+
+      button {
+        width: 100%;
+        appearance: none;
+        border: none;
+        border-radius: 14px;
+        min-height: 50px;
+        padding: 0 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        background: var(--primary);
+        color: hsl(220 20% 4%);
+        box-shadow: 0 12px 24px -10px rgba(47, 208, 111, 0.5);
+        transition: transform 140ms ease, opacity 140ms ease;
+      }
+
+      button:hover { transform: translateY(-1px); }
+      button:active { transform: translateY(0); }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 24px 0;
+        color: var(--border);
+      }
+      .divider::before, .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+      .divider span {
+        color: var(--muted-foreground);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .telegram-wrap { min-height: 44px; }
+
+      .message {
+        margin-top: 20px;
+        font-size: 14px;
+        min-height: 20px;
+      }
+      .message.error { color: #ff9d9d; }
+      .message.success { color: #8dffc0; }
+
+      .footer-links {
+        margin-top: 32px;
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        font-size: 13px;
+        color: var(--muted-foreground);
+      }
+      .footer-links a:hover { color: var(--foreground); text-decoration: underline; }
+      a { color: inherit; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="login-card">
+      <div class="logo-wrap">
+        <img class="brand-logo" src="/dashboard/assets/logo.png" alt="__APP_NAME__" />
+      </div>
+      <h1>Member Login</h1>
+      <p class="subtitle">Access your personal trading dashboard and live engine controls.</p>
+
+      <div class="auth-section">
+        <div class="telegram-wrap" id="telegram-login-widget"></div>
+        
+        <div class="divider"><span>Or use a token</span></div>
+
+        <div class="field-group">
+          <label class="field-label" for="api-token">Access Token</label>
+          <input id="api-token" type="password" placeholder="Paste your dashboard access token" />
+        </div>
+        <button id="login-btn">Unlock Dashboard</button>
+      </div>
+
+      <div class="message" id="login-message"></div>
+
+      <div class="footer-links">
+        <a href="/">Public Site</a>
+        <a href="/terms-of-use">Terms</a>
+        <a href="/privacy-policy">Privacy</a>
+      </div>
+    </div>
+
+    <script>
+      const APP_NAME = "__APP_NAME__";
+      const TELEGRAM_LOGIN_ENABLED = __TELEGRAM_LOGIN_ENABLED_JS__;
+      const TELEGRAM_BOT_USERNAME = __TELEGRAM_BOT_USERNAME_JS__;
+      const TELEGRAM_LOGIN_URL = __TELEGRAM_LOGIN_URL_JS__;
+      const REDIRECT_TO = "__REDIRECT_TO__";
+      
+      const els = {
+        tokenInput: document.getElementById("api-token"),
+        loginBtn: document.getElementById("login-btn"),
+        message: document.getElementById("login-message"),
+        telegramWidget: document.getElementById("telegram-login-widget"),
+      };
+
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get("login_error");
+      if (error) {
+        els.message.textContent = error;
+        els.message.className = "message error";
+      }
+
+      function renderTelegramWidget() {
+        if (!TELEGRAM_LOGIN_ENABLED || !TELEGRAM_BOT_USERNAME || !TELEGRAM_LOGIN_URL) {
+          els.telegramWidget.innerHTML = '<p style="font-size: 13px; color: var(--muted-foreground);">Telegram login is currently unavailable. Use /dashboard_login in the bot.</p>';
+          return;
+        }
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute("data-telegram-login", TELEGRAM_BOT_USERNAME);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-radius", "12");
+        script.setAttribute("data-userpic", "false");
+        script.setAttribute("data-auth-url", TELEGRAM_LOGIN_URL);
+        els.telegramWidget.appendChild(script);
+      }
+
+      els.loginBtn.addEventListener("click", () => {
+        const token = els.tokenInput.value.trim();
+        if (!token) {
+          els.message.textContent = "Please enter an access token.";
+          els.message.className = "message error";
+          return;
+        }
+        
+        // Redirect to the member dashboard with the token
+        window.location.href = `/dashboard/member?access=${encodeURIComponent(token)}`;
+      });
+
+      renderTelegramWidget();
+    </script>
+  </body>
+</html>

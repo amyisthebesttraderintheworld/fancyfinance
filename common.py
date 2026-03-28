@@ -275,7 +275,7 @@ class PhemexClient:
                 query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items()) if v is not None])
             payload = query_string
         elif method == "POST":
-            # Sign and send the exact same JSON payload to avoid signature/body mismatches.
+            # Phemex v2 signature for POST must include the JSON body.
             payload = json.dumps(params or {}, separators=(",", ":"), sort_keys=True)
 
         signature = self._generate_signature(endpoint, payload, expiry)
@@ -291,9 +291,10 @@ class PhemexClient:
             url += f"?{query_string}"
 
         try:
-            if method.upper() == "GET":
+            if method == "GET":
                 response = requests.get(url, headers=headers, timeout=15)
             elif method == "POST":
+                # Do NOT append params to URL for POST; they are in the JSON body.
                 response = requests.post(url, headers=headers, data=payload, timeout=15)
             elif method == "DELETE":
                 response = requests.delete(url, headers=headers, timeout=15)
@@ -447,8 +448,7 @@ class SettingsManager:
             elif target_type == "Boolean":
                 value = str(value).lower() in ['true', '1', 'yes']
             self.settings[key]["value"] = value
-            saved = self.save()
-            return saved
+            return self.save()
         except Exception:
             return False
     def list_all(self):

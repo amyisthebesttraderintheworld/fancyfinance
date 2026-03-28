@@ -426,6 +426,9 @@ def _snapshot(engine, user_id: Optional[int] = None):
     if reference_balance is None:
         reference_balance = getattr(engine, "reference_balance", engine.balance)
 
+    balance = getattr(engine, "balance", 0.0)
+    initial_balance = engine.config.get("backtest", {}).get("initial_balance") or 0.0
+
     return {
         "app": APP_NAME,
         "version": __version__,
@@ -435,9 +438,9 @@ def _snapshot(engine, user_id: Optional[int] = None):
         "exchange": engine.exchange_id,
         "running": engine.is_running,
         "paused": engine.is_paused,
-        "balance": 0.0,
-        "reference_balance": 0.0,
-        "initial_balance": 0.0,
+        "balance": 0.0 if user_id is None else balance,
+        "reference_balance": 0.0 if user_id is None else reference_balance,
+        "initial_balance": 0.0 if user_id is None else initial_balance,
         "symbols": symbols,
         "symbol_count": len(symbols),
         "open_positions": len(engine.positions),
@@ -631,9 +634,8 @@ def _runtime_summary(engine, user_id: Optional[int] = None):
     }
 
 
-def _member_profile(engine, user_id: int) -> Dict[str, Any]:
+def _member_profile(engine, user_id: int, stripe_service: StripeService) -> Dict[str, Any]:
     db = getattr(engine, "db", None)
-    stripe_service = StripeService(getattr(engine, "config", {}))
     user: Dict[str, Any] = {}
     user_getter = getattr(db, "get_user", None)
     if callable(user_getter):
@@ -784,10 +786,10 @@ def _member_profile(engine, user_id: int) -> Dict[str, Any]:
     }
 
 
-def _set_member_enabled(engine, user_id: int, enabled: bool) -> Dict[str, Any]:
+def _set_member_enabled(engine, user_id: int, enabled: bool, stripe_service: StripeService) -> Dict[str, Any]:
     mode = str(getattr(engine, "config", {}).get("mode") or "").strip().lower()
     db = getattr(engine, "db", None)
-    profile = _member_profile(engine, user_id)
+    profile = _member_profile(engine, user_id, stripe_service)
 
     if mode == "live":
         if not profile["can_live"]:
@@ -843,14 +845,13 @@ def _set_member_enabled(engine, user_id: int, enabled: bool) -> Dict[str, Any]:
             },
         )
 
-    return _member_profile(engine, user_id)
+    return _member_profile(engine, user_id, stripe_service)
 
 
-def _config_summary(engine, auth_token: Optional[str]):
+def _config_summary(engine, auth_token: Optional[str], stripe_service: StripeService):
     exchange_config = engine.config.get(engine.exchange_id, {})
     telegram_config = engine.config.get("telegram", {})
     email_config = engine.config.get("email", {})
-    stripe_service = StripeService(engine.config)
     db = getattr(engine, "db", None)
     cipher = getattr(db, "cipher", None)
 
@@ -878,8 +879,8 @@ def _strategy_payload(engine, user_id: Optional[int] = None):
     if callable(getter):
         profile = getter(user_id)
     else:
-        profile = normalize_strategy_profile(getattr(engine, "config", {}), {})
-    profile = normalize_strategy_profile(getattr(engine, "config", {}), {}, current=profile)
+        profile = {}
+    profile = normalize_strategy_profile(getattr(engine, "config", {}), profile)
     return {
         "profile": profile,
         "timeframes": ["1m", "3m", "5m", "15m", "30m", "1H", "2H", "4H", "6H", "12H", "1D"],
@@ -905,12 +906,12 @@ def _user_summary(engine):
     }
 
 
-def _dashboard_payload(engine, auth_token: Optional[str]):
+def _dashboard_payload(engine, auth_token: Optional[str], stripe_service: StripeService):
     snapshot = _snapshot(engine)
     return {
         "snapshot": snapshot,
         "runtime": _runtime_summary(engine),
-        "config": _config_summary(engine, auth_token),
+        "config": _config_summary(engine, auth_token, stripe_service),
         "positions": [],
         "recent_trades": [],
         "performance": _performance_summary(engine, []),
@@ -921,7 +922,7 @@ def _dashboard_payload(engine, auth_token: Optional[str]):
     }
 
 
-def _member_dashboard_payload(engine, user_id: int):
+def _member_dashboard_payload(engine, user_id: int, stripe_service: StripeService):
     trades = _recent_trades(engine, user_id=user_id)
     snapshot = _snapshot(engine, user_id=user_id)
     snapshot["initial_balance"] = None
@@ -939,7 +940,7 @@ def _member_dashboard_payload(engine, user_id: int):
         "config": {},
         "users": {},
         "strategy": _strategy_payload(engine, user_id=user_id),
-        "member": _member_profile(engine, user_id),
+        "member": _member_profile(engine, user_id, stripe_service),
     }
 
 
@@ -1258,11 +1259,11 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         member_user_id = _authorized_actor(request, x_api_key)
         if member_user_id is not None:
             return _apply_no_store(
-                JSONResponse(_member_dashboard_payload(engine, member_user_id)),
+                JSONResponse(_member_dashboard_payload(engine, member_user_id, stripe_service)),
                 private=True,
                 vary_cookie=True,
             )
-        return _apply_no_store(JSONResponse(_dashboard_payload(engine, auth_token)), private=True, vary_cookie=True)
+        return _apply_no_store(JSONResponse(_dashboard_payload(engine, auth_token, stripe_service)), private=True, vary_cookie=True)
 
     @app.get("/dashboard/member-data")
     def dashboard_member_data(
@@ -1272,7 +1273,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
     ):
         user_id = _authorized_member(request, x_api_key, access)
         return _apply_no_store(
-            JSONResponse(_member_dashboard_payload(engine, user_id)),
+            JSONResponse(_member_dashboard_payload(engine, user_id, stripe_service)),
             private=True,
             vary_cookie=True,
         )
@@ -1319,7 +1320,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         if isinstance(raw_payload, dict) and "enabled" in raw_payload:
             enabled = _coerce_bool(raw_payload.get("enabled"))
 
-        member_state = _set_member_enabled(engine, actor_user_id, enabled)
+        member_state = _set_member_enabled(engine, actor_user_id, enabled, stripe_service)
         return {
             "ok": True,
             "enabled": bool(member_state.get("effective_enabled")),

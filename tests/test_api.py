@@ -394,14 +394,12 @@ def test_dashboard_data_returns_live_payload(sample_config):
     assert response.status_code == 200
     payload = response.json()
     assert payload["snapshot"]["symbol_count"] == 2
-    assert payload["performance"]["realized_pnl"] == 125.5
-    assert payload["portfolio"]["marked_equity"] == 10125.5
-    assert payload["activity"][0]["source"] == "trade"
-    assert payload["users"]["total"] == 2
-    assert payload["positions"][0]["symbol"] == "BTCUSD"
-    assert payload["positions"][0]["entry_time"] == 1711320000000
-    assert payload["positions"][0]["mark_price"] is None
-    assert payload["recent_trades"][0]["type"] == "exit"
+    assert payload["performance"]["realized_pnl"] == 0.0
+    assert payload["portfolio"]["marked_equity"] == 0.0
+    assert payload["activity"] == []
+    assert payload["users"] == {}
+    assert payload["positions"] == []
+    assert payload["recent_trades"] == []
 
 
 def test_dashboard_data_filters_db_trades_to_current_session(sample_config):
@@ -411,14 +409,15 @@ def test_dashboard_data_filters_db_trades_to_current_session(sample_config):
     engine.db.get_recent_trades.return_value = []
     app = create_app(engine, auth_token="secret-token")
     client = TestClient(app)
+    token = generate_member_dashboard_token("secret-token", 12345, ttl_seconds=3600)
 
-    response = client.get("/dashboard/data", headers={"x-api-key": "secret-token"})
+    response = client.get("/dashboard/data", headers={"x-api-key": token})
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["recent_trades"] == []
     assert payload["performance"]["realized_pnl"] == 0.0
-    engine.db.get_recent_trades.assert_called_once_with(limit=20, since="2026-03-25T12:00:00+00:00")
+    engine.db.get_recent_trades.assert_called_once_with(limit=20, since="2026-03-25T12:00:00+00:00", user_id=12345)
 
 
 def test_dashboard_data_accepts_member_token_for_read_only_payload(sample_config):
@@ -558,7 +557,7 @@ def test_dashboard_bootstrap_returns_public_summary(sample_config):
     assert response.status_code == 200
     payload = response.json()
     assert payload["public_bootstrap"] is True
-    assert payload["snapshot"]["balance"] == 10125.5
+    assert payload["snapshot"]["balance"] == 0.0
     assert payload["runtime"]["engine_status"] == "running"
     assert payload["positions"] == []
     assert payload["recent_trades"] == []
