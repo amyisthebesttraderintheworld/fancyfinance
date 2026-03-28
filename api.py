@@ -98,7 +98,7 @@ def _authorize_member_dashboard(expected_token: Optional[str], provided_token: O
 
 def _authorize_dashboard_request(expected_token: Optional[str], provided_token: Optional[str]) -> Optional[int]:
     if not expected_token:
-        return None
+        raise HTTPException(status_code=401, detail="Dashboard access is not configured")
     if not provided_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     if provided_token == expected_token:
@@ -906,19 +906,17 @@ def _user_summary(engine):
 
 
 def _dashboard_payload(engine, auth_token: Optional[str]):
-    trades = _recent_trades(engine)
     snapshot = _snapshot(engine)
-    positions = _positions_payload(engine)
     return {
         "snapshot": snapshot,
         "runtime": _runtime_summary(engine),
         "config": _config_summary(engine, auth_token),
-        "positions": positions,
-        "recent_trades": trades,
-        "performance": _performance_summary(engine, trades),
-        "portfolio": _portfolio_summary(snapshot, positions),
-        "activity": _activity_payload(engine, recent_trades=trades),
-        "users": _user_summary(engine),
+        "positions": [],
+        "recent_trades": [],
+        "performance": _performance_summary(engine, []),
+        "portfolio": _portfolio_summary(snapshot, []),
+        "activity": [],
+        "users": {},
         "strategy": _strategy_payload(engine),
     }
 
