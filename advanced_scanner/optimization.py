@@ -6,8 +6,8 @@ import numpy as np
 from scipy.optimize import minimize, Bounds
 from typing import Callable, List, Tuple, Union, Dict, Any
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from utils import c
-from config import MAX_WORKERS, BOLD, BRIGHT_WHITE, DIM, BRIGHT_GREEN
+from advanced_scanner.utils import c
+from advanced_scanner.config import MAX_WORKERS, BOLD, BRIGHT_WHITE, DIM, BRIGHT_GREEN
 
 def gradient_descent(f: Callable[[np.ndarray], float], grad_f: Callable[[np.ndarray], np.ndarray], x0: np.ndarray, lr: float = 0.01, tol: float = 1e-6, max_iter: int = 1000):
     """Simple gradient descent optimizer."""
@@ -71,8 +71,8 @@ def sharpe_ratio_portfolio(returns: np.ndarray, cov_matrix: np.ndarray, risk_fre
 
 def _opt_worker(sym_rows_map, funding_map, vol_map, capital, risk, t, h):
     # Local import to avoid circular dependencies and ensure fresh state
-    from backtest import backtest_portfolio
-    from stats import portfolio_stats
+    from advanced_scanner.backtest import backtest_portfolio
+    from advanced_scanner.stats import portfolio_stats
     
     all_trades, equity_curve, final_cap, concurrent_log = backtest_portfolio(
         sym_rows_map, funding_map, vol_map, threshold=t, hold_bars=h, 
@@ -115,8 +115,8 @@ def optimize_parameters(sym_rows_map, funding_map, vol_map, capital, risk):
 
 def _fuzz_worker(sym_rows_map, funding_map, vol_map, capital):
     import random, os, time
-    from backtest import backtest_portfolio
-    from stats import portfolio_stats
+    from advanced_scanner.backtest import backtest_portfolio
+    from advanced_scanner.stats import portfolio_stats
     random.seed(os.getpid() + int(time.time() * 1000) % 1234567)
     t = random.randint(15, 50); h = random.randint(1, 12); c_down = random.randint(1, 5)
     r = random.uniform(0.005, 0.025); af = random.choice([True, False])
@@ -134,8 +134,8 @@ def _fuzz_worker(sym_rows_map, funding_map, vol_map, capital):
 
 def _mc_worker(sym_rows_map, funding_map, vol_map, capital, params):
     import random, os, time
-    from backtest import backtest_portfolio
-    from stats import portfolio_stats
+    from advanced_scanner.backtest import backtest_portfolio
+    from advanced_scanner.stats import portfolio_stats
     random.seed(os.getpid() + int(time.time() * 1000) % 1234567)
     all_trades, equity_curve, final_cap, concurrent_log = backtest_portfolio(
         sym_rows_map, funding_map, vol_map, **params, starting_capital=capital
@@ -144,7 +144,7 @@ def _mc_worker(sym_rows_map, funding_map, vol_map, capital, params):
     return st.get("fitness", 0)
 
 def fuzz_sweep(sym_rows_map, funding_map, vol_map, capital, iterations=40, initial_threshold=None):
-    from config import MAX_WORKERS, BRIGHT_CYAN, BRIGHT_RED, BRIGHT_GREEN, BOLD, BRIGHT_WHITE, DIM
+    from advanced_scanner.config import MAX_WORKERS, BRIGHT_CYAN, BRIGHT_RED, BRIGHT_GREEN, BOLD, BRIGHT_WHITE, DIM
     import sys
     print("\n" + c("  ◆ RUNNING STRATEGY PARAMETER SWEEP (FUZZING)...", BOLD + BRIGHT_WHITE))
     print(c(f"  Randomly sampling {iterations} parameter combinations to find robust outcomes", DIM))

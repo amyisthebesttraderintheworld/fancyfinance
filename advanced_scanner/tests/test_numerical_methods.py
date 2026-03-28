@@ -4,7 +4,7 @@ Unit tests for numerical_methods.py
 
 import unittest
 import numpy as np
-from numerical_methods import bisection_method, newton_raphson, secant_method, cubic_spline_interpolation, simpson_integration, runge_kutta_4
+from advanced_scanner.numerical_methods import bisection_method, newton_raphson, secant_method, cubic_spline_interpolation, simpson_integration, runge_kutta_4
 
 class TestNumericalMethods(unittest.TestCase):
     def test_root_finding(self):

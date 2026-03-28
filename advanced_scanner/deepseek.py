@@ -6,8 +6,8 @@ import sys
 import json
 import requests
 import os
-from utils import get_env_key, strip_ansi, type_print, c
-from config import BRIGHT_CYAN, BRIGHT_MAGENTA, BOLD, BRIGHT_WHITE, YELLOW, BRIGHT_RED
+from advanced_scanner.utils import get_env_key, strip_ansi, type_print, c
+from advanced_scanner.config import BRIGHT_CYAN, BRIGHT_MAGENTA, BOLD, BRIGHT_WHITE, YELLOW, BRIGHT_RED
 
 def report_to_deepseek(report_text=None, include_code=True):
     api_key = get_env_key("DEEPSEEK_API_KEY")

@@ -4,7 +4,7 @@ Unit tests for stochastic_processes.py
 
 import unittest
 import numpy as np
-from stochastic_processes import brownian_motion, geometric_brownian_motion, monte_carlo_paths, jump_diffusion
+from advanced_scanner.stochastic_processes import brownian_motion, geometric_brownian_motion, monte_carlo_paths, jump_diffusion
 
 class TestStochasticProcesses(unittest.TestCase):
     def test_brownian_motion(self):

@@ -4,7 +4,7 @@ Unit tests for stats_models.py
 
 import unittest
 import numpy as np
-from stats_models import probability_density, cumulative_density, t_test, monte_carlo_simulation, z_score_stats, identify_outliers
+from advanced_scanner.stats_models import probability_density, cumulative_density, t_test, monte_carlo_simulation, z_score_stats, identify_outliers
 
 class TestStatsModels(unittest.TestCase):
     def test_pdf_cdf(self):

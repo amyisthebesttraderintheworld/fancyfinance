@@ -4,7 +4,7 @@ Unit tests for chaos_and_complexity.py
 
 import unittest
 import numpy as np
-from chaos_and_complexity import lyapunov_exponent, hurst_exponent, fractal_dimension, logistic_map, entropy
+from advanced_scanner.chaos_and_complexity import lyapunov_exponent, hurst_exponent, fractal_dimension, logistic_map, entropy
 
 class TestChaosComplexity(unittest.TestCase):
     def test_lyapunov_exponent(self):

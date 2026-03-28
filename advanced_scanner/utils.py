@@ -9,7 +9,7 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from config import TIMEOUT, TYPE_DELAY, RESET
+from advanced_scanner.config import TIMEOUT, TYPE_DELAY, RESET
 
 def get_env_key(key_name):
     if os.path.exists(".env"):

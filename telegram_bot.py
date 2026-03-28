@@ -172,22 +172,24 @@ def _welcome_menu_text() -> str:
 
 def _record_user_agreement(user_id) -> bool:
     # Persist agreement in Supabase (primary), fallback to local settings manager.
+    success = False
     if bot_context.db and hasattr(bot_context.db, "set_user_agreement"):
         try:
             if bot_context.db.set_user_agreement(user_id, True):
-                return True
+                success = True
         except Exception:
             pass
 
     if bot_context.settings_mgr:
-        return bot_context.settings_mgr.set(
+        if bot_context.settings_mgr.set(
             f"user_agreed_{user_id}",
             True,
             "Boolean",
             "User agreement to Terms & Conditions",
-        )
+        ):
+            success = True
 
-    return False
+    return success
 
 
 MENU_BUTTON_COMMANDS = {

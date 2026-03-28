@@ -94,8 +94,8 @@ except ImportError:
             from scanners import short as scanner_short
         except ImportError:
             try:
-                from fangblenny_bot.scanners import long as scanner_long
-                from fangblenny_bot.scanners import short as scanner_short
+                from scanners import long as scanner_long
+                from scanners import short as scanner_short
             except ImportError:
                 try:
                     import scanners.long as scanner_long

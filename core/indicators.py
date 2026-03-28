@@ -94,21 +94,23 @@ def calc_atr(highs: List[float], lows: List[float], closes: List[float], period:
     highs_a = np.asarray(highs, dtype=float)
     lows_a = np.asarray(lows, dtype=float)
     closes_a = np.asarray(closes, dtype=float)
-    # patch[3]: vectorized — 10-30x faster than the old Python loop
-    h_l    = highs_a[1:] - lows_a[1:]
-    h_pc   = np.abs(highs_a[1:] - closes_a[:-1])
-    l_pc   = np.abs(lows_a[1:] - closes_a[:-1])
-    tr_arr = np.maximum(h_l, np.maximum(h_pc, l_pc))
-    if len(tr_arr) < period:
+    tr_list = []
+    for i in range(1, n):
+        h_l = highs_a[i] - lows_a[i]
+        h_pc = abs(highs_a[i] - closes_a[i - 1])
+        l_pc = abs(lows_a[i] - closes_a[i - 1])
+        tr = float(max(h_l, h_pc, l_pc))
+        tr_list.append(tr)
+    if len(tr_list) < period:
         return None
-    atr = float(tr_arr[:period].mean())
-    for i in range(period, len(tr_arr)):
-        atr = (atr * (period - 1) + float(tr_arr[i])) / period
+    atr = sum(tr_list[:period]) / period
+    for i in range(period, len(tr_list)):
+        atr = (atr * (period - 1) + tr_list[i]) / period
     return atr
 
 
 def calc_volume_profile(ohlc: List[Tuple[float, float, float, float]], volumes: List[float], bins: int = 20) -> Tuple[Optional[float], List[float]]:
-    if not ohlc or not volumes or len(ohlc) != len(volumes) or bins <= 0:
+    if not ohlc or not volumes or len(ohlc) != len(volumes):
         return None, []
     highs = [c[1] for c in ohlc]
     lows = [c[2] for c in ohlc]

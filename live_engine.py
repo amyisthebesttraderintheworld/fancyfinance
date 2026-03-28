@@ -78,7 +78,7 @@ class LiveEngine(Simulator):
             self.clients[user_id] = new_client
             if session:
                 self._refresh_balance(session=session, force=True)
-                session.reference_balance = max(session.reference_balance, session.balance)
+                session.reference_balance = session.balance
                 self.logger.info(f"Live Engine session for user {user_id} initialized. Balance: {session.balance}")
                 self._reconcile_positions_once(session=session, notify=False)
                 if notify:
@@ -86,7 +86,7 @@ class LiveEngine(Simulator):
         else:
             self.client = new_client
             self._refresh_balance(force=True)
-            self._balance_reference = max(self._balance_reference, self.balance)
+            self._global_session.reference_balance = self._global_session.balance
             self.logger.info(f"Live Engine global initialized. Balance: {self.balance}")
             self._reconcile_positions_once(notify=False)
             if notify:
@@ -257,7 +257,7 @@ class LiveEngine(Simulator):
         target = session or self._global_session
         current = current_balance if current_balance is not None else target.balance
         reference_balance = max(target.reference_balance, current)
-        max_daily_loss = float(self.config["risk"]["max_daily_loss"])
+        max_daily_loss = float(session.config["risk"]["max_daily_loss"])
         return reference_balance > 0 and current < reference_balance * (1 - max_daily_loss)
 
     def _reconcile_positions_once(self, session: Optional[SimulationSession] = None, notify: bool = False):
@@ -426,7 +426,7 @@ class LiveEngine(Simulator):
             if self.use_market_scan_engine:
                 continue
 
-            if len(session.positions) >= self.config["risk"].get("max_positions", 1):
+            if len(session.positions) >= session.config["risk"].get("max_positions", 1):
                 continue
 
             signal = None
@@ -513,6 +513,8 @@ class LiveEngine(Simulator):
         if self._max_daily_loss_exceeded(current_balance, session=target):
             self.logger.critical(f"Max daily loss exceeded for {target.user_id or 'global'}. Pausing session.")
             target.is_paused = True
+            if target.user_id is None:
+                self.is_running = False
             self.notifier.send_message(
                 "🚨 Max daily loss exceeded. Your live session has been paused for safety.",
                 user_id=str(target.user_id) if target.user_id else None
@@ -554,7 +556,7 @@ class LiveEngine(Simulator):
                         "qty": position.quantity,
                         "type": "entry",
                     },
-                    user_id=target.user_id
+                    session=target
                 )
                 self.db.log_trade(entry_payload, user_id=target.user_id)
                 self.db.update_position(
@@ -578,6 +580,9 @@ class LiveEngine(Simulator):
                 )
                 self.logger.info(f"Live entry {symbol} {direction} @ {position.entry_price} Qty: {position.quantity} (User {target.user_id or 'global'})")
             else:
+                self._reconcile_positions_once(session=target, notify=False)
+                if symbol not in target.positions:
+                    return
                 existing_position = target.positions.get(symbol)
                 order = client.place_order(
                     symbol,
@@ -607,7 +612,7 @@ class LiveEngine(Simulator):
                             "pnl": pnl,
                             "reason": reason,
                         },
-                        user_id=target.user_id
+                        session=target
                     )
                     self.db.log_trade(exit_payload, user_id=target.user_id)
                     self.db.remove_position(symbol, user_id=target.user_id)
@@ -643,6 +648,12 @@ class LiveEngine(Simulator):
                 user_id=str(target.user_id) if target.user_id else None
             )
         finally:
+            self._reconcile_positions_once(session=target, notify=False)
+            if is_entry and symbol not in target.positions:
+                self.notifier.send_message(
+                    "Order Execution Failed",
+                    user_id=str(target.user_id) if target.user_id else None
+                )
             self._refresh_balance(session=target, force=True)
 
     async def _run(self):

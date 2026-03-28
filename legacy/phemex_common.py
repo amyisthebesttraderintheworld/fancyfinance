@@ -57,7 +57,7 @@ except (ImportError, ValueError):
             ENTITY_APP_ID,
         )
     except ImportError:
-        from fangblenny_bot.core.config import (
+        from core.config import (
             BASE_URL,
             TIMEFRAME_MAP,
             DEFAULTS,
@@ -85,7 +85,7 @@ except (ImportError, ValueError):
             safe_request,
         )
     except ImportError:
-        from fangblenny_bot.core.network import (
+        from core.network import (
             build_session,
             get_thread_session,
             throttle,
@@ -105,7 +105,7 @@ except (ImportError, ValueError):
             CACHE,
         )
     except ImportError:
-        from fangblenny_bot.core.cache import (
+        from core.cache import (
             SimpleCache,
             CACHE,
         )
@@ -148,7 +148,7 @@ except (ImportError, ValueError):
         calc_volume_profile = calc_volume_profile
         calc_volume_spike = calc_volume_spike
     except ImportError:
-        from fangblenny_bot.core.indicators import (
+        from core.indicators import (
             calc_ema_series,
             calc_rsi,
             calc_bb,
@@ -188,7 +188,7 @@ except (ImportError, ValueError):
             grade,
         )
     except ImportError:
-        from fangblenny_bot.core.math_utils import (
+        from core.math_utils import (
             pct_change,
             clamp,
             fmt_vol,
@@ -228,7 +228,7 @@ except (ImportError, ValueError):
             make_entity_request,
         )
     except ImportError:
-        from fangblenny_bot.core.api import (
+        from core.api import (
             get_tickers,
             get_candles,
             get_funding_rate_info,

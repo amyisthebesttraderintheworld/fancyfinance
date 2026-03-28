@@ -63,7 +63,7 @@ def test_complimentary_pro_env_grants_paid_access(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
 
     summary = db.get_membership_summary(12345, "tester", "Test")
 
@@ -80,7 +80,7 @@ def test_complimentary_pro_env_overrides_manual_free(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
     db.set_membership(12345, "free")
 
     summary = db.get_membership_summary(12345, "tester", "Test")
@@ -95,7 +95,7 @@ def test_zero_knowledge_vault_round_trip(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
 
     stored = db.store_user_api_keys(
         12345,
@@ -126,7 +126,7 @@ def test_find_user_by_email_matches_case_insensitively(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
     user = db.get_or_create_user(12345, "tester", "Test")
     user["email"] = "user@example.com"
 
@@ -140,7 +140,7 @@ def test_zero_knowledge_vault_rejects_wrong_passphrase(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
     db.store_user_api_keys(
         12345,
         "pk_live_test",
@@ -161,7 +161,7 @@ def test_start_trial_membership_grants_trial_pro_access(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
     db.start_trial_membership(12345, days=7, username="tester", first_name="Test")
 
     summary = db.get_membership_summary(12345, "tester", "Test")
@@ -178,7 +178,7 @@ def test_log_trade_retries_without_missing_optional_column(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
     db.client = _SchemaCacheFallbackClient(trade_fail_column="leverage")
 
     stored = db.log_trade(
@@ -204,7 +204,7 @@ def test_update_position_retries_without_missing_optional_column(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
     db.client = _SchemaCacheFallbackClient(position_fail_column="leverage")
 
     stored = db.update_position(
@@ -230,7 +230,7 @@ def test_user_config_envelope_preserves_strategy_and_simulation_state(monkeypatc
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
 
     assert db.store_user_strategy_config(12345, {"timeframe": "15m", "leverage": 5}) is True
     assert db.store_user_simulation_state(
@@ -255,7 +255,7 @@ def test_user_config_envelope_preserves_member_state(monkeypatch):
     monkeypatch.delenv("SUPABASE_URL", raising=False)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
 
-    db = SupabaseManager()
+    db = SupabaseManager(mode="testing")
 
     assert db.store_user_strategy_config(12345, {"timeframe": "15m", "leverage": 5}) is True
     assert db.store_user_member_state(

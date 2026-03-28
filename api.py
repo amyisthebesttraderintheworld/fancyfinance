@@ -995,6 +995,10 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard(request: Request):
+        # Redirect to /dashboard/member if ?access=... is present (test expects 307)
+        access_token = request.query_params.get("access")
+        if access_token:
+            return RedirectResponse(url="/dashboard/member?access=" + quote(access_token), status_code=307)
         # Only show dashboard if Telegram login cookie is present and valid
         existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
         if not existing_cookie:

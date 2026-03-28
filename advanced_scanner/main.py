@@ -11,25 +11,25 @@ import time
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from config import (
+from advanced_scanner.config import (
     MAX_WORKERS, KLINE_LIMIT, TOP_N, BT_KLINE_LIMIT,
     DEFAULT_CAPITAL, DEFAULT_RISK_PCT,
     BRIGHT_CYAN, BOLD, BRIGHT_WHITE, CYAN, DIM,
     BRIGHT_RED, BRIGHT_GREEN, BRIGHT_YELLOW, BRIGHT_MAGENTA, RESET
 )
-from utils import type_print, c, log_execution
-from fetcher import bootstrap, fetch
-from scoring import score_rows, score_to_leverage
-from backtest import backtest_portfolio, walk_forward_optimization
-from stochastic_processes import geometric_brownian_motion, jump_diffusion
-from math_utils import combinations
-from stats_models import t_test
-from stats import (
+from advanced_scanner.utils import type_print, c, log_execution
+from advanced_scanner.fetcher import bootstrap, fetch
+from advanced_scanner.scoring import score_rows, score_to_leverage
+from advanced_scanner.backtest import backtest_portfolio, walk_forward_optimization
+from advanced_scanner.stochastic_processes import geometric_brownian_motion, jump_diffusion
+from advanced_scanner.math_utils import combinations
+from advanced_scanner.stats_models import t_test
+from advanced_scanner.stats import (
     portfolio_stats, print_portfolio_report, 
     score_color, bias_color, lev_color, bar_color, pct_color, ts_to_str
 )
-from optimization import optimize_parameters, fuzz_sweep
-from deepseek import report_to_deepseek
+from advanced_scanner.optimization import optimize_parameters, fuzz_sweep
+from advanced_scanner.deepseek import report_to_deepseek
 
 def run_stress_tests(sym_rows_map, funding_map, vol_map, threshold, hold_bars, capital, risk, n_paths=5):
     print("\n" + c("  ◆ RUNNING MULTI-MODEL STRESS TESTS...", BOLD + BRIGHT_WHITE))
@@ -80,7 +80,7 @@ def calculate_luck_probability(n_trades, n_wins):
         prob += combinations(n_trades, k) * (0.5 ** n_trades)
     return prob
 
-from scoring import extract_features, cross_sectional_score_ranking
+from advanced_scanner.scoring import extract_features, cross_sectional_score_ranking
 
 def run_scan(syms, funds):
     type_print(c("Scanning concurrently...", BRIGHT_CYAN))
@@ -188,7 +188,7 @@ def run_backtest_workflow(syms, funds, vols, threshold, hold_bars, bt_limit, top
 run_backtest = run_backtest_workflow
 
 def estimate_duration(args, syms):
-    from config import BT_KLINE_LIMIT, KLINE_LIMIT, MAX_WORKERS, TOP_N
+    from advanced_scanner.config import BT_KLINE_LIMIT, KLINE_LIMIT, MAX_WORKERS, TOP_N
     
     n_syms = len(syms)
     if args.top and args.top < n_syms:

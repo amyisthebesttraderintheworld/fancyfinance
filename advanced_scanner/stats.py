@@ -4,8 +4,8 @@ stats.py  ─  Portfolio Statistics & Reporting
 
 import time
 from collections import defaultdict
-from utils import c
-from config import (
+from advanced_scanner.utils import c
+from advanced_scanner.config import (
     BOLD, BRIGHT_WHITE, BRIGHT_GREEN, GREEN, BRIGHT_RED, RED, YELLOW,
     DIM, BRIGHT_CYAN, BRIGHT_MAGENTA, MAGENTA, CYAN, BLUE
 )
@@ -36,7 +36,7 @@ def portfolio_stats(all_trades, equity_curve, final_cap, concurrent_log, start_c
     calmar = ann_ret / (max_dd_p / 100) if max_dd_p > 0 else 0
 
     # Fitness metric for optimization: Penalize low trade count
-    from config import MIN_TRADES_FOR_STATS
+    from advanced_scanner.config import MIN_TRADES_FOR_STATS
     n_trades = len(all_trades)
     fitness = sharpe
     if n_trades < MIN_TRADES_FOR_STATS:

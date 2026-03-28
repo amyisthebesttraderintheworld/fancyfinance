@@ -39,15 +39,15 @@ scoring.py  ─  Signal Calculation & Candle Analysis (Fully Vectorized)
 
 import numpy as np
 import time
-from indicators import rsi, bb, macd, stochastic, z_score, ema, atr, adx
-from chaos_and_complexity import rolling_hurst, rolling_entropy
-from signal_processing import butter_lowpass_filter
-from time_series_analysis import rolling_autocorr, moving_average_volatility, rolling_spectral_density_peak
-from stats_models import identify_outliers
-from machine_learning_math import sigmoid
+from advanced_scanner.indicators import rsi, bb, macd, stochastic, z_score, ema, atr, adx
+from advanced_scanner.chaos_and_complexity import rolling_hurst, rolling_entropy
+from advanced_scanner.signal_processing import butter_lowpass_filter
+from advanced_scanner.time_series_analysis import rolling_autocorr, moving_average_volatility, rolling_spectral_density_peak
+from advanced_scanner.stats_models import identify_outliers
+from advanced_scanner.machine_learning_math import sigmoid
 
-from linear_algebra import principal_component_analysis
-from machine_learning_math import sigmoid
+from advanced_scanner.linear_algebra import principal_component_analysis
+from advanced_scanner.machine_learning_math import sigmoid
 
 def validate_signal_independence(X, feature_names):
     """

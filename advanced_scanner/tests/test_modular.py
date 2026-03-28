@@ -8,15 +8,15 @@ import numpy as np
 from unittest.mock import MagicMock
 
 # Modular Imports
-from config import *
-from utils import strip_ansi, get_env_key, get_json
-from indicators import rsi, bb, ema, macd, atr, adx, stochastic, z_score
-from scoring import score_rows, candle_strength, engulf, score_to_leverage
-from trade_objects import Order, Trade
-from backtest import backtest_portfolio
-from stats import portfolio_stats, print_portfolio_report
-from fetcher import fetch, bootstrap
-from main import run_scan, optimize_parameters, run_backtest
+from advanced_scanner.config import *
+from advanced_scanner.utils import strip_ansi, get_env_key, get_json
+from advanced_scanner.indicators import rsi, bb, ema, macd, atr, adx, stochastic, z_score
+from advanced_scanner.scoring import score_rows, candle_strength, engulf, score_to_leverage
+from advanced_scanner.trade_objects import Order, Trade
+from advanced_scanner.backtest import backtest_portfolio
+from advanced_scanner.stats import portfolio_stats, print_portfolio_report
+from advanced_scanner.fetcher import fetch, bootstrap
+from advanced_scanner.main import run_scan, optimize_parameters, run_backtest
 
 # --- Helpers ---
 def create_synthetic_rows(length=60, price_func=lambda i: 100 + i):
@@ -101,7 +101,7 @@ def test_order_and_trade():
 # --- 4. Backtest Portfolio ---
 
 def test_backtest_simple(monkeypatch):
-    import backtest
+    import advanced_scanner.backtest as backtest
     import random
     def mock_calc(ohlcv, f, weights=None):
         res = np.zeros(len(ohlcv))
@@ -133,11 +133,11 @@ def test_stats():
 def test_plumbing(monkeypatch):
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"data": {"rows": [[1000, 1, 2, 3, 4, 5, 6, 7]], "perpProductsV2": []}}
-    import utils
+    import advanced_scanner.utils as utils
     monkeypatch.setattr(utils.SESSION, "get", lambda *a, **kw: mock_resp)
     assert get_json("http://test") == mock_resp.json()
     
-    import fetcher
+    import advanced_scanner.fetcher as fetcher
     monkeypatch.setattr(fetcher, "get_json", lambda *a, **kw: mock_resp.json())
     s, r, f = fetch("BTC", {})
     assert len(r) == 1

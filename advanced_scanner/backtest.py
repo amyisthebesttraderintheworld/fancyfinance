@@ -5,17 +5,17 @@ backtest.py  ─  Portfolio Backtest Engine (Optimized)
 import random
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import FUNDING_INTERVAL, BRIGHT_RED, MAX_WORKERS
-from scoring import calculate_all_scores, score_to_leverage, derive_optimal_weights, _extract_features_and_target_returns, calculate_position_size, apply_portfolio_risk_management
-from indicators import adx, atr
-from trade_objects import Order, Trade
-from utils import c
+from advanced_scanner.config import FUNDING_INTERVAL, BRIGHT_RED, MAX_WORKERS
+from advanced_scanner.scoring import calculate_all_scores, score_to_leverage, derive_optimal_weights, _extract_features_and_target_returns, calculate_position_size, apply_portfolio_risk_management
+from advanced_scanner.indicators import adx, atr
+from advanced_scanner.trade_objects import Order, Trade
+from advanced_scanner.utils import c
 
 def walk_forward_optimization(sym_rows_map, funding_map, vol_map, capital, risk, windows=4):
-    from stats import ts_to_str, portfolio_stats, print_portfolio_report, usd_color, pct_color
-    from optimization import optimize_parameters
-    from utils import c
-    from config import BOLD, BRIGHT_CYAN, BRIGHT_WHITE, BRIGHT_MAGENTA
+    from advanced_scanner.stats import ts_to_str, portfolio_stats, print_portfolio_report, usd_color, pct_color
+    from advanced_scanner.optimization import optimize_parameters
+    from advanced_scanner.utils import c
+    from advanced_scanner.config import BOLD, BRIGHT_CYAN, BRIGHT_WHITE, BRIGHT_MAGENTA
 
     print("\n" + c("═" * 100, BRIGHT_MAGENTA))
     print(c("  ◆ RUNNING WALK-FORWARD OPTIMIZATION (WFO)", BOLD + BRIGHT_WHITE))

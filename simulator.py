@@ -67,6 +67,7 @@ class BaseEngine(ABC):
 class SimulationSession:
     user_id: Optional[int]
     balance: float
+    config: dict = field(default_factory=dict)
     reference_balance: float = 0.0
     positions: dict[str, Position] = field(default_factory=dict)
     trade_history: list[dict[str, Any]] = field(default_factory=list)
@@ -112,6 +113,7 @@ class Simulator(BaseEngine):
         self._user_scoped_simulation = str(config.get("mode") or "").strip().lower() in {"simulation", "live"}
         self._user_sessions: dict[int, SimulationSession] = {}
         self._global_session = self._build_session(user_id=None)
+        self._global_session.config = config
         self._latest_market_prices: dict[str, tuple[int, float]] = {}
         self._next_ws_request_id = 1
 
@@ -205,13 +207,14 @@ class Simulator(BaseEngine):
 
     def _build_session(self, user_id: Optional[int], *, start_new: bool = True) -> SimulationSession:
         session = SimulationSession(user_id=user_id, balance=self.initial_balance)
+        session.config = self.config
         stored_profile = self.db.get_user_strategy_config(user_id) if user_id is not None else None
         session.strategy_profile = normalize_strategy_profile(
-            self.config,
+            session.config,
             stored_profile or self.default_strategy_profile,
             current=self.default_strategy_profile,
         )
-        session.market_scan_settings = resolve_scan_settings(self.config, session.strategy_profile)
+        session.market_scan_settings = resolve_scan_settings(session.config, session.strategy_profile)
         if start_new:
             self._start_new_session(session)
         return session
@@ -440,23 +443,23 @@ class Simulator(BaseEngine):
         if self._user_scoped_simulation and user_id is not None:
             session = self.get_user_session(user_id, create=True)
             if session is not None and session.strategy_profile:
-                return normalize_strategy_profile(self.config, {}, current=session.strategy_profile)
+                return normalize_strategy_profile(session.config, {}, current=session.strategy_profile)
 
         session = self._global_session
-            if not self.use_market_scan_engine or target.is_paused:
-                return []
+        if not self.use_market_scan_engine or target.is_paused:
+            return []
 
-            scanner_type = self.config.get("scanner", "standard").lower()
-            settings = self._settings_for_session(target)
-            max_positions = int(self.config["risk"].get("max_positions", 1))
-            available_slots = max_positions - len(target.positions)
-            if available_slots <= 0:
-                return []
-            if target.balance < settings.margin_usdt:
-                return []
-            locked_margin = sum(float(getattr(position, "margin_used", 0.0) or 0.0) for position in target.positions.values())
-            if locked_margin + settings.margin_usdt > settings.max_margin_usdt:
-                return []
+        scanner_type = session.config.get("scanner", "standard").lower()
+        settings = self._settings_for_session(target)
+        max_positions = int(session.config["risk"].get("max_positions", 1))
+        available_slots = max_positions - len(target.positions)
+        if available_slots <= 0:
+            return []
+        if target.balance < settings.margin_usdt:
+            return []
+        locked_margin = sum(float(getattr(position, "margin_used", 0.0) or 0.0) for position in target.positions.values())
+        if locked_margin + settings.margin_usdt > settings.max_margin_usdt:
+            return []
 
             now_ms = int(time.time() * 1000)
             expired = [symbol for symbol, expires_at in target.symbol_cooldowns.items() if int(expires_at or 0) <= now_ms]
@@ -545,8 +548,9 @@ class Simulator(BaseEngine):
         if self._user_scoped_simulation and session is not None:
             return bool(session.runtime_api_ready)
 
-        api_key = self.config.get(self.exchange_id, {}).get("api_key") or self.config.get("api_key")
-        api_secret = self.config.get(self.exchange_id, {}).get("api_secret") or self.config.get("api_secret")
+        config = session.config if session is not None else self.config
+        api_key = config.get(self.exchange_id, {}).get("api_key") or config.get("api_key")
+        api_secret = config.get(self.exchange_id, {}).get("api_secret") or config.get("api_secret")
         return bool(api_key and api_secret and api_key != "YOUR_API_KEY" and api_secret != "YOUR_API_SECRET")
 
     def _apply_runtime_api_keys(self, user_id: int, api_key: str, api_secret: str):
@@ -559,11 +563,11 @@ class Simulator(BaseEngine):
                 session.runtime_api_secret = api_secret
             return
 
-        self.config.setdefault(self.exchange_id, {})
-        self.config[self.exchange_id]["api_key"] = api_key
-        self.config[self.exchange_id]["api_secret"] = api_secret
-        self.config["api_key"] = api_key
-        self.config["api_secret"] = api_secret
+        session.config.setdefault(self.exchange_id, {})
+        session.config[self.exchange_id]["api_key"] = api_key
+        session.config[self.exchange_id]["api_secret"] = api_secret
+        session.config["api_key"] = api_key
+        session.config["api_secret"] = api_secret
         self.exchange = ExchangeManager(self.exchange_id, api_key, api_secret)
         self.active_api_user_id = user_id
 
@@ -588,7 +592,7 @@ class Simulator(BaseEngine):
 
     def _ensure_symbol_state(self, symbol: str, *, session: Optional[SimulationSession] = None):
         target = session or self._global_session
-        scanner_type = self.config.get("scanner", "standard").lower()
+        scanner_type = target.config.get("scanner", "standard").lower()
         if scanner_type == "advanced":
             # Use advanced scanner wrappers (stateless, so just a marker)
             if symbol not in target.long_scanners:
@@ -597,9 +601,9 @@ class Simulator(BaseEngine):
                 target.short_scanners[symbol] = "advanced"
         else:
             if symbol not in target.long_scanners:
-                target.long_scanners[symbol] = LongScanner(self.config)
+                target.long_scanners[symbol] = LongScanner(target.config)
             if symbol not in target.short_scanners:
-                target.short_scanners[symbol] = ShortScanner(self.config)
+                target.short_scanners[symbol] = ShortScanner(target.config)
 
     def _subscribe_payload(self, symbol: str) -> dict[str, Any]:
         return {
@@ -659,7 +663,7 @@ class Simulator(BaseEngine):
             return []
 
         settings = self._settings_for_session(target)
-        max_positions = int(self.config["risk"].get("max_positions", 1))
+        max_positions = int(target.config["risk"].get("max_positions", 1))
         available_slots = max_positions - len(target.positions)
         if available_slots <= 0:
             return []
@@ -691,6 +695,13 @@ class Simulator(BaseEngine):
             locked_margin += float(plan.get("margin_used") or settings.margin_usdt)
             plans.append(plan)
         return plans
+
+    def _normalize_user_id(self, user_id: Optional[int], chat_id: Optional[int] = None) -> Optional[int]:
+        if user_id is not None:
+            return int(user_id)
+        if chat_id is not None:
+            return int(chat_id)
+        return None
 
     def _normalize_price(self, value: Any) -> float:
         price = float(value)
@@ -912,7 +923,7 @@ class Simulator(BaseEngine):
         if self.use_market_scan_engine:
             return
 
-        if len(session.positions) >= self.config["risk"].get("max_positions", 1):
+        if len(session.positions) >= session.config["risk"].get("max_positions", 1):
             return
 
         signal = None
@@ -969,7 +980,7 @@ class Simulator(BaseEngine):
 
                     # Periodic membership check: enforcement during runtime.
                     if session.user_id:
-                        mode = str(self.config.get("mode") or "simulation").strip().lower()
+                        mode = str(session.config.get("mode") or "simulation").strip().lower()
                         if not self.db.user_can_access_mode(session.user_id, mode):
                             self.logger.warning(
                                 f"User {session.user_id} does not have active paid access for {mode}. Pausing session."
@@ -989,7 +1000,7 @@ class Simulator(BaseEngine):
                             break
                         if plan["symbol"] in session.positions:
                             continue
-                        if len(session.positions) >= self.config["risk"].get("max_positions", 1):
+                        if len(session.positions) >= session.config["risk"].get("max_positions", 1):
                             break
                         self._execute_trade_for_session(
                             session,
@@ -1029,16 +1040,16 @@ class Simulator(BaseEngine):
             else:
                 break
 
-        max_losses = self.config["safety"]["max_consecutive_losses"]
+        max_losses = session.config["safety"]["max_consecutive_losses"]
         if consecutive_losses < max_losses:
             return
 
         target.is_paused = True
-        target.safety_paused_until = time.time() + (self.config["safety"]["timeout_duration_minutes"] * 60)
+        target.safety_paused_until = time.time() + (session.config["safety"]["timeout_duration_minutes"] * 60)
         msg = (
             "🛡️ *SAFETY TIMEOUT TRIGGERED*\n\n"
             f"Reason: {consecutive_losses} consecutive losses.\n"
-            f"Trading paused for {self.config['safety']['timeout_duration_minutes']} minutes."
+            f"Trading paused for {session.config['safety']['timeout_duration_minutes']} minutes."
         )
         self.notifier.send_message(msg, user_id=target.user_id)
         self.logger.warning(

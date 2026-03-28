@@ -4,7 +4,7 @@ Unit tests for signal_processing.py
 
 import unittest
 import numpy as np
-from signal_processing import butter_lowpass_filter, butter_highpass_filter, savitzky_golay_filter, wiener_filter, cross_correlation, convolution, detrend
+from advanced_scanner.signal_processing import butter_lowpass_filter, butter_highpass_filter, savitzky_golay_filter, wiener_filter, cross_correlation, convolution, detrend
 
 class TestSignalProcessing(unittest.TestCase):
     def test_filters(self):

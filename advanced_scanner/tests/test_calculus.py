@@ -4,7 +4,7 @@ Unit tests for calculus.py
 
 import unittest
 import numpy as np
-from calculus import numerical_derivative, gradient, hessian, partial_derivative
+from advanced_scanner.calculus import numerical_derivative, gradient, hessian, partial_derivative
 
 class TestCalculus(unittest.TestCase):
     def test_numerical_derivative(self):

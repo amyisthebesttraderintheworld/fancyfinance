@@ -2,13 +2,13 @@
 fetcher.py  ─  Data Retrieval Logic
 """
 
-from utils import get_json, type_print, c
-from config import BASE_URL, KLINE_LIMIT, MIN_24H_TURNOVER, BRIGHT_CYAN, BRIGHT_WHITE
+from advanced_scanner.utils import get_json, type_print, c
+from advanced_scanner.config import BASE_URL, KLINE_LIMIT, MIN_24H_TURNOVER, BRIGHT_CYAN, BRIGHT_WHITE
 
 def fetch(sym, funds, limit=KLINE_LIMIT):
     try:
-        from config import BASE_URL
-        from utils import get_json
+        from advanced_scanner.config import BASE_URL
+        from advanced_scanner.utils import get_json
         url = BASE_URL + "/exchange/public/md/v2/kline/last"
         all_rows = []
         to_ts = None

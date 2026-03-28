@@ -303,11 +303,11 @@ def _process_deepseek_stream(resp) -> str:
             d = json.loads(data_raw)
             content = d["choices"][0]["delta"].get("content", "")
             if content:
-                # print(content, end="", flush=True)
+                print(content, end="", flush=True)
                 full_text += content
         except (json.JSONDecodeError, KeyError, IndexError):
             continue
-    # print()
+    print()
     return full_text
 
 

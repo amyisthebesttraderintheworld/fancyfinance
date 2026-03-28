@@ -21,12 +21,12 @@ TIMEFRAME_MAP = {
 }
 
 DEFAULTS = {
-    "MIN_VOLUME": int(os.getenv("BOT_MIN_VOLUME", "1000000")),
-    "TIMEFRAME": os.getenv("BOT_TIMEFRAME", "4H"),
-    "TOP_N": int(os.getenv("BOT_TOP_N", "20")),
-    "MIN_SCORE": int(os.getenv("BOT_MIN_SCORE", "125")),
-    "MAX_WORKERS": int(os.getenv("BOT_MAX_WORKERS", "100")),
-    "RATE_LIMIT_RPS": float(os.getenv("BOT_RATE_LIMIT_RPS", "50.0")),
+    "MIN_VOLUME": int(os.getenv("MIN_VOLUME", 1_000_000)),
+    "TIMEFRAME": os.getenv("TIMEFRAME", "15m"),
+    "TOP_N": int(os.getenv("TOP_N", 20)),
+    "MIN_SCORE": int(os.getenv("MIN_SCORE", 130)),
+    "MAX_WORKERS": int(os.getenv("MAX_WORKERS", 100)),
+    "RATE_LIMIT_RPS": float(os.getenv("RATE_LIMIT_RPS", 100.0)),
 }
 
 # third-party API keys

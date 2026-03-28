@@ -2,8 +2,8 @@
 trade_objects.py  ─  Trading Data Structures
 """
 
-from config import MAKER_FEE, TAKER_FEE, BASE_SLIPPAGE, ORDER_EXPIRE_BARS
-from scoring import score_to_leverage, calculate_position_size
+from advanced_scanner.config import MAKER_FEE, TAKER_FEE, BASE_SLIPPAGE, ORDER_EXPIRE_BARS
+from advanced_scanner.scoring import score_to_leverage, calculate_position_size
 
 class Order:
     __slots__ = ("sym", "direction", "placed_ts", "placed_bar", "price",

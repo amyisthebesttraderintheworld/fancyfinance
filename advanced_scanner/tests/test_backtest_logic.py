@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import numpy as np
-from backtest import backtest_portfolio
-from trade_objects import Order, Trade
+from advanced_scanner.backtest import backtest_portfolio
+from advanced_scanner.trade_objects import Order, Trade
 
 class TestBacktestLogic(unittest.TestCase):
 

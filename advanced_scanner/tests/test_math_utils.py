@@ -4,7 +4,7 @@ Unit tests for math_utils.py
 
 import unittest
 import math
-from math_utils import factorial, gamma_function, combinations, set_precision, to_mpf
+from advanced_scanner.math_utils import factorial, gamma_function, combinations, set_precision, to_mpf
 
 class TestMathUtils(unittest.TestCase):
     def test_factorial(self):

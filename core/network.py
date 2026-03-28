@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import logging
 import threading
 import time
 from typing import Any, Dict, Optional
-from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -16,13 +14,6 @@ _thread_local = threading.local()
 # global rate limiter state
 _rate_lock = threading.Lock()
 _last_request_time_global = 0.0
-_host_backoff_lock = threading.Lock()
-_host_backoff_until: Dict[str, float] = {}
-
-# urllib3 logs each retry attempt loudly by default; we handle failures by
-# returning None to the caller, so keep retry noise out of the live TUI.
-logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
-logging.getLogger("urllib3.util.retry").setLevel(logging.ERROR)
 
 
 def build_session(timeout: int = 15, max_retries: int = 3) -> requests.Session:
@@ -39,7 +30,7 @@ def build_session(timeout: int = 15, max_retries: int = 3) -> requests.Session:
     retry = Retry(
         total=max_retries,
         backoff_factor=0.6,
-        status_forcelist=[500, 502, 503, 504],  # patch[2]: 429 handled manually
+        status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=frozenset(["GET", "POST", "PUT", "DELETE", "OPTIONS"]),
     )
     adapter = HTTPAdapter(max_retries=retry, pool_connections=100, pool_maxsize=100)
@@ -87,13 +78,6 @@ def safe_request(
     stream: bool = False,
 ) -> Optional[requests.Response]:
     """Wrapper around requests to handle retries, rate limiting and errors."""
-    host = urlsplit(url).hostname or ""
-    if host:
-        with _host_backoff_lock:
-            retry_after = _host_backoff_until.get(host, 0.0)
-        if retry_after > time.time():
-            return None
-
     try:
         if rps:
             throttle(rps)
@@ -125,13 +109,6 @@ def safe_request(
         resp.raise_for_status()
         return resp
     except requests.RequestException as e:
-        message = str(e)
-        if host and (
-            "NameResolutionError" in message
-            or "Temporary failure in name resolution" in message
-        ):
-            with _host_backoff_lock:
-                _host_backoff_until[host] = time.time() + 5.0
         # swallow network-related errors; caller can handle None
         return None
     except Exception:

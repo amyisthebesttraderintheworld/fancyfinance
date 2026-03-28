@@ -6,14 +6,14 @@ import io
 import sys
 import numpy as np
 from unittest.mock import MagicMock
-from config import *
-from utils import strip_ansi, get_env_key, get_json
-from indicators import rsi, bb, ema, macd, atr, adx, stochastic, z_score
-from scoring import score_rows, candle_strength, engulf, score_to_leverage
-from trade_objects import Order, Trade
-from backtest import backtest_portfolio
-from stats import portfolio_stats, print_portfolio_report
-from fetcher import fetch, bootstrap
+from advanced_scanner.config import *
+from advanced_scanner.utils import strip_ansi, get_env_key, get_json
+from advanced_scanner.indicators import rsi, bb, ema, macd, atr, adx, stochastic, z_score
+from advanced_scanner.scoring import score_rows, candle_strength, engulf, score_to_leverage
+from advanced_scanner.trade_objects import Order, Trade
+from advanced_scanner.backtest import backtest_portfolio
+from advanced_scanner.stats import portfolio_stats, print_portfolio_report
+from advanced_scanner.fetcher import fetch, bootstrap
 from main import run_scan, optimize_parameters, run_backtest
 
 # --- Helpers ---

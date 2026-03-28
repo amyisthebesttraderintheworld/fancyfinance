@@ -4,7 +4,7 @@ Unit tests for linear_algebra.py
 
 import unittest
 import numpy as np
-from linear_algebra import eigen_decomposition, singular_value_decomposition, principal_component_analysis, matrix_rank, matrix_inverse
+from advanced_scanner.linear_algebra import eigen_decomposition, singular_value_decomposition, principal_component_analysis, matrix_rank, matrix_inverse
 
 class TestLinearAlgebra(unittest.TestCase):
     def test_eigen_decomposition(self):

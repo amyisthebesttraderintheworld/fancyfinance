@@ -86,6 +86,19 @@ async def test_live_engine_order_exit(live_engine, mock_notifier):
     # Mock position
     live_engine.positions["BTCUSD"] = Position("BTCUSD", 'long', 40000, 0.1, 39000, 42000, 1000)
     live_engine.client.get_account.return_value = 1.0
+    live_engine.client.get_positions.side_effect = [
+        [
+            {
+                "symbol": "BTCUSD",
+                "side": "Buy",
+                "size": 0.1,
+                "avgEntryPrice": 40000.0,
+                "stopLoss": 39000.0,
+                "takeProfit": 42000.0,
+            }
+        ],
+        []
+    ]
     
     # Execute exit
     live_engine._execute_trade("BTCUSD", 'long', 41000, 0.1, is_entry=False, reason="Take Profit")

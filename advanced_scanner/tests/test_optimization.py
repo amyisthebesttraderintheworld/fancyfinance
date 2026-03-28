@@ -4,7 +4,7 @@ Unit tests for optimization.py
 
 import unittest
 import numpy as np
-from optimization import gradient_descent, constrained_optimization, mean_variance_portfolio, sharpe_ratio_portfolio
+from advanced_scanner.optimization import gradient_descent, constrained_optimization, mean_variance_portfolio, sharpe_ratio_portfolio
 
 class TestOptimization(unittest.TestCase):
     def test_gradient_descent(self):

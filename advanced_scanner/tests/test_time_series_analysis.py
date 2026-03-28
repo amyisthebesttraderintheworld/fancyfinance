@@ -4,7 +4,7 @@ Unit tests for time_series_analysis.py
 
 import unittest
 import numpy as np
-from time_series_analysis import autocorrelation, partial_autocorrelation, spectral_density, fft_analysis, moving_average_volatility
+from advanced_scanner.time_series_analysis import autocorrelation, partial_autocorrelation, spectral_density, fft_analysis, moving_average_volatility
 
 class TestTimeSeriesAnalysis(unittest.TestCase):
     def test_autocorrelation(self):

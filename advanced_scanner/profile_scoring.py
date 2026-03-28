@@ -1,7 +1,7 @@
 
 import time
 import numpy as np
-from scoring import calculate_all_scores
+from advanced_scanner.scoring import calculate_all_scores
 
 def profile():
     n = 500

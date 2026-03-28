@@ -743,7 +743,7 @@ class SupabaseManager:
             status = "active"
             is_verified = True
 
-        paid_access = is_verified and tier in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP} and status in {"trial_pro", "active"}
+        paid_access = (is_verified or tier == TRIAL_PRO_MEMBERSHIP) and tier in {TRIAL_PRO_MEMBERSHIP, PRO_MEMBERSHIP} and status in {"trial_pro", "active"}
         return {
             "tier": tier,
             "status": status,

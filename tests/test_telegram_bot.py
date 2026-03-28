@@ -145,7 +145,7 @@ async def test_error_handler_stops_when_conflict_not_recovered():
 def test_polling_startup_delay_defaults_on_railway(monkeypatch):
     monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj_123")
     monkeypatch.delenv("TELEGRAM_POLLING_STARTUP_DELAY_SECONDS", raising=False)
-    telegram_bot.config = {"telegram": {"polling_enabled": True}}
+    telegram_bot.bot_context.config = {"telegram": {"polling_enabled": True}}
 
     assert telegram_bot._polling_startup_delay_seconds() == 20
 
@@ -153,15 +153,15 @@ def test_polling_startup_delay_defaults_on_railway(monkeypatch):
 def test_polling_startup_delay_env_override_wins(monkeypatch):
     monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj_123")
     monkeypatch.setenv("TELEGRAM_POLLING_STARTUP_DELAY_SECONDS", "7")
-    telegram_bot.config = {"telegram": {"polling_enabled": True}}
+    telegram_bot.bot_context.config = {"telegram": {"polling_enabled": True}}
 
     assert telegram_bot._polling_startup_delay_seconds() == 7
 
 @pytest.mark.asyncio
 async def test_proxy_command_authorized(mock_update, mock_context, mock_config):
     # Set globals for telegram_bot module
-    telegram_bot.config = mock_config
-    telegram_bot.cmd_queue = queue.Queue()
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.command_queue = queue.Queue()
     
     mock_update.message.text = "/status"
     mock_update.effective_chat.id = 12345 # Authorized in mock_config
@@ -169,8 +169,8 @@ async def test_proxy_command_authorized(mock_update, mock_context, mock_config):
     await proxy_command(mock_update, mock_context)
     
     # Check if command put in queue
-    assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
+    assert not telegram_bot.bot_context.command_queue.empty()
+    cmd, args, chat_id, user_id = telegram_bot.bot_context.command_queue.get()
     assert cmd == "/status"
     assert chat_id == 12345
     assert user_id == 12345
@@ -178,22 +178,22 @@ async def test_proxy_command_authorized(mock_update, mock_context, mock_config):
 
 @pytest.mark.asyncio
 async def test_proxy_command_requires_paid_membership_for_sim_self_service(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
-    telegram_bot.cmd_queue = queue.Queue()
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.command_queue = queue.Queue()
     
     mock_update.message.text = "/pause"
     mock_update.effective_chat.id = 99999
     
     await proxy_command(mock_update, mock_context)
     
-    assert telegram_bot.cmd_queue.empty()
+    assert telegram_bot.bot_context.command_queue.empty()
     assert "Paid Membership Required" in mock_update.message.reply_text.call_args[0][0]
 
 
 @pytest.mark.asyncio
 async def test_proxy_command_allows_paid_member_to_control_own_simulation(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
-    telegram_bot.cmd_queue = queue.Queue()
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.command_queue = queue.Queue()
 
     mock_update.message.text = "/pause"
     mock_update.effective_chat.id = 99999
@@ -205,8 +205,8 @@ async def test_proxy_command_allows_paid_member_to_control_own_simulation(mock_u
     ):
         await proxy_command(mock_update, mock_context)
 
-    assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
+    assert not telegram_bot.bot_context.command_queue.empty()
+    cmd, args, chat_id, user_id = telegram_bot.bot_context.command_queue.get()
     assert cmd == "/pause"
     assert args == []
     assert chat_id == 99999
@@ -216,16 +216,16 @@ async def test_proxy_command_allows_paid_member_to_control_own_simulation(mock_u
 
 @pytest.mark.asyncio
 async def test_proxy_command_status_allowed_for_non_admin(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
-    telegram_bot.cmd_queue = queue.Queue()
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.command_queue = queue.Queue()
 
     mock_update.message.text = "/status"
     mock_update.effective_chat.id = 99999
 
     await proxy_command(mock_update, mock_context)
 
-    assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
+    assert not telegram_bot.bot_context.command_queue.empty()
+    cmd, args, chat_id, user_id = telegram_bot.bot_context.command_queue.get()
     assert cmd == "/status"
     assert chat_id == 99999
     assert user_id == 12345
@@ -274,7 +274,7 @@ async def test_button_handler_agree_falls_back_to_new_message(mock_context):
 
 @pytest.mark.asyncio
 async def test_verify_email_command_success(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = ["user@example.com"]
 
     with patch.object(telegram_bot.db, "request_email_verification", return_value="123456"):
@@ -289,7 +289,7 @@ async def test_verify_email_command_success(mock_update, mock_context, mock_conf
 
 @pytest.mark.asyncio
 async def test_verify_email_command_failure(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = ["user@example.com"]
 
     with patch.object(telegram_bot.db, "request_email_verification", return_value="123456"):
@@ -316,15 +316,15 @@ async def test_agree_command_sends_menu(mock_update, mock_context):
 
 @pytest.mark.asyncio
 async def test_menu_button_handler_routes_status(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
-    telegram_bot.cmd_queue = queue.Queue()
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.command_queue = queue.Queue()
     mock_update.message.text = "📊 Status"
     mock_update.effective_chat.id = 99999
 
     await menu_button_handler(mock_update, mock_context)
 
-    assert not telegram_bot.cmd_queue.empty()
-    cmd, args, chat_id, user_id = telegram_bot.cmd_queue.get()
+    assert not telegram_bot.bot_context.command_queue.empty()
+    cmd, args, chat_id, user_id = telegram_bot.bot_context.command_queue.get()
     assert cmd == "/status"
     assert chat_id == 99999
     assert user_id == 12345
@@ -342,7 +342,7 @@ async def test_menu_button_handler_routes_settings(mock_update, mock_context):
 
 @pytest.mark.asyncio
 async def test_subscribe_command_returns_subscription_page_url(mock_update, mock_context, mock_config):
-    telegram_bot.config = {
+    telegram_bot.bot_context.config = {
         **mock_config,
         "api": {
             **mock_config["api"],
@@ -366,7 +366,7 @@ async def test_subscribe_command_returns_subscription_page_url(mock_update, mock
 
 @pytest.mark.asyncio
 async def test_manage_subscription_command_returns_portal_url(mock_update, mock_context, mock_config):
-    telegram_bot.config = {
+    telegram_bot.bot_context.config = {
         **mock_config,
         "stripe": {
             "secret_key": "sk_test_123",
@@ -393,7 +393,7 @@ async def test_manage_subscription_command_returns_portal_url(mock_update, mock_
 
 @pytest.mark.asyncio
 async def test_setup_api_command_stores_zero_knowledge_vault(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = ["api_key_123", "api_secret_456", "correct", "horse", "battery", "staple"]
     mock_context.bot.delete_message = AsyncMock()
 
@@ -417,8 +417,8 @@ async def test_setup_api_command_stores_zero_knowledge_vault(mock_update, mock_c
 
 @pytest.mark.asyncio
 async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
-    telegram_bot.cmd_queue = queue.Queue()
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.command_queue = queue.Queue()
     mock_context.args = ["correct", "horse", "battery", "staple"]
     mock_context.bot.delete_message = AsyncMock()
 
@@ -429,8 +429,8 @@ async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_con
     ):
         await unlock_api_command(mock_update, mock_context)
 
-    assert not telegram_bot.cmd_queue.empty()
-    command, args, chat_id, user_id = telegram_bot.cmd_queue.get()
+    assert not telegram_bot.bot_context.command_queue.empty()
+    command, args, chat_id, user_id = telegram_bot.bot_context.command_queue.get()
     assert command == "/unlock_api"
     assert args == ["12345", "correct horse battery staple"]
     assert chat_id == 12345
@@ -440,7 +440,7 @@ async def test_unlock_api_command_queues_sensitive_request(mock_update, mock_con
 
 @pytest.mark.asyncio
 async def test_backtest_command_returns_summary(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = ["BTCUSD", "1m", "500"]
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
@@ -473,7 +473,7 @@ async def test_backtest_command_returns_summary(mock_update, mock_context, mock_
 
 @pytest.mark.asyncio
 async def test_backtest_command_runs_scanner_universe_without_args(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = []
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
@@ -516,7 +516,7 @@ async def test_backtest_command_runs_scanner_universe_without_args(mock_update, 
 
 @pytest.mark.asyncio
 async def test_backtest_command_shows_usage_for_invalid_args(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = ["BTCUSD", "ETHUSD"]
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
@@ -529,7 +529,7 @@ async def test_backtest_command_shows_usage_for_invalid_args(mock_update, mock_c
 
 @pytest.mark.asyncio
 async def test_backtest_command_rejects_invalid_candle_count(mock_update, mock_context, mock_config):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     mock_context.args = ["BTCUSD", "1m", "750"]
 
     with patch.object(telegram_bot.db, "get_or_create_user", return_value={"telegram_id": 12345}):
@@ -541,7 +541,7 @@ async def test_backtest_command_rejects_invalid_candle_count(mock_update, mock_c
 
 @pytest.mark.asyncio
 async def test_backtest_command_supports_flag_profile(mock_update, mock_context, mock_config, monkeypatch):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     active_engine = MagicMock()
     active_engine.get_strategy_config.return_value = {
         "timeframe": "1m",
@@ -612,7 +612,7 @@ async def test_backtest_command_supports_flag_profile(mock_update, mock_context,
 
 @pytest.mark.asyncio
 async def test_set_config_command_updates_active_engine_profile(mock_update, mock_context, mock_config, monkeypatch):
-    telegram_bot.config = mock_config
+    telegram_bot.bot_context.config = mock_config
     active_engine = MagicMock()
     active_engine.set_strategy_config.return_value = {
         "timeframe": "15m",
@@ -664,7 +664,7 @@ async def test_set_config_command_updates_active_engine_profile(mock_update, moc
 
 @pytest.mark.asyncio
 async def test_start_trial_command_unlocks_trial_pro(mock_update, mock_context, mock_config):
-    telegram_bot.config = {
+    telegram_bot.bot_context.config = {
         **mock_config,
         "api": {
             **mock_config["api"],
@@ -694,7 +694,7 @@ async def test_start_trial_command_unlocks_trial_pro(mock_update, mock_context, 
 
 @pytest.mark.asyncio
 async def test_dashboard_api_command_returns_member_link(mock_update, mock_context, mock_config):
-    telegram_bot.config = {
+    telegram_bot.bot_context.config = {
         **mock_config,
         "api": {
             **mock_config["api"],
@@ -703,6 +703,10 @@ async def test_dashboard_api_command_returns_member_link(mock_update, mock_conte
         },
     }
 
+@pytest.mark.asyncio
+async def test_dashboard_api_command_returns_member_link(mock_update, mock_context, mock_config):
+    telegram_bot.bot_context.config = mock_config
+    telegram_bot.bot_context.config["api"]["auth_token"] = "dummy"
     with patch.object(
         telegram_bot.db,
         "get_membership_summary",
@@ -720,7 +724,7 @@ async def test_dashboard_api_command_returns_member_link(mock_update, mock_conte
 
 @pytest.mark.asyncio
 async def test_plans_command_shows_trial_pro_status(mock_update, mock_context, mock_config):
-    telegram_bot.config = {
+    telegram_bot.bot_context.config = {
         **mock_config,
         "stripe": {
             "display_price": "$6.99/month",

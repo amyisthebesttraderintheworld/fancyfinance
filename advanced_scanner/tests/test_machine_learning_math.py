@@ -4,7 +4,7 @@ Unit tests for machine_learning_math.py
 
 import unittest
 import numpy as np
-from machine_learning_math import soft_max, sigmoid, relu, cross_entropy, kernel_matrix, distance_metric, covariance_matrix, correlation_matrix
+from advanced_scanner.machine_learning_math import soft_max, sigmoid, relu, cross_entropy, kernel_matrix, distance_metric, covariance_matrix, correlation_matrix
 
 class TestMLMath(unittest.TestCase):
     def test_activation_functions(self):

@@ -5,7 +5,7 @@ except (ImportError, ValueError):
         from bots.live_bot import *
     except ImportError:
         try:
-            from fangblenny_bot.bots.live_bot import *
+            from bots.live_bot import *
         except ImportError:
             # If all else fails, try to import from parent directory
             import sys

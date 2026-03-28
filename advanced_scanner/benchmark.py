@@ -2,7 +2,7 @@
 import time
 import numpy as np
 from main import run_backtest
-from config import BT_KLINE_LIMIT, DEFAULT_CAPITAL, DEFAULT_RISK_PCT
+from advanced_scanner.config import BT_KLINE_LIMIT, DEFAULT_CAPITAL, DEFAULT_RISK_PCT
 
 def benchmark():
     # Mock some data to avoid fetching from network

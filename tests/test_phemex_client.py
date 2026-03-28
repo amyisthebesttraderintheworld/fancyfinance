@@ -68,4 +68,6 @@ def test_place_order_preserves_fractional_quantity(mock_post, client):
 
     assert order["orderID"] == "fractional-order"
     assert mock_post.called
-    assert mock_post.call_args.kwargs["json"]["orderQty"] == 0.0075
+    import json
+    data = json.loads(mock_post.call_args.kwargs["data"])
+    assert data["orderQty"] == 0.0075
