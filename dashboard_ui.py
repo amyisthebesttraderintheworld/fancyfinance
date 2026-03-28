@@ -48,50 +48,32 @@ def build_dashboard_html(
         else "The same Railway-hosted control plane behind FancyFinance, now styled to match the new public site and built for fast operator decisions."
     )
     auth_clear_button = "Log Out" if public_mode else "Clear Token"
-    if public_mode:
-        telegram_login_intro = (
-            "Use the Telegram button below to sign into your personal dashboard."
-            if telegram_login_enabled
-            else "Telegram web login is not configured yet. Open the bot and use /dashboard_login as a temporary fallback."
-        )
-        telegram_widget_style = "" if telegram_login_enabled else "display:none;"
-        telegram_fallback_style = "display:none;" if telegram_login_enabled else ""
-        auth_controls_html = """
-          <div class="telegram-login-block" id="telegram-login-block">
-            <div class="panel-subtitle">{telegram_login_intro}</div>
-            <div class="telegram-login-widget" id="telegram-login-widget" style="{telegram_widget_style}"></div>
-            <div id="telegram-login-fallback" style="{telegram_fallback_style}">
-              <a class="link-btn primary" href="{telegram_bot_url}" target="_blank" rel="noreferrer">Open Telegram Bot</a>
-            </div>
-          </div>
-          <div class="button-row">
-            <button class="secondary" id="member-logout-btn">Log Out</button>
-            <button class="secondary" id="member-refresh-btn">Refresh Now</button>
-          </div>
-        """.format(
-            telegram_login_intro=telegram_login_intro,
-            telegram_widget_style=telegram_widget_style,
-            telegram_fallback_style=telegram_fallback_style,
-            telegram_bot_url=telegram_bot_url,
-        )
-    elif auth_required:
-        auth_controls_html = """
-          <div>
-            <label class="field-label" for="api-token">Admin Token</label>
-            <input id="api-token" type="password" placeholder="Paste the FancyFinance admin dashboard token" />
-            <div class="button-row">
-              <button class="primary" id="save-token-btn">Unlock Dashboard</button>
-              <button class="secondary" id="clear-token-btn">Clear Token</button>
-              <button class="secondary" id="refresh-btn">Refresh Now</button>
-            </div>
-          </div>
-        """
-    else:
-        auth_controls_html = """
-          <div class="button-row">
-            <button class="secondary" id="refresh-btn">Refresh Now</button>
-          </div>
-        """
+    # Always require Telegram login for dashboard access
+    telegram_login_intro = (
+        "Use the Telegram button below to sign into your personal dashboard."
+        if telegram_login_enabled
+        else "Telegram web login is not configured yet. Open the bot and use /dashboard_login as a temporary fallback."
+    )
+    telegram_widget_style = "" if telegram_login_enabled else "display:none;"
+    telegram_fallback_style = "display:none;" if telegram_login_enabled else ""
+    auth_controls_html = """
+      <div class="telegram-login-block" id="telegram-login-block">
+        <div class="panel-subtitle">{telegram_login_intro}</div>
+        <div class="telegram-login-widget" id="telegram-login-widget" style="{telegram_widget_style}"></div>
+        <div id="telegram-login-fallback" style="{telegram_fallback_style}">
+          <a class="link-btn primary" href="{telegram_bot_url}" target="_blank" rel="noreferrer">Open Telegram Bot</a>
+        </div>
+      </div>
+      <div class="button-row">
+        <button class="secondary" id="member-logout-btn">Log Out</button>
+        <button class="secondary" id="member-refresh-btn">Refresh Now</button>
+      </div>
+    """.format(
+        telegram_login_intro=telegram_login_intro,
+        telegram_widget_style=telegram_widget_style,
+        telegram_fallback_style=telegram_fallback_style,
+        telegram_bot_url=telegram_bot_url,
+    )
     controls_style = ""
     positions_style = ""
     setup_style = "display:none;" if public_mode else ""

@@ -109,7 +109,7 @@ def _build_engine(sample_config):
     engine.command_queue = SimpleNamespace(qsize=lambda: 3)
     engine.safety_paused_until = 0
     engine._websocket = object()
-    engine.active_api_user_id = 12345
+    engine._global_session.active_api_user_id = 12345
     engine._runtime_api_ready = lambda: True
     engine.db = db
     engine.stop = MagicMock()

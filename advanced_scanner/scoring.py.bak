@@ -1,0 +1,287 @@
+# --- Portfolio Risk Management ---
+def apply_portfolio_risk_management(position_sizes, capital, max_portfolio_risk=0.2, max_single_asset_risk=0.05):
+    """
+    Adjusts position sizes to ensure portfolio and per-asset risk limits are not breached.
+    - position_sizes: dict {symbol: size}
+    - capital: total capital
+    - max_portfolio_risk: max fraction of capital at risk across all positions (e.g., 0.2 = 20%)
+    - max_single_asset_risk: max fraction of capital at risk per asset (e.g., 0.05 = 5%)
+    Returns: dict {symbol: adjusted_size}
+    """
+    # Cap each asset
+    capped = {sym: min(size, capital * max_single_asset_risk) for sym, size in position_sizes.items()}
+    total = sum(capped.values())
+    max_total = capital * max_portfolio_risk
+    if total > max_total and total > 0:
+        # Scale down all positions proportionally
+        scale = max_total / total
+        capped = {sym: size * scale for sym, size in capped.items()}
+    return capped
+"""
+scoring.py  ─  Signal Calculation & Candle Analysis (Fully Vectorized)
+"""
+
+import numpy as np
+import time
+from indicators import rsi, bb, macd, stochastic, z_score, ema, atr, adx
+from chaos_and_complexity import rolling_hurst, rolling_entropy
+from signal_processing import butter_lowpass_filter
+from time_series_analysis import rolling_autocorr, moving_average_volatility, rolling_spectral_density_peak
+from stats_models import identify_outliers
+from machine_learning_math import sigmoid
+
+from linear_algebra import principal_component_analysis
+from machine_learning_math import sigmoid
+
+def validate_signal_independence(X, feature_names):
+    """
+    Calculates the correlation matrix of features and returns the average absolute correlation.
+    """
+    if X.shape[1] < 2: return 0.0
+    corr = np.corrcoef(X, rowvar=False)
+    # Average absolute correlation of off-diagonal elements
+    avg_corr = np.mean(np.abs(corr[mask]))
+    return avg_corr, corr
+
+def extract_features(ohlcv, funding):
+    """
+    Extracts and normalizes features for signal generation.
+    """
+    n = len(ohlcv)
+    if n < 60: return np.zeros((n, 9)), np.zeros(n) # Return empty features and lookback mask
+    
+    o, h, l, c, v = ohlcv[:, 3], ohlcv[:, 4], ohlcv[:, 5], ohlcv[:, 6], ohlcv[:, 7]
+    
+    # --- Feature Extraction ---
+    rsi_vals = rsi(c)
+    bl, bm, bh = bb(c)
+    macd_line, signal_line, macd_hist = macd(c)
+    z_vals = z_score(c)
+    atr_vals = atr(h, l, c)
+    h_exps = rolling_hurst(c, 50)
+    ents = rolling_entropy(c, 50)
+    ac1s = rolling_autocorr(c, 20, lag=1)
+    
+    # BB Percentage
+    rng_bb = bh - bl
+    pct_bb = np.where(rng_bb != 0, (c - bl) / rng_bb, 0.5)
+    
+    # Volatility and Momentum
+    vol_r = np.divide(atr_vals, c, out=np.zeros_like(atr_vals), where=c != 0)
+    vel = np.zeros_like(c)
+    vel[1:] = (c[1:] - c[:-1]) / np.where(c[:-1] != 0, c[:-1], 1)
+    
+    # Funding
+    f_val = np.full(n, funding)
+    
+    # --- Feature Matrix Construction ---
+    features = []
+    features.append((rsi_vals - 50) / 50.0) # 1. RSI
+    features.append((pct_bb - 0.5) * 2.0)   # 2. BB Pct
+    features.append(np.tanh(z_vals / 2.0))  # 3. Z-Score
+    features.append(np.tanh(macd_hist / (atr_vals + 1e-9))) # 4. MACD Hist
+    features.append(h_exps - 0.5)           # 5. Hurst
+    features.append(ac1s)                  # 6. AC1
+    features.append(np.tanh(f_val * 1000)) # 7. Funding
+    features.append(1.0 - np.tanh(ents / 3.0)) # 8. Entropy
+    features.append(np.tanh(vel * 100))    # 9. Velocity
+
+    X = np.column_stack(features)
+    X = np.nan_to_num(X)
+    return X, ents, vol_r
+
+def derive_optimal_weights(X, target_returns, l2_reg=1.0):
+    import numpy as np
+    X = np.asarray(X)
+    target_returns = np.asarray(target_returns)
+    X = X[:-1]
+    target_returns = target_returns[1:]
+    # correct time alignment (no lookahead)
+    X = X[:-1]
+    """
+    X = X[:-1]
+    Calculates weights using Ridge Regression to align signals with target returns.
+    X: (N, K) feature matrix
+    target_returns: (N,) forward-looking returns (aligned with features)
+    
+    CRITICAL: To avoid lookahead bias, we shift target_returns so that
+    X[i] is mapped to the return that happens AFTER X[i] is observed.
+    """
+    # Shift target_returns backward so y[i] = target_returns[i+1]
+    # This means X[i] (features at end of bar i) is used to predict return in bar i+1
+    # Filter out samples with zero returns (lookback padding or flat data)
+    # Also exclude the last sample as we don't have its future return
+    
+    if np.sum(mask) < X.shape[1] * 2:
+        return np.zeros(X.shape[1]) # Insufficient data
+        
+    X_f = X[mask]
+    y_f = y[mask]
+    
+    # Standardize X for stable regression
+    X_mean = np.mean(X_f, axis=0)
+    X_std = np.std(X_f, axis=0) + 1e-9
+    X_norm = (X_f - X_mean) / X_std
+    
+    # Add intercept term (column of ones)
+    X_aug = np.column_stack([X_norm, np.ones(X_norm.shape[0])])
+    
+    # Ridge Regression: w = (X^T X + lambda I)^-1 X^T y
+    K_aug = X_aug.shape[1]
+    # Apply regularization only to coefficients, not the intercept
+    reg_matrix = l2_reg * np.eye(K_aug)
+    reg_matrix[-1, -1] = 0 
+    
+    try:
+        w_aug = np.linalg.solve(X_aug.T @ X_aug + reg_matrix, X_aug.T @ y_f)
+    except np.linalg.LinAlgError:
+        return np.zeros(X.shape[1])
+    
+    # The last element is the intercept, the rest are coefficients
+    w = w_aug[:-1]
+    
+    # De-standardize weights back to original feature scale
+    return w / X_std
+
+def calculate_all_scores(ohlcv, funding, weights=None):
+    n = len(ohlcv)
+    if n < 60: return np.zeros(n)
+    
+    X, ents, vol_r = extract_features(ohlcv, funding)
+    
+    # --- Signal Independence Validation ---
+    feature_names = ["RSI", "BB Pct", "Z-Score", "MACD Hist", "Hurst", "AC1", "Funding", "Entropy", "Velocity"]
+    
+    if weights is None:
+        # These weights act as our "eigen-portfolio" coefficients for signals.
+        # Fallback to defaults if no data-driven weights provided
+        weights = np.array([
+            -0.15, # RSI (Negative because high RSI = short)
+            -0.15, # BB Pct
+            -0.15, # Z-Score
+             0.15, # MACD Hist
+             0.10, # Hurst
+             0.10, # AC1
+            -0.10, # Funding
+             0.05, # Entropy (stability)
+             0.05  # Velocity
+        ])
+    
+    # Validation: Ensure weights are normalized by norm to prevent score explosion
+    w_norm = weights / (np.sum(np.abs(weights)) + 1e-9)
+    
+    raw_scores = X @ w_norm
+    
+    # Scaling to [-100, 100]
+    scores = np.clip(raw_scores * 200, -100, 100).astype(int)
+    
+    # Apply penalties for extreme noise or volatility (Dynamic Risk Adjustment)
+    penalty = np.where(ents > 2.8, 20, 0)
+    penalty += np.where(vol_r > 0.05, 15, 0)
+    
+    scores = np.clip(scores - penalty, -100, 100)
+    scores[:60] = 0 # Lookback padding
+    
+    return scores
+
+
+def score_rows(rows, funding):
+    if not isinstance(rows, np.ndarray):
+        try: rows = np.array(rows, dtype=float)
+        except Exception as e:
+            return 0
+    scores = calculate_all_scores(rows, funding)
+    if len(scores) == 0: return 0
+    return scores[-1]
+
+def score_to_leverage(sc):
+
+    # Decoupled: Leverage is now a fixed, capped value (e.g., 1-3x), not a direct function of score
+    # This can be made configurable or based on risk settings
+    return 2  # Default leverage, can be parameterized
+
+
+# New: Volatility-normalized position sizing
+def calculate_position_size(signal_score, capital, asset_volatility, target_risk=0.01, min_size=1.0, max_size=None):
+    """
+    Position size is determined by target risk per trade and asset volatility.
+    - signal_score: The trade signal (directional, but only sign is used for direction)
+    - capital: Total capital available
+    - asset_volatility: Realized or estimated volatility (e.g., ATR or stddev of returns)
+    - target_risk: Fraction of capital to risk per trade (e.g., 0.01 = 1%)
+    - min_size: Minimum position size
+    - max_size: Maximum position size (optional)
+    Returns: position size (float, in capital units)
+    """
+    if asset_volatility <= 0:
+        return min_size
+    # Risk per trade (dollar risk)
+    risk_dollars = capital * target_risk
+    # Position size = risk_dollars / (volatility * leverage)
+    # Leverage is fixed (see score_to_leverage)
+    leverage = score_to_leverage(signal_score)
+    pos_size = risk_dollars / (asset_volatility * leverage)
+    # Cap position size to available capital and max_size
+    pos_size = max(min_size, pos_size)
+    if max_size is not None:
+        pos_size = min(pos_size, max_size)
+    pos_size = min(pos_size, capital)
+    return pos_size
+
+
+
+def candle_strength(o, h, l, c):
+
+    """
+
+    Returns a score based on the candle's price action.
+
+    Matching the test: (10.5-10)/10 * 200 = 10
+
+    """
+
+    if o == 0: return 0
+
+    return (c - o) / o * 200
+
+
+
+def engulf(po, pc, lo, lc):
+
+    """
+
+    po: prev_open, pc: prev_close
+
+    lo: last_open, lc: last_close
+
+    """
+
+    # Bullish Engulfing: previous was bearish, current is bullish and covers previous range
+
+    if pc < po and lc > lo and lo < pc and lc > po:
+
+        return 10
+
+    # Bearish Engulfing: previous was bullish, current is bearish and covers previous range
+
+    if pc > po and lc < lo and lo > pc and lc < po:
+
+        return -10
+
+    return 0
+
+def _extract_features_and_target_returns(ohlcv, funding):
+    """
+    Extracts features (X) and calculates target returns for derive_optimal_weights.
+    """
+    n = len(ohlcv)
+    if n < 60:
+        return None, None
+
+    # Extract features using the existing function
+    X, _, _ = extract_features(ohlcv, funding)
+
+    # Calculate open-to-close return for bar k
+    target_returns = (ohlcv[:, 6] - ohlcv[:, 3]) / np.where(ohlcv[:, 3] != 0, ohlcv[:, 3], 1e-9)
+
+    return X, target_returns

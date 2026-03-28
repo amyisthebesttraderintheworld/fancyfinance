@@ -51,12 +51,15 @@ class LiveEngine(Simulator):
         exchange_cfg = self.config.get(self.exchange_id, {})
         api_key = exchange_cfg.get("api_key") or self.config.get("api_key")
         api_secret = exchange_cfg.get("api_secret") or self.config.get("api_secret")
-        
-        # If user_id is provided, check session specific keys first.
+
+        # If user_id is provided, prefer session-stored keys
+        session = None
         if user_id:
             session = self.get_user_session(user_id)
-            # We assume keys were already applied to the config/session by _apply_runtime_api_keys
-        
+            if session and session.runtime_api_key and session.runtime_api_secret:
+                api_key = session.runtime_api_key
+                api_secret = session.runtime_api_secret
+
         if not api_key or not api_secret or api_key == "YOUR_API_KEY" or api_secret == "YOUR_API_SECRET":
             if user_id:
                 self.clients.pop(user_id, None)
@@ -70,10 +73,9 @@ class LiveEngine(Simulator):
             testnet=bool(exchange_cfg.get("testnet", False)),
             account_currency=str(exchange_cfg.get("account_currency") or "USDT"),
         )
-        
+
         if user_id:
             self.clients[user_id] = new_client
-            session = self.get_user_session(user_id)
             if session:
                 self._refresh_balance(session=session, force=True)
                 session.reference_balance = max(session.reference_balance, session.balance)

@@ -25,6 +25,7 @@ from exchange_manager import ExchangeManager
 from fang_engine_runtime import build_entry_plan, resolve_scan_settings, run_market_scan
 from scanner_long import LongScanner
 from scanner_short import ShortScanner
+from advanced_scanner.main import run_scan as advanced_run_scan
 from strategy_profile import normalize_strategy_profile
 from supabase_client import SupabaseManager
 
@@ -73,10 +74,12 @@ class SimulationSession:
     is_paused: bool = False
     session_started_at: Optional[str] = None
     session_started_epoch: float = 0.0
-    long_scanners: dict[str, LongScanner] = field(default_factory=dict)
-    short_scanners: dict[str, ShortScanner] = field(default_factory=dict)
+    long_scanners: dict[str, Any] = field(default_factory=dict)
+    short_scanners: dict[str, Any] = field(default_factory=dict)
     active_api_user_id: Optional[int] = None
     runtime_api_ready: bool = False
+    runtime_api_key: Optional[str] = None
+    runtime_api_secret: Optional[str] = None
     strategy_profile: dict[str, Any] = field(default_factory=dict)
     market_scan_settings: Any = None
     symbol_cooldowns: dict[str, int] = field(default_factory=dict)
@@ -196,13 +199,6 @@ class Simulator(BaseEngine):
     def short_scanners(self, value: dict[str, ShortScanner]):
         self._global_session.short_scanners = dict(value)
 
-    @property
-    def active_api_user_id(self) -> Optional[int]:
-        return self._global_session.active_api_user_id
-
-    @active_api_user_id.setter
-    def active_api_user_id(self, value: Optional[int]):
-        self._global_session.active_api_user_id = value
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -447,39 +443,56 @@ class Simulator(BaseEngine):
                 return normalize_strategy_profile(self.config, {}, current=session.strategy_profile)
 
         session = self._global_session
-        if session.strategy_profile:
-            return normalize_strategy_profile(self.config, {}, current=session.strategy_profile)
-        return normalize_strategy_profile(self.config, {}, current=self.default_strategy_profile)
+            if not self.use_market_scan_engine or target.is_paused:
+                return []
 
-    def set_strategy_config(self, strategy_config: dict[str, Any], user_id: Optional[int] = None) -> dict[str, Any]:
-        current = self.get_strategy_config(user_id)
-        normalized = normalize_strategy_profile(self.config, strategy_config, current=current)
+            scanner_type = self.config.get("scanner", "standard").lower()
+            settings = self._settings_for_session(target)
+            max_positions = int(self.config["risk"].get("max_positions", 1))
+            available_slots = max_positions - len(target.positions)
+            if available_slots <= 0:
+                return []
+            if target.balance < settings.margin_usdt:
+                return []
+            locked_margin = sum(float(getattr(position, "margin_used", 0.0) or 0.0) for position in target.positions.values())
+            if locked_margin + settings.margin_usdt > settings.max_margin_usdt:
+                return []
 
-        if self._user_scoped_simulation and user_id is not None:
-            session = self.get_user_session(user_id, create=True)
-            if session is not None:
-                session.strategy_profile = dict(normalized)
-                session.market_scan_settings = resolve_scan_settings(self.config, session.strategy_profile)
-            self.db.store_user_strategy_config(int(user_id), normalized)
-            return normalized
+            now_ms = int(time.time() * 1000)
+            expired = [symbol for symbol, expires_at in target.symbol_cooldowns.items() if int(expires_at or 0) <= now_ms]
+            for symbol in expired:
+                target.symbol_cooldowns.pop(symbol, None)
 
-        self.default_strategy_profile = dict(normalized)
-        self.market_scan_settings = resolve_scan_settings(self.config, self.default_strategy_profile)
-        self._global_session.strategy_profile = dict(normalized)
-        self._global_session.market_scan_settings = self.market_scan_settings
-        self.config.setdefault("strategy", {})
-        self.config["strategy"]["timeframe"] = normalized["timeframe"]
-        return normalized
-
-    def _normalize_user_id(self, user_id: Optional[int], chat_id: Optional[int] = None) -> Optional[int]:
-        candidate = user_id if user_id is not None else chat_id
-        if candidate is None:
-            return None
-        try:
-            return int(candidate)
-        except (TypeError, ValueError):
-            return None
-
+            plans: list[dict[str, Any]] = []
+            if scanner_type == "advanced":
+                # Use advanced scanner for candidate selection
+                # Example: advanced_run_scan returns sorted_assets: [(symbol, info_dict), ...]
+                # You may want to map info_dict to your plan format as needed
+                funds = {}  # TODO: Provide actual funds mapping if needed
+                syms = list(settings.symbols) if hasattr(settings, "symbols") else []
+                results = advanced_run_scan(syms, funds)
+                for sym, info in results:
+                    if info["side"] == "neutral":
+                        continue
+                    plan = {"symbol": sym, "direction": info["side"], "score": info["score"]}
+                    if plan["symbol"] in target.symbol_cooldowns:
+                        continue
+                    plans.append(plan)
+                return plans
+            else:
+                candidates = run_market_scan(
+                    settings,
+                    in_position=set(target.positions.keys()),
+                    available_slots=available_slots,
+                )
+                for result, direction in candidates:
+                    plan = build_entry_plan(result, direction, settings)
+                    if not plan or not plan.get("symbol"):
+                        continue
+                    if plan["symbol"] in target.symbol_cooldowns:
+                        continue
+                    plans.append(plan)
+                return plans
     def get_user_session(self, user_id: Optional[int], *, create: bool = False) -> Optional[SimulationSession]:
         normalized_user_id = self._normalize_user_id(user_id)
         if not self._user_scoped_simulation or normalized_user_id is None:
@@ -542,6 +555,8 @@ class Simulator(BaseEngine):
             if session is not None:
                 session.active_api_user_id = user_id
                 session.runtime_api_ready = True
+                session.runtime_api_key = api_key
+                session.runtime_api_secret = api_secret
             return
 
         self.config.setdefault(self.exchange_id, {})
@@ -573,10 +588,18 @@ class Simulator(BaseEngine):
 
     def _ensure_symbol_state(self, symbol: str, *, session: Optional[SimulationSession] = None):
         target = session or self._global_session
-        if symbol not in target.long_scanners:
-            target.long_scanners[symbol] = LongScanner(self.config)
-        if symbol not in target.short_scanners:
-            target.short_scanners[symbol] = ShortScanner(self.config)
+        scanner_type = self.config.get("scanner", "standard").lower()
+        if scanner_type == "advanced":
+            # Use advanced scanner wrappers (stateless, so just a marker)
+            if symbol not in target.long_scanners:
+                target.long_scanners[symbol] = "advanced"
+            if symbol not in target.short_scanners:
+                target.short_scanners[symbol] = "advanced"
+        else:
+            if symbol not in target.long_scanners:
+                target.long_scanners[symbol] = LongScanner(self.config)
+            if symbol not in target.short_scanners:
+                target.short_scanners[symbol] = ShortScanner(self.config)
 
     def _subscribe_payload(self, symbol: str) -> dict[str, Any]:
         return {
