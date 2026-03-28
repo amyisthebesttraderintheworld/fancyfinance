@@ -997,58 +997,14 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         access_token = request.query_params.get("access")
         if access_token:
             return RedirectResponse(url="/dashboard/member?access=" + quote(access_token), status_code=307)
-        # Only show dashboard if Telegram login cookie is present and valid
-        existing_cookie = request.cookies.get(MEMBER_ACCESS_COOKIE)
-        if not existing_cookie:
-            # Show login page with Telegram login only
-            response = HTMLResponse(
-                build_dashboard_html(
-                    APP_NAME,
-                    __version__,
-                    auth_required=True,
-                    public_mode=True,
-                    member_session_mode=False,
-                    data_endpoint="/dashboard/member-data",
-                    token_storage_key="fancyfinance_member_dashboard_token",
-                    query_token_param="access",
-                    persist_token=False,
-                    telegram_login_enabled=bool(telegram_login["enabled"]),
-                    telegram_login_bot_username=str(telegram_login["bot_username"]),
-                    telegram_login_url=str(telegram_login["auth_url"]),
-                    telegram_bot_url=str(telegram_login["bot_url"]),
-                )
-            )
-            return _apply_no_store(response, vary_cookie=True)
-        try:
-            _authorize_member_dashboard(auth_token, existing_cookie)
-        except HTTPException:
-            response = HTMLResponse(
-                build_dashboard_html(
-                    APP_NAME,
-                    __version__,
-                    auth_required=True,
-                    public_mode=True,
-                    member_session_mode=False,
-                    data_endpoint="/dashboard/member-data",
-                    token_storage_key="fancyfinance_member_dashboard_token",
-                    query_token_param="access",
-                    persist_token=False,
-                    telegram_login_enabled=bool(telegram_login["enabled"]),
-                    telegram_login_bot_username=str(telegram_login["bot_username"]),
-                    telegram_login_url=str(telegram_login["auth_url"]),
-                    telegram_bot_url=str(telegram_login["bot_url"]),
-                )
-            )
-            response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
-            return _apply_no_store(response, vary_cookie=True)
-        # If valid, show dashboard
+        # Always show login page with Telegram login
         response = HTMLResponse(
             build_dashboard_html(
                 APP_NAME,
                 __version__,
                 auth_required=True,
                 public_mode=True,
-                member_session_mode=True,
+                member_session_mode=False,
                 data_endpoint="/dashboard/member-data",
                 token_storage_key="fancyfinance_member_dashboard_token",
                 query_token_param="access",
@@ -1059,7 +1015,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                 telegram_bot_url=str(telegram_login["bot_url"]),
             )
         )
-        return _apply_no_store(response, private=True, vary_cookie=True)
+        return _apply_no_store(response, vary_cookie=True)
 
     @app.get("/dashboard/login/telegram", response_class=RedirectResponse)
     def dashboard_login_via_telegram(request: Request):
