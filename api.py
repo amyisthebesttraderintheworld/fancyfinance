@@ -71,7 +71,7 @@ def _telegram_login_context(config: Dict[str, Any], auth_token: Optional[str]) -
     if not bot_username and bot_token:
         bot_username = _telegram_bot_username_from_token(bot_token)
 
-    enabled = bool(auth_token and bot_token and bot_username)
+    enabled = bool(bot_token and bot_username)
     return {
         "enabled": enabled,
         "bot_token": bot_token,
@@ -411,9 +411,9 @@ def _snapshot(engine, user_id: Optional[int] = None):
             "exchange": engine.exchange_id,
             "running": engine.is_running,
             "paused": paused,
-            "balance": balance,
-            "reference_balance": reference_balance,
-            "initial_balance": initial_balance,
+            "balance": 0.0 if user_id is None else balance,
+            "reference_balance": 0.0 if user_id is None else reference_balance,
+            "initial_balance": 0.0 if user_id is None else initial_balance,
             "symbols": symbols,
             "symbol_count": len(symbols),
             "open_positions": open_positions,
@@ -435,9 +435,9 @@ def _snapshot(engine, user_id: Optional[int] = None):
         "exchange": engine.exchange_id,
         "running": engine.is_running,
         "paused": engine.is_paused,
-        "balance": engine.balance,
-        "reference_balance": reference_balance,
-        "initial_balance": engine.config.get("backtest", {}).get("initial_balance"),
+        "balance": 0.0,
+        "reference_balance": 0.0,
+        "initial_balance": 0.0,
         "symbols": symbols,
         "symbol_count": len(symbols),
         "open_positions": len(engine.positions),
