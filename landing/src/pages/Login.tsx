@@ -6,10 +6,10 @@ const Login = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const widgetRef = useRef<HTMLDivElement>(null);
-  const [telegramConfig, setTelegramConfig] = useState<{ enabled: boolean, bot_username: string } | null>(null);
+  const [telegramConfig, setTelegramConfig] = useState<{ enabled: boolean, bot_username: string, auth_url: string } | null>(null);
 
   useEffect(() => {
-    // Fetch bootstrap config to get the correct bot username
+    // Fetch bootstrap config to get the correct bot username and auth endpoint
     fetch('/dashboard/bootstrap')
       .then(res => res.json())
       .then(data => {
@@ -21,6 +21,7 @@ const Login = () => {
   }, []);
 
   useEffect(() => {
+    // If user is already authenticated, go to dashboard
     if (user) {
       navigate('/dashboard', { replace: true });
     }
@@ -29,9 +30,12 @@ const Login = () => {
   useEffect(() => {
     if (!telegramConfig || !telegramConfig.enabled || !telegramConfig.bot_username) return;
 
-    const AUTH_URL = window.location.origin + "/auth/callback";
+    // The AUTH_URL must point to the BACKEND verification endpoint.
+    // The backend then validates the Telegram HMAC and redirects back to /dashboard?access=TOKEN
+    const AUTH_URL = window.location.origin + (telegramConfig.auth_url || "/dashboard/login/telegram");
 
     if (widgetRef.current && !widgetRef.current.innerHTML) {
+      console.log("Injecting Telegram Widget with Auth URL:", AUTH_URL);
       const script = document.createElement("script");
       script.async = true;
       script.src = "https://telegram.org/js/telegram-widget.js?22";

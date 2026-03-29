@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 
 const TOKEN_KEY = 'fancyfinance_member_dashboard_token';
 
@@ -10,19 +10,21 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   logout: () => void;
+  refresh: () => void;
 }
 
 export const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
   logout: () => {},
+  refresh: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const initializeAuth = () => {
+  const initializeAuth = useCallback(() => {
     // Check localStorage for an existing session
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
@@ -33,7 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(null);
     }
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     initializeAuth();
@@ -41,7 +43,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Listen for storage changes in other tabs
     window.addEventListener('storage', initializeAuth);
     return () => window.removeEventListener('storage', initializeAuth);
-  }, []);
+  }, [initializeAuth]);
 
   const logout = () => {
     console.log("User logged out");
@@ -49,8 +51,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   };
 
+  const refresh = () => {
+    setLoading(true);
+    initializeAuth();
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
