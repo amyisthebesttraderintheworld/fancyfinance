@@ -20,7 +20,7 @@ const AuthCallback = () => {
     if (accessToken) {
       // Backend already validated the Telegram HMAC and issued a token.
       localStorage.setItem(TOKEN_KEY, accessToken);
-      navigate('/dashboard/member', { replace: true });
+      navigate('/dashboard', { replace: true });
       return;
     }
 

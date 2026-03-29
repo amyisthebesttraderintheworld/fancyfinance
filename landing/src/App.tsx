@@ -21,15 +21,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
-            {/*
-              /dashboard/member is NOT wrapped in ProtectedRoute.
-              The backend redirects here with ?access=<token> — ProtectedRoute
-              would block that redirect before the token can be saved.
-              Dashboard.tsx handles its own auth check and redirects to "/" if
-              no valid token is found.
-            */}
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/member" element={<Dashboard />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

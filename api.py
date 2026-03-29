@@ -1015,12 +1015,30 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard(request: Request, access: Optional[str] = None):
+        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
+
         if access:
-            return _apply_no_store(
-                RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307),
-                private=True,
-                vary_cookie=True,
-            )
+            try:
+                _authorize_member_dashboard(auth_token, access)
+                if landing_index:
+                    response = FileResponse(landing_index, media_type="text/html")
+                    response.set_cookie(
+                        MEMBER_ACCESS_COOKIE,
+                        access,
+                        httponly=True,
+                        samesite="lax",
+                        secure=_member_access_cookie_secure(request),
+                        path="/",
+                    )
+                    return _apply_no_store(response, private=True, vary_cookie=True)
+                
+                return _apply_no_store(
+                    RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307),
+                    private=True,
+                    vary_cookie=True,
+                )
+            except HTTPException:
+                return RedirectResponse(url=f"/dashboard/login?login_error={quote('Invalid or expired access token.')}")
 
         token = _resolve_dashboard_token(request)
         if not token:
@@ -1030,6 +1048,9 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             _authorize_dashboard_request(auth_token, token)
         except HTTPException:
             return RedirectResponse(url="/dashboard/login")
+
+        if landing_index:
+            return FileResponse(landing_index, media_type="text/html")
 
         response = HTMLResponse(
             build_dashboard_html(
@@ -1097,7 +1118,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             user_id,
             ttl_seconds=DEFAULT_TOKEN_TTL_SECONDS,
         )
-        response = RedirectResponse(url="/dashboard/member", status_code=307)
+        response = RedirectResponse(url=f"/dashboard?access={quote(member_token, safe='')}", status_code=307)
         response.set_cookie(
             MEMBER_ACCESS_COOKIE,
             member_token,
