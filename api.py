@@ -1157,9 +1157,26 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard/member", response_class=HTMLResponse)
     def member_dashboard(request: Request, access: Optional[str] = None):
+        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
+        
         if access:
             try:
                 _authorize_member_dashboard(auth_token, access)
+                
+                # If SPA exists, let it handle the access token (it will save to localStorage and clean URL)
+                if landing_index:
+                    response = FileResponse(landing_index, media_type="text/html")
+                    response.set_cookie(
+                        MEMBER_ACCESS_COOKIE,
+                        access,
+                        httponly=True,
+                        samesite="lax",
+                        secure=_member_access_cookie_secure(request),
+                        path="/",
+                    )
+                    return _apply_no_store(response, private=True, vary_cookie=True)
+                
+                # Legacy fallback redirect
                 response = RedirectResponse(url="/dashboard/member", status_code=307)
                 response.set_cookie(
                     MEMBER_ACCESS_COOKIE,
@@ -1184,6 +1201,11 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
             return response
 
+        # Prefer the new React SPA for the member dashboard
+        if landing_index:
+            return FileResponse(landing_index, media_type="text/html")
+
+        # Fallback to legacy dashboard
         response = HTMLResponse(
             build_dashboard_html(
                 APP_NAME,
@@ -1202,6 +1224,18 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             )
         )
         return _apply_no_store(response, private=True, vary_cookie=True)
+
+    @app.get("/auth/callback", response_class=HTMLResponse)
+    def auth_callback():
+        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
+        if landing_index:
+            return FileResponse(landing_index, media_type="text/html")
+        raise HTTPException(status_code=503, detail="Landing page is not built")
+
+    @app.get("/webhook/telegram-login", response_class=RedirectResponse)
+    def telegram_login_alias(request: Request):
+        # Alias for the Telegram login webhook mentioned in AuthCallback.tsx
+        return dashboard_login_via_telegram(request)
 
     @app.get("/account", response_class=RedirectResponse)
     def member_account(access: Optional[str] = None):
@@ -1595,6 +1629,14 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
         _authorize(auth_token, x_api_key)
         engine.stop()
         return {"status": "stopped", **_snapshot(engine)}
+
+    @app.get("/{full_path:path}", response_class=HTMLResponse)
+    def catch_all(full_path: str):
+        # Catch-all to support SPA client-side routing
+        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
+        if landing_index:
+            return FileResponse(landing_index, media_type="text/html")
+        raise HTTPException(status_code=404)
 
     return app
 
