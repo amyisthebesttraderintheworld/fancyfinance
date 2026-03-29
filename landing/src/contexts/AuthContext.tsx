@@ -22,17 +22,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // The backend issues a signed JWT as ?access=<token>, which Dashboard.tsx
-    // saves under TOKEN_KEY. That token IS the session — no separate user object needed.
+  const initializeAuth = () => {
+    // Check localStorage for an existing session
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
+      console.log("Auth initialized from localStorage token");
       setUser({ token });
+    } else {
+      console.log("No token found in localStorage during initialization");
+      setUser(null);
     }
     setLoading(false);
+  };
+
+  useEffect(() => {
+    initializeAuth();
+    
+    // Listen for storage changes in other tabs
+    window.addEventListener('storage', initializeAuth);
+    return () => window.removeEventListener('storage', initializeAuth);
   }, []);
 
   const logout = () => {
+    console.log("User logged out");
     localStorage.removeItem(TOKEN_KEY);
     setUser(null);
   };

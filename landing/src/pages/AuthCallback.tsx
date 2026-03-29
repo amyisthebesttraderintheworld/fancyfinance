@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-// AuthCallback handles the Telegram Login Widget OAuth flow if you ever
-// point the widget's auth_url directly at /auth/callback instead of the
-// backend webhook. Currently the backend handles this at /webhook/telegram-login
-// and redirects to /dashboard/member?access=<token>, so this page is a
-// fallback safety net — it just forwards to Dashboard if a token is present.
+/**
+ * AuthCallback.tsx
+ * 
+ * This page handles the direct redirect from the backend's Telegram login flow.
+ * It's responsible for capturing the token from the URL and storing it in localStorage.
+ */
 
 const TOKEN_KEY = 'fancyfinance_member_dashboard_token';
 
@@ -18,6 +19,7 @@ const AuthCallback = () => {
     const accessToken = params.get('access');
 
     if (accessToken) {
+      console.log("Captured access token from URL at /auth/callback");
       // Backend already validated the Telegram HMAC and issued a token.
       localStorage.setItem(TOKEN_KEY, accessToken);
       navigate('/dashboard', { replace: true });
@@ -25,10 +27,16 @@ const AuthCallback = () => {
     }
 
     // No token — something went wrong upstream. Send back to login.
+    console.log("No token found at /auth/callback, redirecting to home");
     navigate('/');
-  }, []);
+  }, [location, navigate]);
 
-  return <div>Authenticating…</div>;
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-white gap-4">
+      <div className="text-xl font-semibold">Authenticating…</div>
+      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
 };
 
 export default AuthCallback;

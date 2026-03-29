@@ -994,82 +994,43 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard/login", response_class=HTMLResponse)
     def dashboard_login(request: Request, login_error: Optional[str] = None):
-        # If already logged in, redirect to dashboard
-        token = _resolve_dashboard_token(request)
-        if token:
-            try:
-                _authorize_dashboard_request(auth_token, token)
-                return RedirectResponse(url="/dashboard", status_code=307)
-            except HTTPException:
-                pass
-
-        return HTMLResponse(
-            build_login_html(
-                APP_NAME,
-                telegram_login_enabled=bool(telegram_login["enabled"]),
-                telegram_login_bot_username=str(telegram_login["bot_username"]),
-                telegram_login_url=str(telegram_login["auth_url"]),
-                redirect_to="/dashboard",
-            )
-        )
+        # Always redirect /dashboard/login to the root landing page for the SPA
+        return RedirectResponse(url="/", status_code=307)
 
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard(request: Request, access: Optional[str] = None):
         landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
+        if landing_index is None:
+            raise HTTPException(status_code=503, detail="Landing page is not built")
 
         if access:
             try:
                 _authorize_member_dashboard(auth_token, access)
-                if landing_index:
-                    response = FileResponse(landing_index, media_type="text/html")
-                    response.set_cookie(
-                        MEMBER_ACCESS_COOKIE,
-                        access,
-                        httponly=True,
-                        samesite="lax",
-                        secure=_member_access_cookie_secure(request),
-                        path="/",
-                    )
-                    return _apply_no_store(response, private=True, vary_cookie=True)
-                
-                return _apply_no_store(
-                    RedirectResponse(url=f"/dashboard/member?access={quote(access, safe='')}", status_code=307),
-                    private=True,
-                    vary_cookie=True,
+                # Let SPA handle the token from the URL
+                response = FileResponse(landing_index, media_type="text/html")
+                response.set_cookie(
+                    MEMBER_ACCESS_COOKIE,
+                    access,
+                    httponly=True,
+                    samesite="lax",
+                    secure=_member_access_cookie_secure(request),
+                    path="/",
                 )
+                return _apply_no_store(response, private=True, vary_cookie=True)
             except HTTPException:
-                return RedirectResponse(url=f"/dashboard/login?login_error={quote('Invalid or expired access token.')}")
+                return RedirectResponse(url="/?login_error=invalid_token")
 
+        # Check for existing session
         token = _resolve_dashboard_token(request)
-        if not token:
-            return RedirectResponse(url="/dashboard/login")
+        if token:
+            try:
+                _authorize_dashboard_request(auth_token, token)
+                return FileResponse(landing_index, media_type="text/html")
+            except HTTPException:
+                pass
 
-        try:
-            _authorize_dashboard_request(auth_token, token)
-        except HTTPException:
-            return RedirectResponse(url="/dashboard/login")
-
-        if landing_index:
-            return FileResponse(landing_index, media_type="text/html")
-
-        response = HTMLResponse(
-            build_dashboard_html(
-                APP_NAME,
-                __version__,
-                auth_required=True,
-                public_mode=True,
-                member_session_mode=False,
-                data_endpoint="/dashboard/member-data",
-                token_storage_key="fancyfinance_member_dashboard_token",
-                query_token_param="access",
-                persist_token=False,
-                telegram_login_enabled=bool(telegram_login["enabled"]),
-                telegram_login_bot_username=str(telegram_login["bot_username"]),
-                telegram_login_url=str(telegram_login["auth_url"]),
-                telegram_bot_url=str(telegram_login["bot_url"]),
-            )
-        )
-        return _apply_no_store(response, vary_cookie=True)
+        # If no valid token, just serve the landing page (which will redirect if needed)
+        return RedirectResponse(url="/", status_code=307)
 
     @app.get("/dashboard/login/telegram", response_class=RedirectResponse)
     def dashboard_login_via_telegram(request: Request):
@@ -1178,80 +1139,16 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard/member", response_class=HTMLResponse)
     def member_dashboard(request: Request, access: Optional[str] = None):
-        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
-        
+        # Redirect all /dashboard/member requests to /dashboard with the token if present
         if access:
-            try:
-                _authorize_member_dashboard(auth_token, access)
-                
-                # If SPA exists, let it handle the access token (it will save to localStorage and clean URL)
-                if landing_index:
-                    response = FileResponse(landing_index, media_type="text/html")
-                    response.set_cookie(
-                        MEMBER_ACCESS_COOKIE,
-                        access,
-                        httponly=True,
-                        samesite="lax",
-                        secure=_member_access_cookie_secure(request),
-                        path="/",
-                    )
-                    return _apply_no_store(response, private=True, vary_cookie=True)
-                
-                # Legacy fallback redirect
-                response = RedirectResponse(url="/dashboard/member", status_code=307)
-                response.set_cookie(
-                    MEMBER_ACCESS_COOKIE,
-                    access,
-                    httponly=True,
-                    samesite="lax",
-                    secure=_member_access_cookie_secure(request),
-                    path="/",
-                )
-                return _apply_no_store(response, private=True, vary_cookie=True)
-            except HTTPException:
-                return RedirectResponse(url=f"/dashboard/login?login_error={quote('Invalid or expired access token.')}")
-
-        token = _resolve_dashboard_token(request)
-        if not token:
-            return RedirectResponse(url="/dashboard/login")
-
-        try:
-            _authorize_member_dashboard(auth_token, token)
-        except HTTPException:
-            response = RedirectResponse(url="/dashboard/login")
-            response.delete_cookie(MEMBER_ACCESS_COOKIE, path="/")
-            return response
-
-        # Prefer the new React SPA for the member dashboard
-        if landing_index:
-            return FileResponse(landing_index, media_type="text/html")
-
-        # Fallback to legacy dashboard
-        response = HTMLResponse(
-            build_dashboard_html(
-                APP_NAME,
-                __version__,
-                auth_required=True,
-                public_mode=True,
-                member_session_mode=True,
-                data_endpoint="/dashboard/member-data",
-                token_storage_key="fancyfinance_member_dashboard_token",
-                query_token_param="access",
-                persist_token=False,
-                telegram_login_enabled=bool(telegram_login["enabled"]),
-                telegram_login_bot_username=str(telegram_login["bot_username"]),
-                telegram_login_url=str(telegram_login["auth_url"]),
-                telegram_bot_url=str(telegram_login["bot_url"]),
-            )
-        )
-        return _apply_no_store(response, private=True, vary_cookie=True)
+            return RedirectResponse(url=f"/dashboard?access={quote(access, safe='')}", status_code=307)
+        return RedirectResponse(url="/dashboard", status_code=307)
 
     @app.get("/auth/callback", response_class=HTMLResponse)
-    def auth_callback():
-        landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
-        if landing_index:
-            return FileResponse(landing_index, media_type="text/html")
-        raise HTTPException(status_code=503, detail="Landing page is not built")
+    def auth_callback(access: Optional[str] = None):
+        if access:
+            return RedirectResponse(url=f"/dashboard?access={quote(access, safe='')}", status_code=307)
+        return RedirectResponse(url="/dashboard", status_code=307)
 
     @app.get("/webhook/telegram-login", response_class=RedirectResponse)
     def telegram_login_alias(request: Request):
