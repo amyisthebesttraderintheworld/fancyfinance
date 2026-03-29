@@ -944,7 +944,7 @@ def _member_dashboard_payload(engine, user_id: int, stripe_service: StripeServic
     }
 
 
-def _public_dashboard_payload(engine):
+def _public_dashboard_payload(engine, telegram_login: Dict[str, Any] = None):
     snapshot = _snapshot(engine)
     positions = _positions_payload(engine)
     trades = _recent_trades(engine)
@@ -960,6 +960,7 @@ def _public_dashboard_payload(engine):
         "users": {},
         "config": {},
         "strategy": {},
+        "telegram_login": telegram_login,
     }
 
 
@@ -992,22 +993,20 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
             raise HTTPException(status_code=503, detail="Landing page is not built")
         return FileResponse(landing_index, media_type="text/html")
 
-    @app.get("/dashboard/login", response_class=HTMLResponse)
-    def dashboard_login(request: Request, login_error: Optional[str] = None):
-        # Always redirect /dashboard/login to the root landing page for the SPA
-        return RedirectResponse(url="/", status_code=307)
-
     @app.get("/dashboard", response_class=HTMLResponse)
-    def dashboard(request: Request, access: Optional[str] = None):
+    @app.get("/dashboard/member", response_class=HTMLResponse)
+    @app.get("/dashboard/login", response_class=HTMLResponse)
+    def serve_dashboard_spa(request: Request, access: Optional[str] = None):
         landing_index = _first_existing_path(LANDING_DIST_DIR / "index.html")
         if landing_index is None:
             raise HTTPException(status_code=503, detail="Landing page is not built")
-
+        
+        response = FileResponse(landing_index, media_type="text/html")
+        
+        # If access token is provided in URL, set the cookie as a backup for API calls
         if access:
             try:
                 _authorize_member_dashboard(auth_token, access)
-                # Let SPA handle the token from the URL
-                response = FileResponse(landing_index, media_type="text/html")
                 response.set_cookie(
                     MEMBER_ACCESS_COOKIE,
                     access,
@@ -1016,21 +1015,10 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
                     secure=_member_access_cookie_secure(request),
                     path="/",
                 )
-                return _apply_no_store(response, private=True, vary_cookie=True)
-            except HTTPException:
-                return RedirectResponse(url="/?login_error=invalid_token")
-
-        # Check for existing session
-        token = _resolve_dashboard_token(request)
-        if token:
-            try:
-                _authorize_dashboard_request(auth_token, token)
-                return FileResponse(landing_index, media_type="text/html")
             except HTTPException:
                 pass
-
-        # If no valid token, just serve the landing page (which will redirect if needed)
-        return RedirectResponse(url="/", status_code=307)
+                
+        return _apply_no_store(response, vary_cookie=True)
 
     @app.get("/dashboard/login/telegram", response_class=RedirectResponse)
     def dashboard_login_via_telegram(request: Request):
@@ -1272,7 +1260,7 @@ def create_app(engine, auth_token: Optional[str] = None) -> FastAPI:
 
     @app.get("/dashboard/bootstrap")
     def dashboard_bootstrap():
-        return _apply_no_store(JSONResponse(_public_dashboard_payload(engine)), vary_cookie=True)
+        return _apply_no_store(JSONResponse(_public_dashboard_payload(engine, telegram_login)), vary_cookie=True)
 
     @app.post("/strategy/config")
     async def strategy_config_save(request: Request, x_api_key: Optional[str] = Header(default=None), access: Optional[str] = None):
